@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5f99">
+<title>Ronda Backbone Multivale</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+/* Layout: app de campo, uma coluna, barra superior fixa e barra de ações embaixo; alvos de toque grandes, leitura sob sol */
+:root{
+  --bg:#eef2f5; --surface:#ffffff; --surface-2:#f6f8fa; --line:#cdd6de; --line-strong:#8796a3;
+  --ink:#14191e; --muted:#53616d; --accent:#0b5f99; --accent-ink:#ffffff; --accent-soft:#dcebf6;
+  --orange:#d9480f; --ok:#1f7a3a; --ok-soft:#dff1e4; --bad:#b4231b; --bad-soft:#f8e1df; --warn-soft:#fdeedd;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-cond:'IBM Plex Sans Condensed','Arial Narrow',system-ui,sans-serif;
+  --r:10px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1418; --surface:#182027; --surface-2:#1e2830; --line:#2e3a44; --line-strong:#5d6d7a;
+  --ink:#e8eef2; --muted:#9aa9b5; --accent:#4aa3e0; --accent-ink:#06121b; --accent-soft:#16324a;
+  --orange:#ff8a50; --ok:#5cc47a; --ok-soft:#173523; --bad:#ff7b72; --bad-soft:#3d1c1a; --warn-soft:#3a2a17; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0f1418; --surface:#182027; --surface-2:#1e2830; --line:#2e3a44; --line-strong:#5d6d7a;
+  --ink:#e8eef2; --muted:#9aa9b5; --accent:#4aa3e0; --accent-ink:#06121b; --accent-soft:#16324a;
+  --orange:#ff8a50; --ok:#5cc47a; --ok-soft:#173523; --bad:#ff7b72; --bad-soft:#3d1c1a; --warn-soft:#3a2a17; color-scheme:dark }
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.4;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+img{max-width:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top,0px) + 8px) 16px 8px;display:flex;align-items:center;gap:12px}
+.top .logo{height:38px;width:auto;flex-shrink:0;background:#fff;border-radius:6px;padding:2px 4px}
+.top .ttl{flex:1;min-width:0}
+.top .ttl b{display:block;font-family:var(--f-cond);font-size:18px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .ttl span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{min-width:44px;height:44px;border:1px solid var(--line);background:var(--surface-2);border-radius:var(--r);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0 10px;gap:6px;font-weight:600;font-size:14px}
+.iconbtn svg{width:20px;height:20px}
+main{max-width:720px;margin:0 auto;padding:16px 16px calc(110px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card h2{margin:0;font-family:var(--f-cond);font-size:19px;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+.card h3{margin:4px 0 0;font-family:var(--f-cond);font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.num{display:inline-flex;width:24px;height:24px;border-radius:5px;background:var(--accent);color:var(--accent-ink);font-size:14px;align-items:center;justify-content:center;font-family:var(--f-body)}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:480px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field.full{grid-column:1/-1}
+label.lb,.lb{font-family:var(--f-cond);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.lb .req{color:var(--bad)}
+input[type=text],input[type=number],input[type=date],input[type=tel],select,textarea{width:100%;min-height:48px;border:1.5px solid var(--line-strong);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:16px}
+textarea{min-height:96px;resize:vertical}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.btn{min-height:52px;border-radius:12px;border:1.5px solid var(--line-strong);background:var(--surface);font-weight:700;font-size:16px;padding:0 18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
+.btn svg{width:22px;height:22px;flex-shrink:0}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.go{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.stop{background:var(--surface);border-color:var(--bad);color:var(--bad)}
+.btn.wa{background:#1f9d55;border-color:#1f9d55;color:#fff}
+.btn.block{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>.btn{flex:1 1 150px}
+.seg{display:flex;border:1.5px solid var(--line-strong);border-radius:var(--r);overflow:hidden;min-height:46px}
+.seg button{flex:1;border:0;background:var(--surface);font-weight:700;font-size:15px;cursor:pointer;padding:0 6px;border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg.ck button[data-v="OK"][aria-pressed="true"]{background:var(--ok);color:#fff}
+.seg.ck button[data-v="NC"][aria-pressed="true"]{background:var(--bad);color:#fff}
+.seg.ck button[data-v="NA"][aria-pressed="true"]{background:var(--line-strong);color:#fff}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:480px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:10px}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat span{font-size:12px;color:var(--muted);font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.gps{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:8px 12px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);align-self:flex-start}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line-strong);flex-shrink:0}
+.gps.ok .dot{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft)}
+.gps.weak .dot{background:var(--orange)}
+.gps.err .dot{background:var(--bad)}
+.map{height:280px;border-radius:12px;border:1px solid var(--line);overflow:hidden;background:var(--surface-2);z-index:0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:18px;height:4px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);cursor:pointer;text-align:left;width:100%}
+.item .badge{width:40px;height:40px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-variant-numeric:tabular-nums}
+.item .tx{flex:1;min-width:0}
+.item .tx b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .tx span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap;font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.04em}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.draft{background:var(--warn-soft);color:var(--orange)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.steps{position:sticky;top:calc(env(safe-area-inset-top,0px) + 63px);z-index:15;background:var(--bg);display:flex;gap:6px;overflow-x:auto;padding:10px 16px;margin:0 -16px;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.steps::-webkit-scrollbar{display:none}
+.steps button{flex-shrink:0;min-height:40px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--surface);font-weight:600;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.steps button[aria-current="step"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.steps button .chk{width:8px;height:8px;border-radius:50%;background:var(--line-strong)}
+.steps button.done .chk{background:var(--ok)}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;justify-content:center}
+.bar .in{max-width:720px;width:100%;display:flex;gap:10px}
+.bar .btn{flex:1}
+.check-row{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.check-row:first-of-type{border-top:0}
+.check-row .q{font-weight:600}
+.fo-tools{display:flex;gap:8px;flex-wrap:wrap}
+.fo-tools .btn{min-height:44px;font-size:14px;flex:1 1 140px}
+.fo{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--surface-2)}
+.fo.on{border-color:var(--accent);background:var(--accent-soft)}
+.fo-head{display:flex;align-items:center;gap:10px}
+.fo-n{font-weight:700;font-size:17px;min-width:56px;font-variant-numeric:tabular-nums}
+.sw{width:14px;height:14px;border-radius:3px;border:1px solid #333;display:inline-block;vertical-align:-2px}
+.fo-head .meta{flex:1;font-size:14px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tog{min-height:44px;min-width:118px;border-radius:10px;border:1.5px solid var(--line-strong);background:var(--surface);font-weight:700;cursor:pointer;font-size:14px}
+.fo.on .tog{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.fo-body{display:grid;grid-template-columns:90px minmax(0,1fr) 84px;gap:8px}
+.fo-body select,.fo-body input{min-height:44px;padding:6px 8px}
+.photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:420px){.photos{grid-template-columns:minmax(0,1fr)}}
+.ph{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface-2);display:flex;flex-direction:column}
+.ph img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;background:#000}
+.ph .pb{padding:8px;display:flex;flex-direction:column;gap:6px}
+.ph select,.ph input{min-height:42px;font-size:15px;padding:6px 8px}
+.ph .del{min-height:40px;border:1px solid var(--bad);color:var(--bad);background:transparent;border-radius:8px;font-weight:600;cursor:pointer}
+.sig{border:1.5px dashed var(--line-strong);border-radius:12px;background:#fff;touch-action:none;width:100%;height:180px;display:block}
+.warnbox{border:1px solid var(--orange);background:var(--warn-soft);border-radius:12px;padding:12px;font-size:14px}
+.okbox{border:1px solid var(--ok);background:var(--ok-soft);border-radius:12px;padding:12px;font-size:14px}
+table.t{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+table.t th,table.t td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+table.t th{font-family:var(--f-cond);text-transform:uppercase;font-size:12px;letter-spacing:.05em;color:var(--muted)}
+table.t td.r,table.t th.r{text-align:right}
+.tw{overflow-x:auto}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:600;z-index:50;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.hero{display:flex;flex-direction:column;gap:6px}
+.hero .big{font-family:var(--f-cond);font-size:28px;font-weight:700;line-height:1.1;text-wrap:balance}
+.clock{font-variant-numeric:tabular-nums}
+.leaflet-container{font:inherit}
+.mk{background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.mk.start{background:#1f7a3a}.mk.me{background:#d9480f;width:18px;height:18px}
+@media (prefers-reduced-motion:no-preference){.btn,.tog,.seg button{transition:background .15s,color .15s}}
+</style>
+</head>
+<body>
+<header class="top">
+  <img class="logo" src="logo.png" alt="Multivale Engenharia">
+  <div class="ttl"><b id="topTitle">Ronda Preventiva Backbone</b><span id="topSub">Inspeção de caixas de emenda</span></div>
+  <button class="iconbtn" id="btnBack" hidden aria-label="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Início</button>
+</header>
+<main id="app"></main>
+<div class="bar" id="bar" hidden><div class="in" id="barIn"></div></div>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
+<input type="file" id="fileGal" accept="image/*" multiple hidden>
+
+<script src="leaflet.js"></script>
+<script src="jspdf.umd.min.js"></script>
+<script src="jspdf.plugin.autotable.min.js"></script>
+<script>
+'use strict';
+/* ============================ utilidades ============================ */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad2 = n => String(n).padStart(2, '0');
+const fData = ts => { const d = new Date(ts); return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; };
+const fHora = ts => { const d = new Date(ts); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const fHoraS = ts => { const d = new Date(ts); return `${fHora(ts)}:${pad2(d.getSeconds())}`; };
+const fDH = ts => `${fData(ts)} ${fHora(ts)}`;
+const fDur = ms => { if (!(ms > 0)) return '0 min'; const m = Math.round(ms / 60000); const h = Math.floor(m / 60); return h ? `${h}h ${pad2(m % 60)}min` : `${m} min`; };
+const fClock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${pad2(Math.floor(s/3600))}:${pad2(Math.floor(s/60)%60)}:${pad2(s%60)}`; };
+const fKm = km => (km || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' km';
+const isoDate = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
+const COLORS = [['Verde','#2e8b3e'],['Amarelo','#f2c200'],['Branco','#ffffff'],['Azul','#1f5fbf'],['Vermelho','#c8102e'],['Violeta','#7a3fa0'],['Marrom','#7a4a1e'],['Rosa','#f08ab0'],['Preto','#141414'],['Cinza','#8a8a8a'],['Laranja','#f07c00'],['Azul-claro','#5ec8e0']];
+const tf = n => ({ t: Math.floor((n - 1) / 12) + 1, f: ((n - 1) % 12) + 1 });
+const foTxt = n => { const { t, f } = tf(n); return `T${t} ${COLORS[t-1][0]} / F${f} ${COLORS[f-1][0]}`; };
+const sw = c => `<i class="sw" style="background:${c}"></i>`;
+const hav = (a, b) => { const R = 6371000, r = Math.PI / 180; const dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r; const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*r) * Math.cos(b.lat*r) * Math.sin(dLon/2)**2; return 2 * R * Math.asin(Math.sqrt(x)); };
+const pathKm = pts => { let m = 0; for (let i = 1; i < pts.length; i++) m += hav(pts[i-1], pts[i]); return m / 1000; };
+const gaps = pts => { let n = 0, ms = 0; for (let i = 1; i < pts.length; i++) { const d = pts[i].ts - pts[i-1].ts; if (d > 180000) { n++; ms += d; } } return { n, ms }; };
+const ICON = {
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+  cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  img: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/></svg>',
+  pdf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg>',
+  wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5c-.2 0-.4.1-.7.3-.2.3-.9.9-.9 2.2s.9 2.5 1 2.7c.1.2 1.8 2.8 4.4 3.9 1.6.7 2.3.8 3.1.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3z"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  next: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>'
+};
+let toastT;
+function toast(msg, ms = 3200) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
+
+/* ============================ banco local (IndexedDB) ============================ */
+const DB = {
+  db: null, mem: { rondas: new Map(), inspecoes: new Map(), meta: new Map() },
+  open() { return new Promise(res => { try { const r = indexedDB.open('ronda-backbone-multivale', 1);
+    r.onupgradeneeded = () => { const d = r.result; ['rondas','inspecoes','meta'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); }); };
+    r.onsuccess = () => { this.db = r.result; res(true); }; r.onerror = () => res(false); } catch (e) { res(false); } }); },
+  req(store, mode, fn) { if (!this.db) return Promise.resolve(fn(null)); return new Promise((res, rej) => { const t = this.db.transaction(store, mode); const q = fn(t.objectStore(store)); t.oncomplete = () => res(q && 'result' in q ? q.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }); },
+  get(s, id) { return this.db ? this.req(s, 'readonly', st => st.get(id)) : Promise.resolve(this.mem[s].get(id)); },
+  all(s) { return this.db ? this.req(s, 'readonly', st => st.getAll()) : Promise.resolve([...this.mem[s].values()]); },
+  put(s, v) { return this.db ? this.req(s, 'readwrite', st => st.put(v)) : Promise.resolve(this.mem[s].set(v.id, v)); },
+  del(s, id) { return this.db ? this.req(s, 'readwrite', st => st.delete(id)) : Promise.resolve(this.mem[s].delete(id)); }
+};
+
+/* ============================ estado ============================ */
+const CHECK = [
+  ['vedacao','Vedação / estanqueidade'],['umidade','Sem umidade interna / formigas'],['fixacao','Fixação e ferragens'],
+  ['bandejas','Bandejas e organização'],['raio','Raio de curvatura'],['reserva','Reserva técnica acomodada'],
+  ['capa','Cabos sem danos na capa'],['plaqueta','Identificação / plaqueta'],['poste','Poste / CV em bom estado'],['limpeza','Local limpo / sem vegetação']];
+const CATS = ['Caixa fechada','Caixa aberta','Bandejas / fusões','Identificação (TAG)','Cabos e reserva','Local / poste','Irregularidade','Outra'];
+const STEPS = [['caixa','Caixa'],['cabos','Cabos'],['check','Checklist'],['fusoes','Fusões'],['fotos','Fotos'],['final','Finalizar']];
+const S = { view: 'home', perfil: { id: 'perfil', nome: '', matricula: '', placa: '' }, ronda: null, insp: null, step: 0,
+  rondaView: null, gps: { status: 'off', last: null, msg: 'GPS desligado' }, watchId: null, wake: null, inspCache: new Map(), map: null, mapLayers: null, logoData: null };
+
+function novaInspecao(loc) {
+  const now = Date.now(), d = new Date(now);
+  const rows = Array.from({ length: 36 }, () => ({ f: false, cabo: 'S1', fib: '', band: '' }));
+  return { id: uid(), rondaId: S.ronda && !S.ronda.fim ? S.ronda.id : null, criado: now, atualizado: now, status: 'rascunho', chegada: now, saida: null,
+    info: { data: isoDate(now), mes: `${pad2(d.getMonth()+1)}/${d.getFullYear()}`, tecnico: S.perfil.nome, tag: '', modelo: '', fabricante: '', tipo: '', tipoOutro: '', poste: '', endereco: '', bairro: '', cidade: '', rota: '' },
+    loc: loc || null,
+    cabos: { entrada: { marca: '', lote: '', fibras: '', metragem: '' }, s1: { marca: '', lote: '', fibras: '', metragem: '' }, s2: { marca: '', lote: '', fibras: '', metragem: '' }, temS2: false },
+    check: {}, checkObs: {}, fo: { total: 36, rows }, fotos: [], obs: '', assinatura: null };
+}
+function getPath(o, p) { return p.split('.').reduce((a, k) => a == null ? a : a[k], o); }
+function setPath(o, p, v) { const ks = p.split('.'); let a = o; for (let i = 0; i < ks.length - 1; i++) { if (a[ks[i]] == null) a[ks[i]] = {}; a = a[ks[i]]; } a[ks[ks.length - 1]] = v; }
+
+let saveInspT;
+function saveInsp(now) { clearTimeout(saveInspT); const doIt = () => { if (S.insp) { S.insp.atualizado = Date.now(); S.inspCache.set(S.insp.id, S.insp); DB.put('inspecoes', S.insp).catch(() => toast('Não foi possível salvar no aparelho.')); } }; if (now) return doIt(); saveInspT = setTimeout(doIt, 500); }
+let saveRondaT, rondaDirty = false;
+function saveRonda(now) { rondaDirty = true; clearTimeout(saveRondaT); const doIt = () => { if (S.ronda && rondaDirty) { rondaDirty = false; DB.put('rondas', S.ronda).catch(() => {}); } }; if (now) return doIt(); saveRondaT = setTimeout(doIt, 8000); }
+
+/* ============================ GPS e percurso ============================ */
+function gpsStart() {
+  if (!('geolocation' in navigator)) { S.gps = { status: 'err', last: null, msg: 'Este aparelho não tem GPS disponível no navegador.' }; updateLive(); return; }
+  if (S.watchId != null) return;
+  S.gps.status = 'wait'; S.gps.msg = 'Procurando sinal de GPS…'; updateLive();
+  S.watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+}
+function gpsStop() { if (S.watchId != null) navigator.geolocation.clearWatch(S.watchId); S.watchId = null; S.gps.status = 'off'; S.gps.msg = 'GPS desligado'; }
+function onPos(p) {
+  const pt = { lat: +p.coords.latitude.toFixed(6), lon: +p.coords.longitude.toFixed(6), ts: Date.now(), acc: Math.round(p.coords.accuracy || 0) };
+  S.gps.last = pt;
+  S.gps.status = pt.acc <= 50 ? 'ok' : 'weak';
+  S.gps.msg = pt.acc <= 50 ? `GPS ativo · precisão ±${pt.acc} m` : `Sinal fraco · ±${pt.acc} m`;
+  const r = S.ronda;
+  if (r && !r.fim && pt.acc <= 50) {
+    const last = r.pontos[r.pontos.length - 1];
+    let keep = !last;
+    if (last) { const d = hav(last, pt), dt = (pt.ts - last.ts) / 1000; const speed = dt > 0 ? d / dt : 0; keep = (d >= 8 && speed < 45) || (dt > 120 && speed < 45); }
+    if (keep) { r.pontos.push(pt); saveRonda(); }
+  }
+  updateLive();
+}
+function onPosErr(e) {
+  S.gps.status = 'err';
+  S.gps.msg = e.code === 1 ? 'Localização bloqueada. Libere a permissão de localização para este app.' : e.code === 3 ? 'GPS sem resposta. Vá para céu aberto.' : 'Não foi possível obter a localização.';
+  updateLive();
+}
+function posAtual(maxAge = 60000) {
+  return new Promise(res => {
+    const l = S.gps.last; if (l && Date.now() - l.ts < maxAge && l.acc <= 80) return res(l);
+    if (!('geolocation' in navigator)) return res(l || null);
+    navigator.geolocation.getCurrentPosition(p => { const pt = { lat: +p.coords.latitude.toFixed(6), lon: +p.coords.longitude.toFixed(6), ts: Date.now(), acc: Math.round(p.coords.accuracy || 0) }; S.gps.last = pt; res(pt); },
+      () => res(l || null), { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  });
+}
+async function wakeOn() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && !S.wake) { S.wake = await navigator.wakeLock.request('screen'); S.wake.addEventListener('release', () => { S.wake = null; }); } } catch (e) { S.wake = null; } }
+function wakeOff() { try { S.wake && S.wake.release(); } catch (e) {} S.wake = null; }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { if (S.ronda && !S.ronda.fim) { wakeOn(); gpsStart(); } render(); }
+  else { saveRonda(true); saveInsp(true); }
+});
+window.addEventListener('pagehide', () => { saveRonda(true); saveInsp(true); });
+
+async function reverseGeo(lat, lon) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 9000);
+  try { const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=pt-BR&zoom=18&addressdetails=1`, { signal: ctl.signal, headers: { 'Accept': 'application/json' } });
+    if (!r.ok) return null; const j = await r.json(); const a = j.address || {};
+    return { endereco: [a.road || a.pedestrian || a.footway || a.path || '', a.house_number].filter(Boolean).join(', '), bairro: a.suburb || a.neighbourhood || a.quarter || a.city_district || '', cidade: [a.city || a.town || a.village || a.municipality || '', a.state_code || (a['ISO3166-2-lvl4'] || '').replace('BR-', '')].filter(Boolean).join(' - '), completo: j.display_name || '' };
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
+
+function segmentos(r) {
+  if (!r) return [];
+  const ev = [...r.eventos].sort((a, b) => a.ts - b.ts);
+  const ini = ev.find(e => e.tipo === 'inicio'); if (!ini) return [];
+  const chegadas = ev.filter(e => e.tipo === 'chegada');
+  const tagOf = id => { const i = S.inspCache.get(id); return (i && i.info.tag) || 'sem TAG'; };
+  const segs = []; let fromTs = ini.ts, fromLb = 'Início da ronda', fromLoc = ini;
+  chegadas.forEach((ch, k) => {
+    const sai = ev.find(e => e.tipo === 'saida' && e.inspId === ch.inspId);
+    segs.push({ tipo: k === 0 ? 'desl' : 'cabo', de: fromLb, para: 'Caixa ' + tagOf(ch.inspId), ini: fromTs, fim: ch.ts, a: fromLoc, b: ch, inspId: ch.inspId });
+    fromTs = sai ? sai.ts : ch.ts; fromLb = 'Caixa ' + tagOf(ch.inspId); fromLoc = ch;
+  });
+  const end = r.fim || Date.now();
+  if (end > fromTs) segs.push({ tipo: r.fim ? (chegadas.length ? 'ret' : 'desl') : 'atual', de: fromLb, para: r.fim ? 'Fim da ronda' : 'Posição atual', ini: fromTs, fim: end, a: fromLoc });
+  segs.forEach(s => { s.pts = r.pontos.filter(p => p.ts >= s.ini && p.ts <= s.fim); if (s.a && s.a.lat != null) s.pts.unshift(s.a); if (s.b && s.b.lat != null) s.pts.push(s.b); s.km = pathKm(s.pts); s.gap = gaps(s.pts); });
+  return segs;
+}
+const SEGLB = { desl: 'Deslocamento', cabo: 'Rota do cabo', ret: 'Retorno', atual: 'Em deslocamento' };
+const SEGCOR = { desl: '#d9480f', cabo: '#0b5f99', ret: '#6b7785', atual: '#7a3fa0' };
+function totais(r) {
+  const segs = segmentos(r); const t = { km: 0, desl: 0, cabo: 0, ret: 0, atual: 0, caixas: r ? r.eventos.filter(e => e.tipo === 'chegada').length : 0, dur: r ? (r.fim || Date.now()) - r.inicio : 0, gapN: 0, gapMs: 0 };
+  segs.forEach(s => { t.km += s.km; t[s.tipo] += s.km; t.gapN += s.gap.n; t.gapMs += s.gap.ms; });
+  return { t, segs };
+}
+
+/* ============================ ações da ronda ============================ */
+async function iniciarRonda() {
+  if (!S.perfil.nome.trim()) { toast('Preencha o nome do técnico antes de iniciar.'); $('#pf_nome') && $('#pf_nome').focus(); return; }
+  await DB.put('meta', S.perfil);
+  gpsStart(); wakeOn();
+  const loc = await posAtual(30000);
+  const now = Date.now();
+  S.ronda = { id: uid(), tecnico: S.perfil.nome.trim(), matricula: S.perfil.matricula, placa: S.perfil.placa, inicio: now, fim: null, pontos: loc ? [loc] : [], eventos: [{ tipo: 'inicio', ts: now, lat: loc && loc.lat, lon: loc && loc.lon }] };
+  await DB.put('rondas', S.ronda); await DB.put('meta', { id: 'ativa', rondaId: S.ronda.id });
+  toast(loc ? 'Ronda iniciada. Deslocamento sendo registrado.' : 'Ronda iniciada. Aguardando sinal de GPS.');
+  render();
+}
+async function encerrarRonda() {
+  if (!S.ronda) return;
+  if (!confirm('Encerrar a ronda agora? O percurso para de ser registrado.')) return;
+  const loc = await posAtual(60000);
+  if (loc && S.ronda.pontos.length && loc.ts > S.ronda.pontos[S.ronda.pontos.length - 1].ts) S.ronda.pontos.push(loc);
+  S.ronda.fim = Date.now(); S.ronda.eventos.push({ tipo: 'fim', ts: S.ronda.fim, lat: loc && loc.lat, lon: loc && loc.lon });
+  await DB.put('rondas', S.ronda); await DB.put('meta', { id: 'ativa', rondaId: null });
+  gpsStop(); wakeOff();
+  const id = S.ronda.id; S.ronda = null; S.rondaView = await DB.get('rondas', id);
+  go('ronda');
+}
+async function novaInsp() {
+  toast('Registrando chegada na caixa…', 2000);
+  const loc = await posAtual(45000);
+  const i = novaInspecao(loc);
+  if (S.ronda && !S.ronda.fim) { S.ronda.eventos.push({ tipo: 'chegada', ts: i.chegada, inspId: i.id, lat: loc && loc.lat, lon: loc && loc.lon, acc: loc && loc.acc }); if (loc && (!S.ronda.pontos.length || loc.ts > S.ronda.pontos[S.ronda.pontos.length-1].ts)) S.ronda.pontos.push(loc); saveRonda(true); }
+  S.insp = i; S.step = 0; S.inspCache.set(i.id, i); await DB.put('inspecoes', i);
+  go('insp');
+  if (loc) preencherEndereco(true);
+}
+async function preencherEndereco(soVazios) {
+  const i = S.insp; if (!i || !i.loc) return;
+  const a = await reverseGeo(i.loc.lat, i.loc.lon);
+  if (!a) { toast('Sem internet para buscar o endereço. Preencha à mão.'); return; }
+  ['endereco','bairro','cidade'].forEach(k => { if (a[k] && (!soVazios || !i.info[k])) i.info[k] = a[k]; });
+  i.loc.endCompleto = a.completo; saveInsp(); if (S.view === 'insp' && STEPS[S.step][0] === 'caixa') render(); toast('Endereço preenchido pelo GPS.');
+}
+async function concluirInsp() {
+  const i = S.insp; if (!i) return;
+  if (!i.info.tag.trim()) { toast('Preencha a TAG da caixa.'); S.step = 0; render(); return; }
+  i.status = 'concluida'; i.saida = Date.now();
+  const r = S.ronda && S.ronda.id === i.rondaId ? S.ronda : null;
+  if (r && !r.eventos.some(e => e.tipo === 'saida' && e.inspId === i.id)) { r.eventos.push({ tipo: 'saida', ts: i.saida, inspId: i.id }); saveRonda(true); }
+  saveInsp(true); toast(r ? 'Inspeção concluída. Percurso até a próxima caixa sendo registrado.' : 'Inspeção concluída.');
+  S.insp = null; go('home');
+}
+
+/* ============================ navegação e render ============================ */
+function go(v) { S.view = v; window.scrollTo(0, 0); render(); }
+$('#btnBack').onclick = () => { saveInsp(true); S.insp = null; go('home'); };
+
+function render() {
+  if (S.map) { try { S.map.remove(); } catch (e) {} S.map = null; }
+  const app = $('#app'); $('#btnBack').hidden = S.view === 'home';
+  if (S.view === 'home') { app.innerHTML = viewHome(); setBar(''); $('#topTitle').textContent = 'Ronda Preventiva Backbone'; $('#topSub').textContent = S.perfil.nome ? 'Técnico: ' + S.perfil.nome : 'Inspeção de caixas de emenda'; afterHome(); }
+  else if (S.view === 'insp') { app.innerHTML = viewInsp(); $('#topTitle').textContent = S.insp.info.tag ? 'Caixa ' + S.insp.info.tag : 'Nova inspeção'; $('#topSub').textContent = `${STEPS[S.step][1]} · ${S.step + 1} de ${STEPS.length}`; barInsp(); afterInsp(); }
+  else if (S.view === 'ronda') { app.innerHTML = viewRonda(S.rondaView); setBar(''); $('#topTitle').textContent = 'Resumo da ronda'; $('#topSub').textContent = fDH(S.rondaView.inicio); afterRonda(); }
+}
+function setBar(html) { $('#bar').hidden = !html; $('#barIn').innerHTML = html; }
+
+/* ---------- home ---------- */
+function gpsChip() { const g = S.gps; const c = g.status === 'ok' ? 'ok' : g.status === 'weak' || g.status === 'wait' ? 'weak' : g.status === 'err' ? 'err' : ''; return `<div class="gps ${c}" id="gpsChip" role="status"><span class="dot"></span><span>${esc(g.msg)}</span></div>`; }
+function viewHome() {
+  const r = S.ronda;
+  let h = '';
+  if (!r) {
+    h += `<section class="card"><div class="hero"><span class="lb">Ronda do dia</span><div class="big">Pronto para iniciar a ronda</div><p class="muted small" style="margin:0">Ao iniciar, o app registra o deslocamento até a primeira caixa e depois a rota do cabo entre uma caixa e outra.</p></div>
+      <div class="grid2"><div class="field full"><label class="lb" for="pf_nome">Técnico <span class="req">*</span></label><input type="text" id="pf_nome" data-pf="nome" value="${esc(S.perfil.nome)}" placeholder="Nome completo" autocomplete="name"></div>
+      <div class="field"><label class="lb" for="pf_mat">Matrícula</label><input type="text" id="pf_mat" data-pf="matricula" value="${esc(S.perfil.matricula)}" placeholder="Opcional"></div>
+      <div class="field"><label class="lb" for="pf_placa">Placa do veículo</label><input type="text" id="pf_placa" data-pf="placa" value="${esc(S.perfil.placa)}" placeholder="Opcional" autocapitalize="characters"></div></div>
+      <button class="btn go block" id="bIniciar">${ICON.play}Iniciar ronda</button>
+      <button class="btn block" id="bAvulsa">${ICON.plus}Inspeção avulsa (sem ronda)</button></section>`;
+  } else {
+    const { t } = totais(r);
+    h += `<section class="card"><div class="row" style="justify-content:space-between"><h2><span class="dot" style="background:var(--ok);width:12px;height:12px"></span>Ronda em andamento</h2><span class="muted small">desde ${fHora(r.inicio)}</span></div>
+      ${gpsChip()}
+      <div class="stats"><div class="stat"><b class="clock" id="stDur">${fClock(t.dur)}</b><span>Tempo</span></div><div class="stat"><b id="stKm">${fKm(t.km)}</b><span>Percorrido</span></div><div class="stat"><b id="stCx">${t.caixas}</b><span>Caixas</span></div><div class="stat"><b id="stPts">${r.pontos.length}</b><span>Pontos GPS</span></div></div>
+      <div class="map" id="map" role="img" aria-label="Mapa do percurso da ronda"></div>
+      <div class="legend"><span><i style="background:${SEGCOR.desl}"></i>Deslocamento</span><span><i style="background:${SEGCOR.cabo}"></i>Rota do cabo</span><span><i style="background:${SEGCOR.atual}"></i>Trecho atual</span></div>
+      <div class="warnbox">Mantenha o app aberto durante a ronda. Com a tela apagada ou o app em segundo plano, o celular pode parar de enviar a posição e o trecho fica marcado como "sem sinal" no relatório.</div>
+      <button class="btn pri block" id="bNova">${ICON.pin}Cheguei na caixa · nova inspeção</button>
+      <div class="row"><button class="btn" id="bVerRonda">Ver resumo</button><button class="btn stop" id="bEncerrar">${ICON.stop}Encerrar ronda</button></div></section>`;
+    const ins = r.eventos.filter(e => e.tipo === 'chegada').map(e => S.inspCache.get(e.inspId)).filter(Boolean);
+    h += `<section class="card"><h2>Caixas desta ronda</h2>${ins.length ? `<div class="list">${ins.map((i, k) => itemInsp(i, k + 1)).join('')}</div>` : '<p class="muted" style="margin:0">Nenhuma caixa ainda. Ao chegar na primeira caixa, toque em "Cheguei na caixa".</p>'}</section>`;
+  }
+  h += `<section class="card"><h2>Histórico</h2><div id="hist" class="list"><p class="muted" style="margin:0">Carregando…</p></div></section>`;
+  return h;
+}
+function itemInsp(i, n) {
+  const nc = Object.values(i.check).filter(v => v === 'NC').length;
+  const pill = i.status === 'concluida' ? (nc ? `<span class="pill bad">${nc} N/C</span>` : '<span class="pill ok">Concluída</span>') : '<span class="pill draft">Rascunho</span>';
+  return `<button class="item" data-open="${i.id}"><span class="badge">${n}</span><span class="tx"><b>${esc(i.info.tag || 'Sem TAG')}</b><span>${fHora(i.chegada)} · ${esc(i.info.endereco || 'Endereço não preenchido')}</span></span>${pill}</button>`;
+}
+async function afterHome() {
+  $$('[data-pf]').forEach(el => el.addEventListener('input', () => { S.perfil[el.dataset.pf] = el.value; DB.put('meta', S.perfil); }));
+  $('#bIniciar') && ($('#bIniciar').onclick = iniciarRonda);
+  $('#bAvulsa') && ($('#bAvulsa').onclick = () => { if (!S.perfil.nome.trim()) { toast('Preencha o nome do técnico.'); return; } DB.put('meta', S.perfil); gpsStart(); novaInsp(); });
+  $('#bNova') && ($('#bNova').onclick = novaInsp);
+  $('#bEncerrar') && ($('#bEncerrar').onclick = encerrarRonda);
+  $('#bVerRonda') && ($('#bVerRonda').onclick = () => { S.rondaView = S.ronda; go('ronda'); });
+  bindOpen();
+  if (S.ronda) drawLiveMap('map', S.ronda, true);
+  // histórico
+  const rs = (await DB.all('rondas')).filter(r => r.fim).sort((a, b) => b.inicio - a.inicio).slice(0, 30);
+  const av = (await DB.all('inspecoes')).filter(i => !i.rondaId).sort((a, b) => b.criado - a.criado).slice(0, 20);
+  av.forEach(i => S.inspCache.set(i.id, i));
+  const hist = $('#hist'); if (!hist) return;
+  let h = rs.map(r => { const n = r.eventos.filter(e => e.tipo === 'chegada').length; return `<button class="item" data-ronda="${r.id}"><span class="badge">${n}</span><span class="tx"><b>Ronda ${fData(r.inicio)} · ${esc(r.tecnico)}</b><span>${fHora(r.inicio)}–${fHora(r.fim)} · ${fKm(pathKm(r.pontos))} · ${n} caixa${n === 1 ? '' : 's'}</span></span><span class="pill ok">Encerrada</span></button>`; }).join('');
+  if (av.length) h += `<h3>Inspeções avulsas</h3>` + av.map((i, k) => itemInsp(i, '·')).join('');
+  hist.innerHTML = h || '<p class="muted" style="margin:0">Nenhuma ronda encerrada ainda.</p>';
+  $$('[data-ronda]', hist).forEach(b => b.onclick = async () => { S.rondaView = await DB.get('rondas', b.dataset.ronda); await cacheInspRonda(S.rondaView); go('ronda'); });
+  bindOpen(hist);
+}
+function bindOpen(root = document) { $$('[data-open]', root).forEach(b => b.onclick = async () => { const i = S.inspCache.get(b.dataset.open) || await DB.get('inspecoes', b.dataset.open); if (!i) return; S.insp = i; S.step = 0; go('insp'); }); }
+async function cacheInspRonda(r) { for (const e of r.eventos) if (e.inspId && !S.inspCache.has(e.inspId)) { const i = await DB.get('inspecoes', e.inspId); if (i) S.inspCache.set(i.id, i); } }
+
+let lastMapDraw = 0;
+function drawLiveMap(id, r, live) {
+  const el = document.getElementById(id); if (!el || !window.L) { if (el) el.innerHTML = '<p class="muted small" style="padding:12px">Mapa indisponível sem internet. O percurso continua sendo registrado.</p>'; return; }
+  const map = L.map(el, { zoomControl: true, attributionControl: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  S.map = map; S.mapLayers = L.layerGroup().addTo(map); S.mapLive = live; S.mapRonda = r;
+  paintMap(true);
+}
+function paintMap(fit) {
+  if (!S.map) return; const r = S.mapRonda; const g = S.mapLayers; g.clearLayers();
+  const segs = segmentos(r); const all = [];
+  segs.forEach(s => { const ll = s.pts.map(p => [p.lat, p.lon]); all.push(...ll); if (ll.length > 1) L.polyline(ll, { color: SEGCOR[s.tipo], weight: 5, opacity: .9 }).addTo(g); });
+  const ini = r.eventos.find(e => e.tipo === 'inicio');
+  if (ini && ini.lat != null) L.marker([ini.lat, ini.lon], { icon: L.divIcon({ className: '', html: '<div class="mk start">I</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(g);
+  r.eventos.filter(e => e.tipo === 'chegada' && e.lat != null).forEach((e, k) => { const i = S.inspCache.get(e.inspId); L.marker([e.lat, e.lon], { icon: L.divIcon({ className: '', html: `<div class="mk">${k + 1}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] }) }).bindPopup(esc((i && i.info.tag) || 'Caixa ' + (k + 1))).addTo(g); all.push([e.lat, e.lon]); });
+  if (S.mapLive && S.gps.last) { L.marker([S.gps.last.lat, S.gps.last.lon], { icon: L.divIcon({ className: '', html: '<div class="mk me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(g); all.push([S.gps.last.lat, S.gps.last.lon]); }
+  if (fit) { if (all.length > 1) S.map.fitBounds(all, { padding: [24, 24], maxZoom: 17 }); else if (all.length) S.map.setView(all[0], 16); else S.map.setView([-23.55, -46.63], 11); }
+  lastMapDraw = Date.now();
+}
+function updateLive() {
+  const c = $('#gpsChip'); if (c) c.outerHTML = gpsChip();
+  if (S.view === 'home' && S.ronda) { const { t } = totais(S.ronda); const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; }; set('stKm', fKm(t.km)); set('stCx', t.caixas); set('stPts', S.ronda.pontos.length); if (Date.now() - lastMapDraw > 5000) paintMap(false); }
+  const gl = $('#gpsLoc'); if (gl && S.view === 'insp') gl.innerHTML = locHtml();
+}
+setInterval(() => { if (S.view === 'home' && S.ronda) { const e = $('#stDur'); if (e) e.textContent = fClock(Date.now() - S.ronda.inicio); } }, 1000);
+
+/* ---------- inspeção ---------- */
+function inp(k, lb, opts = {}) {
+  const v = getPath(S.insp, k) ?? '';
+  const id = 'f_' + k.replace(/\./g, '_');
+  const cls = opts.full ? 'field full' : 'field';
+  const req = opts.req ? ' <span class="req">*</span>' : '';
+  const type = opts.type || 'text';
+  const extra = (opts.mode ? ` inputmode="${opts.mode}"` : '') + (opts.ph ? ` placeholder="${esc(opts.ph)}"` : '') + (opts.caps ? ' autocapitalize="characters"' : '');
+  return `<div class="${cls}"><label class="lb" for="${id}">${lb}${req}</label><input type="${type}" id="${id}" data-k="${k}" value="${esc(v)}"${extra}></div>`;
+}
+function stepDone(key) {
+  const i = S.insp;
+  if (key === 'caixa') return !!(i.info.tag && i.info.endereco);
+  if (key === 'cabos') return !!(i.cabos.entrada.lote || i.cabos.entrada.marca);
+  if (key === 'check') return CHECK.every(([k]) => i.check[k]);
+  if (key === 'fusoes') return i.fo.rows.slice(0, i.fo.total).some(r => r.f);
+  if (key === 'fotos') return i.fotos.length > 0;
+  if (key === 'final') return i.status === 'concluida';
+}
+function viewInsp() {
+  const i = S.insp, key = STEPS[S.step][0];
+  let h = `<nav class="steps" aria-label="Etapas">${STEPS.map(([k, lb], n) => `<button data-step="${n}" class="${stepDone(k) ? 'done' : ''}" ${n === S.step ? 'aria-current="step"' : ''}><span class="chk"></span>${lb}</button>`).join('')}</nav>`;
+  if (key === 'caixa') h += stepCaixa(i);
+  if (key === 'cabos') h += stepCabos(i);
+  if (key === 'check') h += stepCheck(i);
+  if (key === 'fusoes') h += stepFusoes(i);
+  if (key === 'fotos') h += stepFotos(i);
+  if (key === 'final') h += stepFinal(i);
+  return h;
+}
+function locHtml() {
+  const l = S.insp && S.insp.loc;
+  if (!l) return `<div class="warnbox">Localização ainda não capturada. ${esc(S.gps.status === 'err' ? S.gps.msg : 'Toque em "Capturar localização".')}</div>`;
+  return `<div class="okbox"><b>${l.lat.toFixed(6)}, ${l.lon.toFixed(6)}</b> · precisão ±${l.acc} m · ${fHoraS(l.ts)}<br><a href="https://maps.google.com/?q=${l.lat},${l.lon}" target="_blank" rel="noopener">Abrir no mapa</a></div>`;
+}
+function stepCaixa(i) {
+  const tipos = [['aerea','Aérea (poste)'],['sub','Subterrânea (CS enterrada)'],['outro','Outro']];
+  return `<section class="card"><h2><span class="num">1</span>Identificação</h2>
+    <div class="grid2">${inp('info.tag', 'TAG da caixa', { req: 1, full: 1, caps: 1, ph: 'Ex.: CE-BKB-0123' })}
+    ${inp('info.data', 'Data', { type: 'date' })}${inp('info.mes', 'Mês referência', { ph: 'MM/AAAA' })}
+    ${inp('info.tecnico', 'Técnico(s) responsável(is)', { req: 1, full: 1 })}
+    ${inp('info.modelo', 'Modelo')}${inp('info.fabricante', 'Fabricante')}
+    <div class="field full"><span class="lb">Tipo de instalação</span><div class="seg" role="group" aria-label="Tipo de instalação">${tipos.map(([v, lb]) => `<button type="button" data-set="info.tipo" data-v="${v}" aria-pressed="${i.info.tipo === v}">${lb}</button>`).join('')}</div></div>
+    ${i.info.tipo === 'outro' ? inp('info.tipoOutro', 'Qual tipo?', { full: 1 }) : ''}
+    ${inp('info.poste', 'Nº poste / CV', { full: 1 })}</div></section>
+  <section class="card"><h2><span class="num">2</span>Localização</h2>
+    <div id="gpsLoc">${locHtml()}</div>
+    <div class="row"><button class="btn pri" id="bLoc">${ICON.pin}Capturar localização</button><button class="btn" id="bEnd">Buscar endereço</button></div>
+    <div class="grid2">${inp('info.endereco', 'Endereço (rua, nº, referência)', { full: 1 })}${inp('info.bairro', 'Bairro')}${inp('info.cidade', 'Cidade')}${inp('info.rota', 'Rota (início / fim)', { full: 1 })}</div></section>`;
+}
+function stepCabos(i) {
+  const bloco = (k, nome) => `<h3>${nome}</h3><div class="grid2">${inp(`cabos.${k}.marca`, 'Marca')}${inp(`cabos.${k}.lote`, 'Lote')}${inp(`cabos.${k}.fibras`, 'Nº de fibras', { mode: 'numeric' })}${inp(`cabos.${k}.metragem`, 'Metragem (m)', { mode: 'numeric', ph: 'Marcação na capa' })}</div>`;
+  return `<section class="card"><h2><span class="num">3</span>Cabos</h2><p class="muted small" style="margin:0">Metragem: anote a marcação métrica impressa na capa do cabo, junto à caixa.</p>
+    ${bloco('entrada', 'Cabo de entrada')}${bloco('s1', 'Cabo de saída 1')}
+    <label class="row" style="min-height:44px;cursor:pointer"><input type="checkbox" data-k="cabos.temS2" ${i.cabos.temS2 ? 'checked' : ''} style="width:22px;height:22px"> <b>Tem cabo de saída 2</b></label>
+    ${i.cabos.temS2 ? bloco('s2', 'Cabo de saída 2') : ''}</section>`;
+}
+function stepCheck(i) {
+  return `<section class="card"><div class="row" style="justify-content:space-between"><h2><span class="num">4</span>Itens inspecionados</h2><button class="btn" id="bAllOk" style="min-height:44px">${ICON.check}Todos OK</button></div>
+  <div>${CHECK.map(([k, lb]) => `<div class="check-row"><span class="q">${lb}</span><div class="seg ck" role="group" aria-label="${lb}">${['OK','NC','NA'].map(v => `<button type="button" data-set="check.${k}" data-v="${v}" aria-pressed="${i.check[k] === v}">${v === 'NC' ? 'N/C' : v === 'NA' ? 'N/A' : 'OK'}</button>`).join('')}</div>
+    ${i.check[k] === 'NC' ? `<input type="text" data-k="checkObs.${k}" value="${esc(i.checkObs[k] || '')}" placeholder="Descreva a irregularidade" aria-label="Irregularidade: ${lb}">` : ''}</div>`).join('')}</div></section>`;
+}
+function optFib(sel, total) { let o = '<option value="">Fibra…</option>'; for (let n = 1; n <= total; n++) { const { t, f } = tf(n); o += `<option value="${n}" ${String(sel) === String(n) ? 'selected' : ''}>${n} · T${t} ${COLORS[t-1][0]} · F${f} ${COLORS[f-1][0]}</option>`; } return o; }
+function stepFusoes(i) {
+  const tot = i.fo.total; const n = i.fo.rows.slice(0, tot).filter(r => r.f).length;
+  let h = `<section class="card"><h2><span class="num">5</span>Fibras fusionadas</h2>
+    <div class="grid2"><div class="field"><label class="lb" for="foTot">Fibras no cabo de entrada</label><select id="foTot">${[12, 24, 36].map(v => `<option ${v === tot ? 'selected' : ''} value="${v}">${v} FO</option>`).join('')}</select></div>
+    <div class="stat" style="align-self:end"><b>${n} de ${tot}</b><span>Fusionadas</span></div></div>
+    <p class="muted small" style="margin:0">Marque cada fibra de entrada que foi fusionada e diga em qual cabo e fibra de saída ela foi ligada (ex.: fibra 1 com fibra 1, ou fibra 1 com fibra 2).</p>
+    <div class="fo-tools"><button class="btn" id="bSeq">Todas 1→1 na Saída 1</button><button class="btn" id="bLimpaFo">Limpar fusões</button></div>
+    <div class="list">`;
+  for (let k = 0; k < tot; k++) {
+    const r = i.fo.rows[k], { t, f } = tf(k + 1);
+    h += `<div class="fo ${r.f ? 'on' : ''}"><div class="fo-head"><span class="fo-n">FO ${k + 1}</span><span class="meta">${sw(COLORS[t-1][1])} T${t} ${COLORS[t-1][0]} ${sw(COLORS[f-1][1])} F${f} ${COLORS[f-1][0]}</span><button type="button" class="tog" data-fo="${k}" aria-pressed="${r.f}">${r.f ? 'Fusionada' : 'Marcar fusão'}</button></div>
+      ${r.f ? `<div class="fo-body"><select data-k="fo.rows.${k}.cabo" aria-label="Cabo de saída da FO ${k + 1}"><option ${r.cabo === 'S1' ? 'selected' : ''}>S1</option><option ${r.cabo === 'S2' ? 'selected' : ''}>S2</option></select><select data-k="fo.rows.${k}.fib" aria-label="Fibra de saída da FO ${k + 1}">${optFib(r.fib, 36)}</select><input type="text" inputmode="numeric" data-k="fo.rows.${k}.band" value="${esc(r.band)}" placeholder="Band." aria-label="Bandeja da FO ${k + 1}"></div>` : ''}</div>`;
+  }
+  return h + '</div></section>';
+}
+function stepFotos(i) {
+  return `<section class="card"><h2><span class="num">6</span>Evidências (fotos)</h2>
+    <p class="muted small" style="margin:0">Cada foto recebe um carimbo com TAG, data, hora e coordenadas do GPS.</p>
+    <div class="row"><button class="btn pri" id="bCam">${ICON.cam}Tirar foto</button><button class="btn" id="bGal">${ICON.img}Da galeria</button></div>
+    <div class="photos" id="photos">${i.fotos.map((p, k) => `<div class="ph"><img data-ph="${k}" alt="Foto ${k + 1}"><div class="pb"><select data-k="fotos.${k}.cat" aria-label="Categoria da foto ${k + 1}">${CATS.map(c => `<option ${p.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select><input type="text" data-k="fotos.${k}.desc" value="${esc(p.desc)}" placeholder="Descrição (opcional)" aria-label="Descrição da foto ${k + 1}"><button class="del" data-delph="${k}">Remover foto</button></div></div>`).join('')}</div>
+    ${i.fotos.length ? '' : '<p class="muted" style="margin:0">Nenhuma foto ainda.</p>'}</section>`;
+}
+function pendencias(i) {
+  const p = [];
+  if (!i.info.tag) p.push('TAG da caixa'); if (!i.info.tecnico) p.push('Técnico');
+  if (!i.loc) p.push('Localização (GPS)'); if (!i.info.endereco) p.push('Endereço');
+  const sem = CHECK.filter(([k]) => !i.check[k]).length; if (sem) p.push(`${sem} item(ns) do checklist`);
+  if (!i.fotos.length) p.push('Fotos'); if (!i.assinatura) p.push('Assinatura');
+  return p;
+}
+function pendHtml(i) { const p = pendencias(i); return p.length ? `<div class="warnbox"><b>Faltando:</b> ${p.map(esc).join(', ')}.<br>O PDF pode ser gerado assim mesmo.</div>` : '<div class="okbox">Tudo preenchido.</div>'; }
+function pendUpd() { const e = $('#pend'); if (e && S.insp) e.innerHTML = pendHtml(S.insp); }
+function stepFinal(i) {
+  const p = pendencias(i);
+  return `<section class="card"><h2><span class="num">7</span>Observações</h2><textarea data-k="obs" id="f_obs" aria-label="Observações e irregularidades" placeholder="Irregularidades encontradas, serviços executados, pendências…">${esc(i.obs)}</textarea></section>
+  <section class="card"><h2><span class="num">8</span>Assinatura do técnico</h2><canvas class="sig" id="sig" aria-label="Área para assinar com o dedo"></canvas><div class="row"><button class="btn" id="bSigClear" style="min-height:44px">Limpar assinatura</button></div></section>
+  <section class="card"><h2>Relatório</h2>
+    <div id="pend">${p.length ? `<div class="warnbox"><b>Faltando:</b> ${p.map(esc).join(', ')}.<br>O PDF pode ser gerado assim mesmo.</div>` : '<div class="okbox">Tudo preenchido.</div>'}</div>
+    <div class="row"><button class="btn wa" id="bWa">${ICON.wa}Enviar PDF no WhatsApp</button><button class="btn" id="bPdf">${ICON.pdf}Baixar PDF</button></div>
+    <button class="btn go block" id="bConcluir">${ICON.check}${i.status === 'concluida' ? 'Salvar e voltar' : 'Concluir inspeção'}</button>
+    ${S.ronda && i.rondaId === S.ronda.id && i.status !== 'concluida' ? '<p class="muted small" style="margin:0">Ao concluir, o app passa a registrar a rota do cabo até a próxima caixa.</p>' : ''}</section>`;
+}
+function barInsp() {
+  const last = S.step === STEPS.length - 1;
+  setBar(`<button class="btn" id="bPrev" ${S.step === 0 ? 'disabled' : ''}>${ICON.prev}Anterior</button>${last ? `<button class="btn go" id="bConc2">${ICON.check}Concluir</button>` : `<button class="btn pri" id="bNext">Próximo${ICON.next}</button>`}`);
+  $('#bPrev').onclick = () => { S.step = Math.max(0, S.step - 1); window.scrollTo(0, 0); render(); };
+  $('#bNext') && ($('#bNext').onclick = () => { S.step = Math.min(STEPS.length - 1, S.step + 1); window.scrollTo(0, 0); render(); });
+  $('#bConc2') && ($('#bConc2').onclick = concluirInsp);
+}
+function afterInsp() {
+  const i = S.insp, app = $('#app');
+  $$('[data-step]').forEach(b => b.onclick = () => { S.step = +b.dataset.step; window.scrollTo(0, 0); render(); });
+  const cur = $('.steps [aria-current]'); cur && cur.scrollIntoView({ inline: 'center', block: 'nearest' });
+  $$('[data-k]', app).forEach(el => {
+    const ev = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(ev, () => {
+      setPath(i, el.dataset.k, el.type === 'checkbox' ? el.checked : el.value); saveInsp();
+      if (el.dataset.k === 'info.tag') { $('#topTitle').textContent = el.value ? 'Caixa ' + el.value : 'Nova inspeção'; }
+      if (el.dataset.k === 'cabos.temS2') render();
+    });
+  });
+  $$('[data-set]', app).forEach(b => b.onclick = () => { const cur = getPath(i, b.dataset.set); setPath(i, b.dataset.set, cur === b.dataset.v ? '' : b.dataset.v); saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); });
+  const key = STEPS[S.step][0];
+  if (key === 'caixa') {
+    $('#bLoc').onclick = async () => { $('#bLoc').disabled = true; $('#bLoc').textContent = 'Capturando…'; const l = await posAtual(0); if (l) { i.loc = l; saveInsp(); toast(`Localização capturada (±${l.acc} m).`); await preencherEndereco(true); } else toast(S.gps.msg && S.gps.status === 'err' ? S.gps.msg : 'Não foi possível pegar a localização.'); render(); };
+    $('#bEnd').onclick = () => { if (!i.loc) { toast('Capture a localização primeiro.'); return; } preencherEndereco(false); };
+  }
+  if (key === 'check') $('#bAllOk').onclick = () => { CHECK.forEach(([k]) => { if (!i.check[k]) i.check[k] = 'OK'; }); saveInsp(); render(); };
+  if (key === 'fusoes') {
+    $('#foTot').onchange = e => { i.fo.total = +e.target.value; saveInsp(); render(); };
+    $$('[data-fo]').forEach(b => b.onclick = () => { const r = i.fo.rows[+b.dataset.fo]; r.f = !r.f; if (r.f && !r.fib) r.fib = String(+b.dataset.fo + 1); saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); });
+    $('#bSeq').onclick = () => { for (let k = 0; k < i.fo.total; k++) { const r = i.fo.rows[k]; r.f = true; r.cabo = 'S1'; r.fib = String(k + 1); } saveInsp(); render(); toast('Todas as fibras marcadas 1→1 na Saída 1. Ajuste as que forem diferentes.'); };
+    $('#bLimpaFo').onclick = () => { i.fo.rows.forEach(r => { r.f = false; r.fib = ''; r.band = ''; }); saveInsp(); render(); };
+  }
+  if (key === 'fotos') {
+    $('#bCam').onclick = () => $('#fileCam').click(); $('#bGal').onclick = () => $('#fileGal').click();
+    $$('[data-ph]').forEach(img => { const p = i.fotos[+img.dataset.ph]; if (p && p.blob) { img.src = URL.createObjectURL(p.blob); img.onload = () => URL.revokeObjectURL(img.src); } });
+    $$('[data-delph]').forEach(b => b.onclick = () => { if (!confirm('Remover esta foto?')) return; i.fotos.splice(+b.dataset.delph, 1); saveInsp(); render(); });
+  }
+  if (key === 'final') {
+    sigInit();
+    $('#bPdf').onclick = async () => { const f = await gerarPdfInsp(i); if (f) baixar(f); };
+    $('#bWa').onclick = async () => { const f = await gerarPdfInsp(i); if (f) compartilhar([f], textoInsp(i)); };
+    $('#bConcluir').onclick = concluirInsp;
+  }
+}
+['fileCam', 'fileGal'].forEach(id => $('#' + id).addEventListener('change', async e => {
+  const files = Array.from(e.target.files || []); e.target.value = '';
+  if (!files.length || !S.insp) return;
+  toast(files.length > 1 ? `Processando ${files.length} fotos…` : 'Processando foto…', 6000);
+  const loc = S.gps.last && Date.now() - S.gps.last.ts < 120000 ? S.gps.last : S.insp.loc;
+  for (const f of files) { try { const p = await processarFoto(f, loc); S.insp.fotos.push(p); } catch (err) { toast('Não foi possível ler uma das fotos.'); } }
+  saveInsp(true); render(); toast('Foto adicionada.');
+}));
+async function processarFoto(file, loc) {
+  let bmp; try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { bmp = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(file); }); }
+  const max = 1600, sc = Math.min(1, max / Math.max(bmp.width, bmp.height)); const w = Math.round(bmp.width * sc), h = Math.round(bmp.height * sc);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(bmp, 0, 0, w, h);
+  const ts = Date.now(), i = S.insp;
+  const bh = Math.max(46, Math.round(Math.min(w, h) * 0.085)); x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(0, h - bh, w, bh);
+  const fs = Math.round(bh * 0.33); x.fillStyle = '#fff'; x.font = `600 ${fs}px "IBM Plex Sans", Arial, sans-serif`; x.textBaseline = 'middle';
+  const l1 = `TAG ${i.info.tag || '—'}  •  ${fData(ts)} ${fHoraS(ts)}`;
+  const l2 = (loc ? `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)} (±${loc.acc} m)` : 'Sem GPS') + `  •  ${i.info.tecnico || S.perfil.nome || ''}`;
+  x.fillText(l1, Math.round(bh * 0.25), h - bh * 0.7); x.font = `${fs}px "IBM Plex Sans", Arial, sans-serif`; x.fillText(l2, Math.round(bh * 0.25), h - bh * 0.3);
+  x.textAlign = 'right'; x.font = `700 ${fs}px "IBM Plex Sans", Arial, sans-serif`; x.fillText('MULTIVALE', w - Math.round(bh * 0.25), h - bh * 0.5);
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.82));
+  return { id: uid(), cat: CATS[Math.min(i.fotos.length, CATS.length - 2)], desc: '', blob, w, h, ts, lat: loc && loc.lat, lon: loc && loc.lon };
+}
+function sigInit() {
+  const c = $('#sig'); const i = S.insp; const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight; c.width = w * dpr; c.height = h * dpr; const x = c.getContext('2d'); x.scale(dpr, dpr); x.lineWidth = 2.4; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#111';
+  if (i.assinatura) { const im = new Image(); im.onload = () => x.drawImage(im, 0, 0, w, h); im.src = i.assinatura; }
+  let drawing = false, last = null;
+  const pos = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  c.addEventListener('pointerdown', e => { drawing = true; last = pos(e); c.setPointerCapture(e.pointerId); x.beginPath(); x.arc(last[0], last[1], 1.1, 0, Math.PI * 2); x.fillStyle = '#111'; x.fill(); });
+  c.addEventListener('pointermove', e => { if (!drawing) return; const p = pos(e); x.beginPath(); x.moveTo(last[0], last[1]); x.lineTo(p[0], p[1]); x.stroke(); last = p; });
+  const end = () => { if (!drawing) return; drawing = false; i.assinatura = c.toDataURL('image/png'); saveInsp(); pendUpd(); };
+  c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+  $('#bSigClear').onclick = () => { x.clearRect(0, 0, w, h); i.assinatura = null; saveInsp(); pendUpd(); };
+}
+
+/* ---------- resumo da ronda ---------- */
+function viewRonda(r) {
+  const { t, segs } = totais(r);
+  const ins = r.eventos.filter(e => e.tipo === 'chegada').map(e => S.inspCache.get(e.inspId)).filter(Boolean);
+  return `<section class="card"><div class="hero"><span class="lb">${r.fim ? 'Ronda encerrada' : 'Ronda em andamento'}</span><div class="big">${esc(r.tecnico)} · ${fData(r.inicio)}</div><span class="muted small">${fHora(r.inicio)} até ${r.fim ? fHora(r.fim) : 'agora'}${r.placa ? ' · Veículo ' + esc(r.placa) : ''}</span></div>
+    <div class="stats"><div class="stat"><b>${fDur(t.dur)}</b><span>Duração</span></div><div class="stat"><b>${fKm(t.km)}</b><span>Total</span></div><div class="stat"><b>${fKm(t.desl + t.ret)}</b><span>Deslocamento</span></div><div class="stat"><b>${fKm(t.cabo)}</b><span>Rota do cabo</span></div></div>
+    <div class="map" id="mapR" role="img" aria-label="Mapa do percurso"></div>
+    <div class="legend"><span><i style="background:${SEGCOR.desl}"></i>Deslocamento</span><span><i style="background:${SEGCOR.cabo}"></i>Rota do cabo</span><span><i style="background:${SEGCOR.ret}"></i>Retorno</span></div>
+    ${t.gapN ? `<div class="warnbox">${t.gapN} trecho(s) sem registro de GPS por mais de 3 min (total ${fDur(t.gapMs)}). Nesses trechos o app estava fechado, em segundo plano ou sem sinal.</div>` : ''}
+    <div class="row"><button class="btn wa" id="bWaR">${ICON.wa}Enviar ronda no WhatsApp</button><button class="btn" id="bPdfR">${ICON.pdf}Baixar PDF da ronda</button></div>
+    ${ins.length ? `<button class="btn block" id="bTudo">${ICON.wa}Enviar ronda + relatórios das ${ins.length} caixas</button>` : ''}</section>
+  <section class="card"><h2>Trechos</h2><div class="tw"><table class="t"><thead><tr><th>Trecho</th><th>De → Para</th><th>Horário</th><th class="r">Km</th></tr></thead><tbody>
+    ${segs.map(s => `<tr><td><b style="color:${SEGCOR[s.tipo]}">${SEGLB[s.tipo]}</b></td><td>${esc(s.de)} → ${esc(s.para)}</td><td>${fHora(s.ini)}–${fHora(s.fim)}<br><span class="muted small">${fDur(s.fim - s.ini)}</span></td><td class="r">${fKm(s.km)}</td></tr>`).join('')}</tbody></table></div></section>
+  <section class="card"><h2>Caixas inspecionadas</h2>${ins.length ? `<div class="list">${ins.map((i, k) => itemInsp(i, k + 1)).join('')}</div>` : '<p class="muted" style="margin:0">Nenhuma caixa nesta ronda.</p>'}</section>`;
+}
+function afterRonda() {
+  const r = S.rondaView; drawLiveMap('mapR', r, !r.fim); bindOpen();
+  $('#bPdfR').onclick = async () => { const f = await gerarPdfRonda(r); if (f) baixar(f); };
+  $('#bWaR').onclick = async () => { const f = await gerarPdfRonda(r); if (f) compartilhar([f], textoRonda(r)); };
+  $('#bTudo') && ($('#bTudo').onclick = async () => {
+    const files = []; const f = await gerarPdfRonda(r); if (!f) return; files.push(f);
+    for (const e of r.eventos.filter(e => e.tipo === 'chegada')) { const i = S.inspCache.get(e.inspId); if (i) { const g = await gerarPdfInsp(i, true); if (g) files.push(g); } }
+    compartilhar(files, textoRonda(r));
+  });
+}
+
+/* ============================ PDF ============================ */
+const ACC = [11, 95, 153];
+async function logoData() {
+  if (S.logoData) return S.logoData;
+  try { const b = await (await fetch('logo-pdf.jpg')).blob(); S.logoData = await blobToData(b); } catch (e) { S.logoData = null; }
+  return S.logoData;
+}
+const blobToData = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+function pdfHeader(doc, logo, titulo, sub, tag) {
+  if (logo) doc.addImage(logo, 'JPEG', 12, 9, 36, 21.6);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...ACC); doc.text(sub.toUpperCase(), 52, 15);
+  doc.setFontSize(14); doc.setTextColor(20); doc.text(titulo, 52, 22, { maxWidth: tag != null ? 94 : 146 });
+  if (tag != null) { doc.setDrawColor(20); doc.setLineWidth(0.6); doc.rect(150, 11, 48, 15); doc.setFontSize(6.5); doc.setTextColor(90); doc.text('TAG DA CAIXA', 152, 15); doc.setFontSize(12); doc.setTextColor(20); doc.text(String(tag || '—'), 152, 23); }
+  doc.setDrawColor(20); doc.setLineWidth(0.7); doc.line(12, 33, 198, 33);
+  return 39;
+}
+function pdfSec(doc, y, n, titulo) {
+  if (y > 262) { doc.addPage(); y = 16; }
+  doc.setFillColor(...ACC); doc.rect(12, y - 4.2, 5.5, 5.5, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.text(String(n), 14.75, y - 0.3, { align: 'center' });
+  doc.setTextColor(20); doc.setFontSize(10.5); doc.text(titulo.toUpperCase(), 20, y);
+  doc.setDrawColor(170); doc.setLineWidth(0.2); doc.line(20 + doc.getTextWidth(titulo.toUpperCase()) + 3, y - 1.5, 198, y - 1.5);
+  return y + 3;
+}
+const TB = { theme: 'grid', margin: { left: 12, right: 12 }, styles: { fontSize: 8.5, cellPadding: 1.8, lineColor: [150, 160, 170], lineWidth: 0.2, textColor: 20 }, headStyles: { fillColor: [233, 238, 241], textColor: 20, fontStyle: 'bold', fontSize: 8 } };
+function kv(doc, y, pares) {
+  const body = []; for (let k = 0; k < pares.length; k += 2) body.push([pares[k][0], pares[k][1] || '—', pares[k + 1] ? pares[k + 1][0] : '', pares[k + 1] ? (pares[k + 1][1] || '—') : '']);
+  doc.autoTable({ ...TB, startY: y, body, columnStyles: { 0: { fontStyle: 'bold', fillColor: [246, 248, 250], cellWidth: 32 }, 1: { cellWidth: 61 }, 2: { fontStyle: 'bold', fillColor: [246, 248, 250], cellWidth: 32 }, 3: { cellWidth: 61 } } });
+  return doc.lastAutoTable.finalY + 7;
+}
+function pdfFooter(doc, txt) {
+  const n = doc.getNumberOfPages();
+  for (let p = 1; p <= n; p++) { doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(110); doc.text(txt, 12, 290); doc.text(`Página ${p} de ${n}`, 198, 290, { align: 'right' }); }
+}
+function nomeArq(base) { return base.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').replace(/_+/g, '_') + '.pdf'; }
+
+async function mapaImg(lines, marks, w = 1400, h = 800) {
+  const all = [...lines.flatMap(l => l.pts), ...marks].filter(p => p && p.lat != null);
+  if (!all.length) return null;
+  const lon2x = (lon, z) => (lon + 180) / 360 * 256 * 2 ** z;
+  const lat2y = (lat, z) => { const s = Math.sin(lat * Math.PI / 180); return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * 2 ** z; };
+  let mnLa = Infinity, mxLa = -Infinity, mnLo = Infinity, mxLo = -Infinity;
+  all.forEach(p => { mnLa = Math.min(mnLa, p.lat); mxLa = Math.max(mxLa, p.lat); mnLo = Math.min(mnLo, p.lon); mxLo = Math.max(mxLo, p.lon); });
+  const padd = 70; let z = 17;
+  for (; z > 3; z--) { if (lon2x(mxLo, z) - lon2x(mnLo, z) <= w - 2 * padd && lat2y(mnLa, z) - lat2y(mxLa, z) <= h - 2 * padd) break; }
+  const cx = (lon2x(mnLo, z) + lon2x(mxLo, z)) / 2, cy = (lat2y(mxLa, z) + lat2y(mnLa, z)) / 2, ox = cx - w / 2, oy = cy - h / 2;
+  const draw = async withTiles => {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+    x.fillStyle = '#e9eef1'; x.fillRect(0, 0, w, h);
+    if (withTiles) {
+      const n = 2 ** z, jobs = [];
+      for (let tx = Math.floor(ox / 256); tx <= Math.floor((ox + w) / 256); tx++) for (let ty = Math.floor(oy / 256); ty <= Math.floor((oy + h) / 256); ty++) {
+        if (ty < 0 || ty >= n) continue; const wx = ((tx % n) + n) % n;
+        jobs.push(new Promise(res => { const im = new Image(); im.crossOrigin = 'anonymous'; const t = setTimeout(() => res(false), 8000); im.onload = () => { clearTimeout(t); x.drawImage(im, tx * 256 - ox, ty * 256 - oy); res(true); }; im.onerror = () => { clearTimeout(t); res(false); }; im.src = `https://tile.openstreetmap.org/${z}/${wx}/${ty}.png`; }));
+      }
+      const ok = await Promise.all(jobs); if (!ok.some(Boolean)) return null;
+      x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(0, 0, w, h);
+    } else { x.strokeStyle = '#d3dbe1'; x.lineWidth = 1; for (let g = 0; g < w; g += 80) { x.beginPath(); x.moveTo(g, 0); x.lineTo(g, h); x.stroke(); } for (let g = 0; g < h; g += 80) { x.beginPath(); x.moveTo(0, g); x.lineTo(w, g); x.stroke(); } }
+    const P = p => [lon2x(p.lon, z) - ox, lat2y(p.lat, z) - oy];
+    lines.forEach(l => { if (l.pts.length < 2) return; [[10, 'rgba(255,255,255,.85)'], [6, l.color]].forEach(([lw, col]) => { x.lineWidth = lw; x.strokeStyle = col; x.lineCap = 'round'; x.lineJoin = 'round'; x.beginPath(); l.pts.forEach((p, k) => { const [a, b] = P(p); k ? x.lineTo(a, b) : x.moveTo(a, b); }); x.stroke(); }); });
+    marks.forEach(m => { if (m.lat == null) return; const [a, b] = P(m); x.beginPath(); x.arc(a, b, 17, 0, Math.PI * 2); x.fillStyle = m.color || '#0b5f99'; x.fill(); x.lineWidth = 3; x.strokeStyle = '#fff'; x.stroke(); x.fillStyle = '#fff'; x.font = 'bold 17px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(m.label, a, b + 1); });
+    x.font = '14px Arial'; x.textAlign = 'right'; x.textBaseline = 'bottom'; const at = withTiles ? '© OpenStreetMap' : 'Mapa sem fundo (sem internet)'; const tw = x.measureText(at).width; x.fillStyle = 'rgba(255,255,255,.85)'; x.fillRect(w - tw - 12, h - 22, tw + 12, 22); x.fillStyle = '#333'; x.fillText(at, w - 6, h - 4);
+    return c.toDataURL('image/jpeg', 0.85);
+  };
+  try { const d = await draw(true); if (d) return d; } catch (e) {}
+  try { return await draw(false); } catch (e) { return null; }
+}
+
+async function gerarPdfInsp(i, silencioso) {
+  if (!window.jspdf) { toast('Gerador de PDF não carregou. Abra o app com internet uma vez.'); return null; }
+  if (!silencioso) toast('Gerando PDF…', 8000);
+  try {
+    const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const logo = await logoData();
+    let y = pdfHeader(doc, logo, 'Inspeção Preventiva Backbone', 'Relatório de inspeção · Rede óptica', i.info.tag);
+    const tipo = { aerea: 'Aérea (poste)', sub: 'Subterrânea (CS enterrada)', outro: 'Outro' + (i.info.tipoOutro ? ': ' + i.info.tipoOutro : '') }[i.info.tipo] || '';
+    const dataBR = i.info.data ? i.info.data.split('-').reverse().join('/') : '';
+    y = pdfSec(doc, y, 1, 'Identificação da caixa');
+    y = kv(doc, y, [['Data', dataBR], ['Mês referência', i.info.mes], ['Técnico(s)', i.info.tecnico], ['TAG da caixa', i.info.tag], ['Modelo', i.info.modelo], ['Fabricante', i.info.fabricante], ['Tipo de instalação', tipo], ['Nº poste / CV', i.info.poste], ['Endereço', i.info.endereco], ['Bairro', i.info.bairro], ['Cidade', i.info.cidade], ['Rota (início/fim)', i.info.rota], ['Chegada', fHora(i.chegada)], ['Saída', i.saida ? fHora(i.saida) : '—']]);
+    y = pdfSec(doc, y, 2, 'Localização (GPS)');
+    const l = i.loc;
+    y = kv(doc, y, [['Coordenadas', l ? `${l.lat.toFixed(6)}, ${l.lon.toFixed(6)}` : 'Não capturada'], ['Precisão', l ? `±${l.acc} m às ${fHoraS(l.ts)}` : ''], ['Mapa', l ? 'maps.google.com/?q=' + l.lat + ',' + l.lon : '']]);
+    if (l) { doc.link(12, y - 13, 186, 7, { url: `https://maps.google.com/?q=${l.lat},${l.lon}` }); }
+    // mapa do trecho até a caixa
+    let seg = null;
+    if (i.rondaId) { const r = (S.ronda && S.ronda.id === i.rondaId) ? S.ronda : await DB.get('rondas', i.rondaId); if (r) { await cacheInspRonda(r); seg = segmentos(r).find(s => s.inspId === i.id); } }
+    if (l) {
+      const img = await mapaImg(seg ? [{ pts: seg.pts, color: SEGCOR[seg.tipo] }] : [], [{ lat: l.lat, lon: l.lon, label: 'C', color: '#0b5f99' }], 1400, 600);
+      if (img) { if (y > 205) { doc.addPage(); y = 16; } doc.addImage(img, 'JPEG', 12, y - 3, 186, 79.7); y += 79.7; doc.setFontSize(7.5); doc.setTextColor(90); doc.setFont('helvetica', 'normal');
+        doc.text(seg ? `${SEGLB[seg.tipo]}: ${seg.de} > ${seg.para} · ${fKm(seg.km)} · ${fHora(seg.ini)}–${fHora(seg.fim)}` : 'Posição da caixa', 12, y + 1); y += 8; }
+    }
+    y = pdfSec(doc, y, 3, 'Cabos');
+    const cab = [['Entrada', i.cabos.entrada], ['Saída 1', i.cabos.s1]]; if (i.cabos.temS2) cab.push(['Saída 2', i.cabos.s2]);
+    doc.autoTable({ ...TB, startY: y, head: [['Cabo', 'Marca', 'Lote', 'Nº de fibras', 'Metragem (m)']], body: cab.map(([n, c]) => [n, c.marca || '—', c.lote || '—', c.fibras || '—', c.metragem || '—']), columnStyles: { 0: { fontStyle: 'bold' } } });
+    y = doc.lastAutoTable.finalY + 7;
+    y = pdfSec(doc, y, 4, 'Itens inspecionados');
+    doc.autoTable({ ...TB, startY: y, head: [['Item', 'Situação', 'Observação']], body: CHECK.map(([k, lb]) => [lb, i.check[k] === 'NC' ? 'N/C' : i.check[k] === 'NA' ? 'N/A' : (i.check[k] || '—'), i.checkObs[k] || '']),
+      columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 22, halign: 'center', fontStyle: 'bold' } },
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 1) { if (d.cell.raw === 'OK') d.cell.styles.textColor = [31, 122, 58]; if (d.cell.raw === 'N/C') { d.cell.styles.textColor = [255, 255, 255]; d.cell.styles.fillColor = [180, 35, 27]; } } } });
+    y = doc.lastAutoTable.finalY + 7;
+    y = pdfSec(doc, y, 5, 'Fibras fusionadas e mapa de fusões');
+    const fused = i.fo.rows.slice(0, i.fo.total).map((r, k) => ({ ...r, n: k + 1 })).filter(r => r.f);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(20);
+    doc.text(`${fused.length} de ${i.fo.total} fibras do cabo de entrada fusionadas.`, 12, y + 1); y += 4;
+    // grade 3 tubos x 12 fibras
+    const gx = 12, cw = 14.5, ch = 6.2; doc.setFontSize(7);
+    for (let f = 0; f < 12; f++) { doc.setFillColor(COLORS[f][1]); doc.rect(gx + 14 + f * cw, y, cw, 3, 'FD'); doc.setTextColor(20); doc.text(String(f + 1), gx + 14 + f * cw + cw / 2, y + 6, { align: 'center' }); }
+    y += 7.5;
+    for (let t = 0; t < i.fo.total / 12; t++) {
+      doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.text(`T${t + 1}`, gx + 1, y + 4.2); doc.setFillColor(COLORS[t][1]); doc.rect(gx + 7, y + 1.7, 4, 3, 'FD'); doc.setFont('helvetica', 'normal');
+      for (let f = 0; f < 12; f++) { const r = i.fo.rows[t * 12 + f]; doc.setDrawColor(150); if (r.f) { doc.setFillColor(...ACC); doc.rect(gx + 14 + f * cw, y, cw, ch, 'FD'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.text('X', gx + 14 + f * cw + cw / 2, y + 4.3, { align: 'center' }); doc.setFont('helvetica', 'normal'); } else doc.rect(gx + 14 + f * cw, y, cw, ch); }
+      y += ch;
+    }
+    y += 4;
+    if (fused.length) {
+      doc.autoTable({ ...TB, startY: y, head: [['FO', 'Entrada (tubo / fibra)', 'Band.', 'Cabo saída', 'Fibra de saída (tubo / fibra)', 'Ligação']],
+        body: fused.map(r => [r.n, foTxt(r.n), r.band || '—', r.cabo, r.fib ? `${r.fib} · ${foTxt(+r.fib)}` : '—', r.fib ? `F${r.n} com F${r.fib}` : '—']), columnStyles: { 0: { halign: 'center', fontStyle: 'bold', cellWidth: 11 }, 2: { halign: 'center', cellWidth: 13 }, 3: { halign: 'center', cellWidth: 19 } } });
+      y = doc.lastAutoTable.finalY + 7;
+    }
+    y = pdfSec(doc, y, 6, 'Observações / irregularidades');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(20);
+    const ob = doc.splitTextToSize(i.obs || 'Sem observações.', 186); ob.forEach(line => { if (y > 280) { doc.addPage(); y = 16; } doc.text(line, 12, y + 1); y += 4.6; }); y += 4;
+    if (y > 245) { doc.addPage(); y = 20; }
+    if (i.assinatura) doc.addImage(i.assinatura, 'PNG', 12, y, 70, 22);
+    doc.setDrawColor(20); doc.setLineWidth(0.4); doc.line(12, y + 24, 92, y + 24); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.text('ASSINATURA DO TÉCNICO — ' + (i.info.tecnico || '').toUpperCase(), 12, y + 28);
+    doc.line(118, y + 24, 198, y + 24); doc.text('VISTO DO SUPERVISOR', 118, y + 28);
+    // fotos
+    if (i.fotos.length) {
+      for (let k = 0; k < i.fotos.length; k++) {
+        const p = i.fotos[k]; if (k % 2 === 0) { doc.addPage(); y = pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de inspeção · ' + (i.info.tag || ''), i.info.tag); }
+        const data = await blobToData(p.blob); const bw = 186, bh = 112; let w = bw, h = w * p.h / p.w; if (h > bh) { h = bh; w = h * p.w / p.h; }
+        doc.addImage(data, 'JPEG', 12 + (bw - w) / 2, y, w, h); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20);
+        doc.text(`Foto ${k + 1} — ${p.cat}${p.desc ? ': ' + p.desc : ''}`, 12, y + h + 5, { maxWidth: 186 }); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90);
+        doc.text(`${fData(p.ts)} ${fHoraS(p.ts)}${p.lat != null ? ` · ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}` : ''}`, 12, y + h + 9.5);
+        y += h + 16;
+      }
+    }
+    pdfFooter(doc, `Multivale Engenharia · Ronda Preventiva Backbone · gerado em ${fDH(Date.now())}`);
+    const blob = doc.output('blob');
+    return new File([blob], nomeArq(`Inspecao_${i.info.tag || 'sem_TAG'}_${i.info.data || isoDate(i.criado)}`), { type: 'application/pdf' });
+  } catch (e) { console.error(e); toast('Erro ao gerar o PDF: ' + e.message, 6000); return null; }
+}
+
+async function gerarPdfRonda(r) {
+  if (!window.jspdf) { toast('Gerador de PDF não carregou. Abra o app com internet uma vez.'); return null; }
+  toast('Gerando relatório da ronda…', 8000);
+  try {
+    await cacheInspRonda(r);
+    const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const logo = await logoData();
+    const { t, segs } = totais(r);
+    let y = pdfHeader(doc, logo, 'Relatório de Ronda Preventiva', 'Controle de percurso e produção', null);
+    y = pdfSec(doc, y, 1, 'Resumo do dia');
+    y = kv(doc, y, [['Técnico', r.tecnico], ['Matrícula', r.matricula], ['Data', fData(r.inicio)], ['Veículo', r.placa], ['Início', fHora(r.inicio)], ['Fim', r.fim ? fHora(r.fim) : 'Em andamento'], ['Duração', fDur(t.dur)], ['Caixas inspecionadas', String(t.caixas)], ['Km total', fKm(t.km)], ['Km deslocamento', fKm(t.desl + t.ret + t.atual)], ['Km rota do cabo', fKm(t.cabo)], ['Sem GPS (>3 min)', t.gapN ? `${t.gapN} trecho(s), ${fDur(t.gapMs)}` : 'Nenhum']]);
+    const ini = r.eventos.find(e => e.tipo === 'inicio');
+    const marks = [{ lat: ini && ini.lat, lon: ini && ini.lon, label: 'I', color: '#1f7a3a' }, ...r.eventos.filter(e => e.tipo === 'chegada').map((e, k) => ({ lat: e.lat, lon: e.lon, label: String(k + 1), color: '#0b5f99' }))];
+    const fim = r.eventos.find(e => e.tipo === 'fim'); if (fim && fim.lat != null) marks.push({ lat: fim.lat, lon: fim.lon, label: 'F', color: '#b4231b' });
+    const img = await mapaImg(segs.map(s => ({ pts: s.pts, color: SEGCOR[s.tipo] })), marks, 1400, 1000);
+    y = pdfSec(doc, y, 2, 'Mapa do percurso');
+    if (img) { if (y > 150) { doc.addPage(); y = 16; } doc.addImage(img, 'JPEG', 12, y - 2, 186, 132.9); y += 133;
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); let lx = 12;
+      [['desl', 'Deslocamento'], ['cabo', 'Rota do cabo'], ['ret', 'Retorno']].forEach(([k, lb]) => { doc.setFillColor(SEGCOR[k]); doc.rect(lx, y, 6, 1.6, 'F'); doc.setTextColor(60); doc.text(lb, lx + 8, y + 1.6); lx += 36; });
+      doc.text('I = início · F = fim · números = ordem das caixas', 120, y + 1.6); y += 8; }
+    y = pdfSec(doc, y, 3, 'Trechos percorridos');
+    doc.autoTable({ ...TB, startY: y, head: [['#', 'Tipo', 'De > Para', 'Início', 'Fim', 'Tempo', 'Km']], body: segs.map((s, k) => [k + 1, SEGLB[s.tipo], `${s.de} > ${s.para}`, fHora(s.ini), fHora(s.fim), fDur(s.fim - s.ini), fKm(s.km)]),
+      foot: [['', '', 'Total', '', '', fDur(t.dur), fKm(t.km)]], footStyles: { fillColor: [233, 238, 241], textColor: 20, fontStyle: 'bold' }, columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 6: { halign: 'right' } },
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 1) { const k = Object.keys(SEGLB).find(x => SEGLB[x] === d.cell.raw); if (k) { d.cell.styles.textColor = SEGCOR[k]; d.cell.styles.fontStyle = 'bold'; } } } });
+    y = doc.lastAutoTable.finalY + 7;
+    y = pdfSec(doc, y, 4, 'Produção — caixas inspecionadas');
+    const ch = r.eventos.filter(e => e.tipo === 'chegada');
+    doc.autoTable({ ...TB, startY: y, head: [['#', 'TAG', 'Endereço', 'Chegada', 'Saída', 'Na caixa', 'Fusões', 'N/C', 'Fotos']],
+      body: ch.map((e, k) => { const i = S.inspCache.get(e.inspId); if (!i) return [k + 1, '—', '', fHora(e.ts), '', '', '', '', '']; const nf = i.fo.rows.slice(0, i.fo.total).filter(x => x.f).length; const nc = Object.values(i.check).filter(v => v === 'NC').length;
+        return [k + 1, i.info.tag || '—', [i.info.endereco, i.info.bairro].filter(Boolean).join(' - ') || '—', fHora(i.chegada), i.saida ? fHora(i.saida) : '—', i.saida ? fDur(i.saida - i.chegada) : '—', `${nf}/${i.fo.total}`, String(nc), String(i.fotos.length)]; }),
+      columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { fontStyle: 'bold' }, 6: { halign: 'center' }, 7: { halign: 'center' }, 8: { halign: 'center' } },
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 7 && +d.cell.raw > 0) { d.cell.styles.textColor = [180, 35, 27]; d.cell.styles.fontStyle = 'bold'; } } });
+    y = doc.lastAutoTable.finalY + 6;
+    if (t.gapN) { doc.setFontSize(8); doc.setTextColor(150, 70, 10); doc.text(doc.splitTextToSize(`Atenção: ${t.gapN} trecho(s) ficaram mais de 3 minutos sem posição de GPS (total ${fDur(t.gapMs)}). Nesses trechos a distância é estimada em linha reta.`, 186), 12, y); y += 10; }
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setDrawColor(20); doc.setLineWidth(0.4); doc.line(12, y + 18, 92, y + 18); doc.line(118, y + 18, 198, y + 18); doc.setFontSize(7.5); doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.text('TÉCNICO — ' + r.tecnico.toUpperCase(), 12, y + 22); doc.text('SUPERVISOR', 118, y + 22);
+    pdfFooter(doc, `Multivale Engenharia · Ronda Preventiva Backbone · gerado em ${fDH(Date.now())}`);
+    return new File([doc.output('blob')], nomeArq(`Ronda_${isoDate(r.inicio)}_${r.tecnico}`), { type: 'application/pdf' });
+  } catch (e) { console.error(e); toast('Erro ao gerar o PDF: ' + e.message, 6000); return null; }
+}
+
+/* ============================ compartilhar ============================ */
+function textoInsp(i) { const l = i.loc; return `Inspeção preventiva backbone — Caixa ${i.info.tag || 'sem TAG'}\nTécnico: ${i.info.tecnico}\nData: ${fDH(i.chegada)}${l ? `\nLocal: https://maps.google.com/?q=${l.lat},${l.lon}` : ''}`; }
+function textoRonda(r) { const { t } = totais(r); return `Ronda preventiva backbone — ${fData(r.inicio)}\nTécnico: ${r.tecnico}\n${fHora(r.inicio)} às ${r.fim ? fHora(r.fim) : 'agora'} · ${t.caixas} caixa(s) · ${fKm(t.km)}`; }
+function baixar(f) { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000); toast('PDF salvo em Downloads.'); }
+async function compartilhar(files, texto) {
+  try {
+    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, title: files[0].name, text: texto }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  files.forEach(baixar);
+  toast('Este navegador não envia arquivos direto. O PDF foi salvo; anexe no WhatsApp.', 6000);
+  setTimeout(() => window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank'), 800);
+}
+
+/* ============================ início ============================ */
+(async function boot() {
+  const ok = await DB.open(); if (!ok) toast('Armazenamento do aparelho indisponível: os dados não serão guardados se o app fechar.', 6000);
+  const pf = await DB.get('meta', 'perfil'); if (pf) S.perfil = pf;
+  const at = await DB.get('meta', 'ativa');
+  if (at && at.rondaId) { const r = await DB.get('rondas', at.rondaId); if (r && !r.fim) { S.ronda = r; await cacheInspRonda(r); gpsStart(); wakeOn(); } }
+  render();
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
