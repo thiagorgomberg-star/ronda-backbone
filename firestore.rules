@@ -1,0 +1,57 @@
+rules_version = '2';
+// Regras do Firestore — Ronda Backbone Multivale
+// Estrutura: orgs/{org}/admins | tecnicos | rotas | rondas | eventos | fotosRede | aovivo
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logado() { return request.auth != null; }
+    function admin(org) { return logado() && exists(/databases/$(database)/documents/orgs/$(org)/admins/$(request.auth.uid)); }
+    function dono() { return logado() && resource.data._uid == request.auth.uid; }
+    function gravandoComoEu() { return logado() && request.resource.data._uid == request.auth.uid; }
+
+    // Supervisores: criados só pelo console do Firebase. Cada um lê o próprio cadastro.
+    match /orgs/{org}/admins/{uid} {
+      allow read: if logado() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Perfil do técnico: o técnico grava e lê o seu; o supervisor lê todos.
+    match /orgs/{org}/tecnicos/{uid} {
+      allow read: if (logado() && request.auth.uid == uid) || admin(org);
+      allow write: if logado() && request.auth.uid == uid;
+    }
+
+    // Rotas e traçados KMZ: a equipe lê; técnico e supervisor cadastram; só o supervisor apaga.
+    match /orgs/{org}/rotas/{id} {
+      allow read: if logado();
+      allow create, update: if gravandoComoEu();
+      allow delete: if admin(org);
+    }
+
+    // Eventos (inspeções e corretivas): a equipe lê, para a busca de eventos próximos.
+    match /orgs/{org}/eventos/{id} {
+      allow read: if logado();
+      allow create: if gravandoComoEu();
+      allow update, delete: if dono() || admin(org);
+    }
+
+    // Rondas (percurso GPS, odômetro, velocidade) e fotos da rede:
+    // só o próprio técnico e o supervisor leem. Desvios de rota são calculados só no painel do supervisor.
+    match /orgs/{org}/rondas/{id} {
+      allow read: if dono() || admin(org);
+      allow create: if gravandoComoEu();
+      allow update, delete: if dono() || admin(org);
+    }
+    match /orgs/{org}/fotosRede/{id} {
+      allow read: if dono() || admin(org);
+      allow create: if gravandoComoEu();
+      allow update, delete: if dono() || admin(org);
+    }
+
+    // Posição em tempo real: cada técnico grava só o próprio documento; o supervisor lê todos.
+    match /orgs/{org}/aovivo/{uid} {
+      allow write: if logado() && request.auth.uid == uid;
+      allow read: if admin(org) || (logado() && request.auth.uid == uid);
+    }
+  }
+}
