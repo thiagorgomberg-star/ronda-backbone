@@ -123,6 +123,31 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid v
 .fo.on .tog{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .fo-body{display:grid;grid-template-columns:90px minmax(0,1fr) 84px;gap:8px}
 .fo-body select,.fo-body input{min-height:44px;padding:6px 8px}
+.fo-body .field{gap:2px}.fo-body .lb{font-size:11px}
+.fo-mot{grid-column:1/-1}
+.fo-body5{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.fo-body5 select,.fo-body5 input{min-height:44px;padding:6px 6px;font-size:15px}
+.fo-body5 .lb{font-size:11px}
+@media (max-width:440px){.fo-body5{grid-template-columns:repeat(2,minmax(0,1fr))}}
+details.tubo{border:1px solid var(--line);border-radius:12px;padding:0 10px;background:var(--surface)}
+details.tubo summary{min-height:52px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:16px;list-style:none}
+details.tubo summary::-webkit-details-marker{display:none}
+details.tubo summary::after{content:'▾';margin-left:4px;color:var(--muted)}
+details.tubo[open] summary::after{content:'▴'}
+.tcount{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;padding:2px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}
+.tcount.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pill.mano{background:var(--warn-soft);color:var(--orange)}
+.fo.dup{border-color:var(--bad);background:var(--bad-soft)}
+.fo-warn{color:var(--bad);font-size:13px;font-weight:600}
+@media (max-width:400px){.fo-body{grid-template-columns:76px minmax(0,1fr) 66px}}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:thin;scroll-snap-type:x proximity}
+.chips button{flex-shrink:0;scroll-snap-align:start;min-height:46px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--surface);font-weight:600;font-size:15px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.chips button[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chips .cnt{font-size:12px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--ink);border:1px solid var(--line);padding:0 5px}
+.chips button[aria-checked="true"] .cnt{background:var(--accent-ink);color:var(--accent);border-color:transparent}
+.chips .ok-mark{color:var(--ok)}
+.ph .tag{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px}
+.ph{position:relative}
 .photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (max-width:420px){.photos{grid-template-columns:minmax(0,1fr)}}
 .ph{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface-2);display:flex;flex-direction:column}
@@ -144,7 +169,7 @@ table.t td.r,table.t th.r{text-align:right}
 .clock{font-variant-numeric:tabular-nums}
 .leaflet-container{font:inherit}
 .mk{background:var(--accent);color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.4)}
-.mk.start{background:#1f7a3a}.mk.me{background:#d9480f;width:18px;height:18px}
+.mk.start{background:#1f7a3a}.mk.foto{background:#7a3fa0;width:24px;height:24px;font-size:11px}.mk.me{background:#d9480f;width:18px;height:18px}
 @media (prefers-reduced-motion:no-preference){.btn,.tog,.seg button{transition:background .15s,color .15s}}
 </style>
 </head>
@@ -152,6 +177,8 @@ table.t td.r,table.t th.r{text-align:right}
 <header class="top">
   <img class="logo" src="logo.png" alt="Multivale Engenharia">
   <div class="ttl"><b id="topTitle">Ronda Preventiva Backbone</b><span id="topSub">Inspeção de caixas de emenda</span></div>
+  <button class="iconbtn" id="btnRel" aria-label="Meus relatórios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg></button>
+  <button class="iconbtn" id="btnPerfil" aria-label="Perfil do técnico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></button>
   <button class="iconbtn" id="btnBack" hidden aria-label="Voltar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Início</button>
 </header>
 <main id="app"></main>
@@ -181,7 +208,19 @@ const fKm = km => (km || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, 
 const isoDate = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; };
 const COLORS = [['Verde','#2e8b3e'],['Amarelo','#f2c200'],['Branco','#ffffff'],['Azul','#1f5fbf'],['Vermelho','#c8102e'],['Violeta','#7a3fa0'],['Marrom','#7a4a1e'],['Rosa','#f08ab0'],['Preto','#141414'],['Cinza','#8a8a8a'],['Laranja','#f07c00'],['Azul-claro','#5ec8e0']];
 const tf = n => ({ t: Math.floor((n - 1) / 12) + 1, f: ((n - 1) % 12) + 1 });
-const foTxt = n => { const { t, f } = tf(n); return `T${t} ${COLORS[t-1][0]} / F${f} ${COLORS[f-1][0]}`; };
+const CAPS = [12, 24, 36, 48, 72, 96, 144, 288];
+const EIA = [['Azul','#1f5fbf'],['Laranja','#f07c00'],['Verde','#2e8b3e'],['Marrom','#7a4a1e'],['Cinza','#8a8a8a'],['Branco','#ffffff'],['Vermelho','#c8102e'],['Preto','#141414'],['Amarelo','#f2c200'],['Violeta','#7a3fa0'],['Rosa','#f08ab0'],['Azul-claro','#5ec8e0']];
+const PADROES = { ABNT: ['Nacional (ABNT)', COLORS], EIA: ['Americano (EIA/TIA-598)', EIA] };
+const pal = p => (PADROES[p] || PADROES.ABNT)[1];
+const padNome = p => (PADROES[p] || PADROES.ABNT)[0];
+const fCor = (f, p) => pal(p)[(f - 1) % 12];
+const tCor = (t, p) => pal(p)[(t - 1) % 12][1];
+const tNome = (t, p) => pal(p)[(t - 1) % 12][0] + (t > 12 ? ` (${Math.ceil(t / 12)}º grupo)` : '');
+const foTxt = (n, p) => { const { t, f } = tf(n); return `T${t} ${tNome(t, p)} / F${f} ${fCor(f, p)[0]}`; };
+const padE = i => i.cabos.entrada.padrao || 'ABNT';
+const padS = (i, cabo) => (cabo === 'S2' ? i.cabos.s2.padrao : i.cabos.s1.padrao) || padE(i);
+function ensureRows(i) { while (i.fo.rows.length < i.fo.total) i.fo.rows.push({ f: false, cabo: 'S1', fib: '', band: '' }); }
+function capSaida(i, cabo) { const v = +(cabo === 'S2' ? i.cabos.s2.fibras : i.cabos.s1.fibras); return CAPS.includes(v) ? v : Math.max(i.fo.total, 12); }
 const sw = c => `<i class="sw" style="background:${c}"></i>`;
 const hav = (a, b) => { const R = 6371000, r = Math.PI / 180; const dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r; const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*r) * Math.cos(b.lat*r) * Math.sin(dLon/2)**2; return 2 * R * Math.asin(Math.sqrt(x)); };
 const pathKm = pts => { let m = 0; for (let i = 1; i < pts.length; i++) m += hav(pts[i-1], pts[i]); return m / 1000; };
@@ -204,9 +243,9 @@ function toast(msg, ms = 3200) { const t = $('#toast'); t.textContent = msg; t.h
 
 /* ============================ banco local (IndexedDB) ============================ */
 const DB = {
-  db: null, mem: { rondas: new Map(), inspecoes: new Map(), meta: new Map() },
-  open() { return new Promise(res => { try { const r = indexedDB.open('ronda-backbone-multivale', 1);
-    r.onupgradeneeded = () => { const d = r.result; ['rondas','inspecoes','meta'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); }); };
+  db: null, mem: { rondas: new Map(), inspecoes: new Map(), meta: new Map(), rotas: new Map(), fotos: new Map() },
+  open() { return new Promise(res => { try { const r = indexedDB.open('ronda-backbone-multivale', 3);
+    r.onupgradeneeded = () => { const d = r.result; ['rondas','inspecoes','meta','rotas','fotos'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); }); };
     r.onsuccess = () => { this.db = r.result; res(true); }; r.onerror = () => res(false); } catch (e) { res(false); } }); },
   req(store, mode, fn) { if (!this.db) return Promise.resolve(fn(null)); return new Promise((res, rej) => { const t = this.db.transaction(store, mode); const q = fn(t.objectStore(store)); t.oncomplete = () => res(q && 'result' in q ? q.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }); },
   get(s, id) { return this.db ? this.req(s, 'readonly', st => st.get(id)) : Promise.resolve(this.mem[s].get(id)); },
@@ -220,16 +259,27 @@ const CHECK = [
   ['vedacao','Vedação / estanqueidade'],['umidade','Sem umidade interna / formigas'],['fixacao','Fixação e ferragens'],
   ['bandejas','Bandejas e organização'],['raio','Raio de curvatura'],['reserva','Reserva técnica acomodada'],
   ['capa','Cabos sem danos na capa'],['plaqueta','Identificação / plaqueta'],['poste','Poste / CV em bom estado'],['limpeza','Local limpo / sem vegetação']];
-const CATS = ['Caixa fechada','Caixa aberta','Bandejas / fusões','Identificação (TAG)','Cabos e reserva','Local / poste','Irregularidade','Outra'];
-const STEPS = [['caixa','Caixa'],['cabos','Cabos'],['check','Checklist'],['fusoes','Fusões'],['fotos','Fotos'],['final','Finalizar']];
-const S = { view: 'home', perfil: { id: 'perfil', nome: '', matricula: '', placa: '' }, ronda: null, insp: null, step: 0,
+const CATS = ['Caixa fechada','Caixa aberta','Bandeja','VT (reserva técnica)','Rede (foto ampla)','Identificação (TAG)','Poste / CV','Irregularidade','Outra'];
+const CATS_OBRIG = ['Caixa fechada','Caixa aberta','Bandeja','VT (reserva técnica)','Rede (foto ampla)'];
+const CATS_REDE = ['Rede (foto ampla)','Cabo / espinamento','Poste / ferragem','Travessia','Irregularidade','Outra'];
+const STEPS_PREV = [['caixa','Caixa'],['cabos','Cabos'],['check','Checklist'],['fusoes','Fusões'],['fotos','Fotos'],['final','Finalizar']];
+const STEPS_CORR = [['ocorr','Ocorrência'],['cabos','Cabos'],['fusoes','Fusões'],['fotos','Fotos'],['mat','Materiais'],['final','Finalizar']];
+const ST = () => S.insp && S.insp.tipo === 'corretiva' ? STEPS_CORR : STEPS_PREV;
+const OCORR = ['Rompimento de cabo','Atenuação / sinal degradado','Vandalismo / furto','Queimada','Poste abalroado ou caído','Obra de terceiros','Caixa de emenda danificada','Outro'];
+const CATS_CORR = ['Antes (rompimento)','Local / rede','Sobra técnica','Caixa de emenda','Bandeja / fusões','Cabo lançado','Depois (normalizado)','Identificação (TAG)','Outra'];
+const CATS_CORR_OBRIG = ['Antes (rompimento)','Local / rede','Depois (normalizado)'];
+const MATERIAIS = [['ceo','Caixa de emenda óptica (CEO)','un'],['bandeja','Bandeja de emenda','un'],['tubete','Protetor de emenda (tubete)','un'],['cabo','Cabo óptico','m'],['alca','Alça preformada','un'],['bap','Braçadeira BAP','un'],['suporteVT','Suporte de reserva técnica (cruzeta)','un'],['fitaInox','Fita de aço inox','m'],['fecho','Fecho para fita de aço','un'],['cordoalha','Cordoalha','m'],['fioEspinar','Fio de espinar','m'],['abracNylon','Abraçadeira de nylon','un'],['plaqueta','Plaqueta de identificação','un'],['fitaIsol','Fita isolante / autofusão','un'],['limpeza','Kit de limpeza (álcool isopropílico)','un']];
+const catsOf = i => i && i.tipo === 'corretiva' ? CATS_CORR : CATS;
+const obrigOf = i => i && i.tipo === 'corretiva' ? CATS_CORR_OBRIG : CATS_OBRIG;
+const isCorr = x => !!(x && x.tipo === 'corretiva');
+const S = { view: 'home', perfil: { id: 'perfil', nome: '', matricula: '', placa: '', prefixo: 'CE-BKB' }, ronda: null, insp: null, step: 0,
   rondaView: null, gps: { status: 'off', last: null, msg: 'GPS desligado' }, watchId: null, wake: null, inspCache: new Map(), map: null, mapLayers: null, logoData: null };
 
 function novaInspecao(loc) {
   const now = Date.now(), d = new Date(now);
   const rows = Array.from({ length: 36 }, () => ({ f: false, cabo: 'S1', fib: '', band: '' }));
   return { id: uid(), rondaId: S.ronda && !S.ronda.fim ? S.ronda.id : null, criado: now, atualizado: now, status: 'rascunho', chegada: now, saida: null,
-    info: { data: isoDate(now), mes: `${pad2(d.getMonth()+1)}/${d.getFullYear()}`, tecnico: S.perfil.nome, tag: '', modelo: '', fabricante: '', tipo: '', tipoOutro: '', poste: '', endereco: '', bairro: '', cidade: '', rota: '' },
+    info: { dono: S.ronda && !S.ronda.fim ? S.ronda.dono || '' : S.perfil.ultDono || '', parceiro: S.ronda && !S.ronda.fim ? S.ronda.parceiro || '' : S.perfil.ultParc || '', data: isoDate(now), mes: `${pad2(d.getMonth()+1)}/${d.getFullYear()}`, tecnico: S.perfil.nome, tag: '', modelo: '', fabricante: '', tipo: '', tipoOutro: '', poste: '', endereco: '', bairro: '', cidade: '', rota: '' },
     loc: loc || null,
     cabos: { entrada: { marca: '', lote: '', fibras: '', metragem: '' }, s1: { marca: '', lote: '', fibras: '', metragem: '' }, s2: { marca: '', lote: '', fibras: '', metragem: '' }, temS2: false },
     check: {}, checkObs: {}, fo: { total: 36, rows }, fotos: [], obs: '', assinatura: null };
@@ -318,21 +368,136 @@ function totais(r) {
   return { t, segs };
 }
 
+/* ============================ perfil e relatórios ============================ */
+const donoLb = (d, p) => d === 'parceiro' ? 'Parceiro' + (p ? ': ' + p : '') : d === 'proprio' ? 'Próprio' : '';
+function donoHtml(prefix, dono, parc) {
+  const ps = [...new Set(['Master', ...(S.perfil.parceiros || [])])];
+  return `<div class="field full"><span class="lb">Backbone</span><div class="seg" role="group" aria-label="Dono do backbone"><button type="button" data-dono="${prefix}" data-v="proprio" aria-pressed="${dono === 'proprio'}">Próprio</button><button type="button" data-dono="${prefix}" data-v="parceiro" aria-pressed="${dono === 'parceiro'}">Parceiro</button></div></div>
+    ${dono === 'parceiro' ? `<div class="field full"><label class="lb" for="${prefix}_parc">Nome do parceiro</label><input type="text" id="${prefix}_parc" data-parc="${prefix}" list="dl_parc" value="${esc(parc || '')}" placeholder="Ex.: Master"><datalist id="dl_parc">${ps.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>` : ''}`;
+}
+function lembraParceiro(p) { p = String(p || '').trim(); if (!p) return; const l = S.perfil.parceiros || []; if (!l.includes(p)) { S.perfil.parceiros = [...l, p].slice(-10); DB.put('meta', S.perfil); } }
+function viewPerfil() {
+  const v = k => esc(S.perfil[k] || '');
+  return `<section class="card"><h2>Perfil do técnico</h2><p class="muted small" style="margin:0">Preencha uma vez. Esses dados entram em todas as rondas, inspeções e relatórios feitos neste celular.</p>
+    <div class="grid2"><div class="field full"><label class="lb" for="pf_nome">Nome completo <span class="req">*</span></label><input type="text" id="pf_nome" data-pf="nome" value="${v('nome')}" autocomplete="name"></div>
+    <div class="field"><label class="lb" for="pf_mat">Matrícula <span class="req">*</span></label><input type="text" id="pf_mat" data-pf="matricula" value="${v('matricula')}" inputmode="numeric"></div>
+    <div class="field"><label class="lb" for="pf_fone">Telefone</label><input type="tel" id="pf_fone" data-pf="fone" value="${v('fone')}" placeholder="Opcional"></div>
+    <div class="field"><label class="lb" for="pf_eq">Equipe / base</label><input type="text" id="pf_eq" data-pf="equipe" value="${v('equipe')}" placeholder="Opcional"></div>
+    <div class="field"><label class="lb" for="pf_placa">Placa do veículo</label><input type="text" id="pf_placa" data-pf="placa" value="${v('placa')}" placeholder="Opcional" autocapitalize="characters"></div>
+    <div class="field full"><label class="lb" for="pf_pref">Prefixo da TAG automática</label><input type="text" id="pf_pref" data-pf="prefixo" value="${esc(S.perfil.prefixo || 'CE-BKB')}" autocapitalize="characters"><span class="muted small">As TAGs saem assim: <b id="tagEx">${esc(tagExemplo())}</b></span></div></div>
+    <button class="btn pri block" id="bSalvaPerfil">${ICON.check}Salvar perfil</button></section>`;
+}
+function afterPerfil() {
+  $$('[data-pf]').forEach(el => el.addEventListener('input', () => { S.perfil[el.dataset.pf] = el.value; const ex = $('#tagEx'); if (ex) ex.textContent = tagExemplo(); }));
+  $('#bSalvaPerfil').onclick = async () => {
+    if (!S.perfil.nome.trim() || !String(S.perfil.matricula || '').trim()) { toast('Preencha nome e matrícula.'); return; }
+    S.perfil.nome = S.perfil.nome.trim(); await DB.put('meta', S.perfil); toast('Perfil salvo.'); go('home');
+  };
+}
+function viewRelatorios() {
+  return `<section class="card"><div class="field"><label class="lb" for="relBusca">Buscar por TAG, endereço, rota ou parceiro</label><input type="text" id="relBusca" value="${esc(S.relBusca || '')}" placeholder="Ex.: CE-BKB-MS-0012"></div>
+    <div class="seg" role="group" aria-label="Filtro"><button type="button" data-relf="todos" aria-pressed="${(S.relF || 'todos') === 'todos'}">Todos</button><button type="button" data-relf="proprio" aria-pressed="${S.relF === 'proprio'}">Próprio</button><button type="button" data-relf="parceiro" aria-pressed="${S.relF === 'parceiro'}">Parceiro</button></div></section>
+    <section class="card"><h2>Inspeções e corretivas</h2><div class="list" id="relInsp"><p class="muted" style="margin:0">Carregando…</p></div></section>
+    <section class="card"><h2>Rondas</h2><div class="list" id="relRondas"></div></section>`;
+}
+async function afterRelatorios() {
+  const ins = (await DB.all('inspecoes')).sort((a, b) => b.criado - a.criado); ins.forEach(i => S.inspCache.set(i.id, i));
+  const rs = (await DB.all('rondas')).sort((a, b) => b.inicio - a.inicio);
+  const pinta = () => {
+    const q = (S.relBusca || '').toLowerCase(), f = S.relF || 'todos';
+    const okD = d => f === 'todos' || d === f;
+    const li = ins.filter(i => okD(i.info.dono) && (!q || [i.info.tag, i.info.endereco, i.info.bairro, i.info.rota, i.info.parceiro].join(' ').toLowerCase().includes(q)));
+    $('#relInsp').innerHTML = li.length ? li.map(i => itemInsp(i, fData(i.chegada).slice(0, 5))).join('') : '<p class="muted" style="margin:0">Nenhuma inspeção encontrada.</p>';
+    const lr = rs.filter(r => okD(r.dono) && (!q || [r.tecnico, r.parceiro, r.rotaId && rotaById(r.rotaId) ? rotaLb(rotaById(r.rotaId)) : ''].join(' ').toLowerCase().includes(q)));
+    $('#relRondas').innerHTML = lr.length ? lr.map(r => { const n = r.eventos.filter(e => e.tipo === 'chegada').length; return `<button class="item" data-ronda="${r.id}"><span class="badge">${n}</span><span class="tx"><b>Ronda ${fData(r.inicio)}${r.dono ? ' · ' + esc(donoLb(r.dono, r.parceiro)) : ''}</b><span>${fHora(r.inicio)}–${r.fim ? fHora(r.fim) : 'agora'} · ${fKm(pathKm(r.pontos))} · ${n} caixa${n === 1 ? '' : 's'}</span></span>${r.fim ? '<span class="pill ok">Encerrada</span>' : '<span class="pill draft">Em andamento</span>'}</button>`; }).join('') : '<p class="muted" style="margin:0">Nenhuma ronda encontrada.</p>';
+    bindOpen($('#relInsp'));
+    $$('[data-ronda]', $('#relRondas')).forEach(b => b.onclick = async () => { S.rondaView = await DB.get('rondas', b.dataset.ronda); await cacheInspRonda(S.rondaView); go('ronda'); });
+  };
+  $('#relBusca').addEventListener('input', e => { S.relBusca = e.target.value; pinta(); });
+  $$('[data-relf]').forEach(b => b.onclick = () => { S.relF = b.dataset.relf; $$('[data-relf]').forEach(x => x.setAttribute('aria-pressed', x === b)); pinta(); });
+  pinta();
+}
+
+/* ============================ rotas cadastradas ============================ */
+const rotaLb = r => r ? [r.codigo, r.nome].filter(Boolean).join(' · ') + (r.pontaA || r.pontaB ? ` (${r.pontaA || '?'} > ${r.pontaB || '?'})` : '') : '';
+const rotaById = id => (S.rotas || []).find(r => r.id === id);
+async function carregaRotas() { S.rotas = (await DB.all('rotas')).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo))); }
+function rotaOpts(sel, vazio) { return `<option value="">${vazio}</option>` + (S.rotas || []).map(r => `<option value="${r.id}" ${r.id === sel ? 'selected' : ''}>${esc(rotaLb(r))}</option>`).join(''); }
+async function dadosRota(rt) {
+  const rs = (await DB.all('rondas')).filter(r => r.rotaId === rt.id);
+  const ins = (await DB.all('inspecoes')).filter(i => i.info.rotaId === rt.id); ins.forEach(i => S.inspCache.set(i.id, i));
+  for (const r of rs) await cacheInspRonda(r);
+  const trac = []; rs.forEach(r => segmentos(r).filter(s => s.tipo === 'cabo' && s.pts.length > 1).forEach(s => trac.push({ ...s, ronda: r })));
+  const porTag = new Map(); ins.sort((a, b) => a.chegada - b.chegada).forEach(i => porTag.set(i.info.tag || i.id, i));
+  const caixas = [...porTag.values()];
+  const km = trac.reduce((a, s) => a + s.km, 0);
+  return { rs, caixas, trac, km };
+}
+function viewRotaForm(rt) {
+  const v = k => esc(rt[k] ?? '');
+  return `<section class="card"><h2>${rt._novo ? 'Cadastrar rota' : 'Rota ' + esc(rt.codigo)}</h2>
+    <div class="grid2"><div class="field"><label class="lb" for="rt_codigo">Código da rota <span class="req">*</span></label><input type="text" id="rt_codigo" data-rt="codigo" value="${v('codigo')}" placeholder="Ex.: BKB-SP-01" autocapitalize="characters"></div>
+    <div class="field"><label class="lb" for="rt_nome">Nome</label><input type="text" id="rt_nome" data-rt="nome" value="${v('nome')}" placeholder="Ex.: Anel Centro"></div>
+    <div class="field"><label class="lb" for="rt_a">Ponta A (início)</label><input type="text" id="rt_a" data-rt="pontaA" value="${v('pontaA')}" placeholder="Ex.: Estação Sé"></div>
+    <div class="field"><label class="lb" for="rt_b">Ponta B (fim)</label><input type="text" id="rt_b" data-rt="pontaB" value="${v('pontaB')}" placeholder="Ex.: Estação Paraíso"></div>
+    <div class="field"><label class="lb" for="rt_cap">Cabo (nº de fibras)</label><select id="rt_cap" data-rt="cap"><option value="">Selecione…</option>${CAPS.map(c => `<option value="${c}" ${String(rt.cap) === String(c) ? 'selected' : ''}>${c} FO</option>`).join('')}</select></div>
+    <div class="field"><label class="lb" for="rt_marca">Marca / tipo do cabo</label><input type="text" id="rt_marca" data-rt="marca" value="${v('marca')}" placeholder="Ex.: Furukawa AS-80"></div>
+    ${donoHtml('rt', rt.dono, rt.parceiro)}
+    <div class="field"><label class="lb" for="rt_ext">Extensão prevista (km)</label><input type="text" inputmode="decimal" id="rt_ext" data-rt="extensao" value="${v('extensao')}" placeholder="Opcional"></div>
+    <div class="field"><label class="lb" for="rt_cx">Nº de caixas previstas</label><input type="text" inputmode="numeric" id="rt_cx" data-rt="caixasPrev" value="${v('caixasPrev')}" placeholder="Opcional"></div>
+    <div class="field full"><label class="lb" for="rt_obs">Observações</label><textarea id="rt_obs" data-rt="obs" placeholder="Trechos aéreos/subterrâneos, pontos de atenção…">${v('obs')}</textarea></div></div>
+    <button class="btn pri block" id="bSalvaRota">${ICON.check}Salvar rota</button></section>
+  ${rt._novo ? '' : `<section class="card"><h2>Traçado do cabo</h2><p class="muted small" style="margin:0">Montado automaticamente com o GPS do trecho "rota do cabo" de cada ronda feita nesta rota.</p><div class="stats" id="rtStats"></div><div class="map" id="mapRt" role="img" aria-label="Mapa da rota do cabo"></div><button class="btn block" id="bKmzRt">${ICON.pin}Exportar KMZ da rota (Google Earth)</button></section>
+  <section class="card"><h2>Caixas da rota</h2><div class="list" id="rtCx"><p class="muted" style="margin:0">Carregando…</p></div></section>
+  <section class="card"><button class="btn stop block" id="bDelRota">Excluir rota</button></section>`}`;
+}
+async function afterRota() {
+  const rt = S.rotaEdit;
+  $$('[data-rt]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { rt[el.dataset.rt] = el.value; }));
+  $$('[data-dono="rt"]').forEach(b => b.onclick = () => { rt.dono = rt.dono === b.dataset.v ? '' : b.dataset.v; const y = window.scrollY; const keep = { ...rt }; render(); S.rotaEdit = keep; window.scrollTo(0, y); });
+  $('#rt_parc') && $('#rt_parc').addEventListener('input', e => { rt.parceiro = e.target.value; });
+  $$('[data-rtpad]').forEach(b => b.onclick = () => { rt.padrao = b.dataset.rtpad; $$('[data-rtpad]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  $('#bSalvaRota').onclick = async () => {
+    if (!String(rt.codigo || '').trim()) { toast('Informe o código da rota.'); $('#rt_codigo').focus(); return; }
+    const novo = rt._novo; delete rt._novo; rt.codigo = rt.codigo.trim().toUpperCase(); rt.padrao = rt.padrao || 'ABNT';
+    await DB.put('rotas', rt); await carregaRotas(); toast('Rota salva.'); if (novo) render();
+  };
+  if (rt._novo) return;
+  $('#bDelRota').onclick = async () => { if (!confirm('Excluir esta rota? As rondas e caixas continuam salvas.')) return; await DB.del('rotas', rt.id); await carregaRotas(); go('home'); };
+  const d = await dadosRota(rt);
+  $('#rtStats').innerHTML = `<div class="stat"><b>${d.caixas.length}${rt.caixasPrev ? '/' + esc(rt.caixasPrev) : ''}</b><span>Caixas</span></div><div class="stat"><b>${fKm(d.km)}</b><span>Traçado GPS</span></div><div class="stat"><b>${rt.extensao ? esc(rt.extensao) + ' km' : '—'}</b><span>Previsto</span></div><div class="stat"><b>${d.rs.length}</b><span>Rondas</span></div>`;
+  $('#rtCx').innerHTML = d.caixas.length ? d.caixas.map((i, k) => itemInsp(i, k + 1)).join('') : '<p class="muted" style="margin:0">Nenhuma caixa inspecionada nesta rota ainda.</p>';
+  bindOpen($('#rtCx'));
+  $('#bKmzRt').onclick = async () => { const f = await kmzRota(rt); if (f) exportar(f); };
+  const el = $('#mapRt'); if (!el || !window.L) return;
+  const map = L.map(el); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map); S.map = map;
+  const all = [];
+  d.trac.forEach(s => { const ll = s.pts.map(p => [p.lat, p.lon]); all.push(...ll); L.polyline(ll, { color: SEGCOR.cabo, weight: 5 }).addTo(map); });
+  d.caixas.filter(i => i.loc).forEach((i, k) => { all.push([i.loc.lat, i.loc.lon]); L.marker([i.loc.lat, i.loc.lon], { icon: L.divIcon({ className: '', html: `<div class="mk">${k + 1}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] }) }).bindPopup(esc(i.info.tag)).addTo(map); });
+  if (all.length > 1) map.fitBounds(all, { padding: [24, 24], maxZoom: 17 }); else if (all.length) map.setView(all[0], 16); else map.setView([-23.55, -46.63], 11);
+}
+async function abrirRota(id) { S.rotaEdit = id ? { ...(await DB.get('rotas', id)) } : { id: uid(), _novo: true, codigo: '', padrao: 'ABNT', criado: Date.now() }; go('rota'); }
+
 /* ============================ ações da ronda ============================ */
 async function iniciarRonda() {
-  if (!S.perfil.nome.trim()) { toast('Preencha o nome do técnico antes de iniciar.'); $('#pf_nome') && $('#pf_nome').focus(); return; }
+  if (!S.perfil.nome.trim() || !String(S.perfil.matricula || '').trim()) { toast('Crie seu perfil (nome e matrícula) antes de iniciar.'); go('perfil'); return; }
+  if (!S.perfil.ultDono) { toast('Informe se o backbone é próprio ou de parceiro.'); return; }
+  if (S.perfil.ultDono === 'parceiro' && !String(S.perfil.ultParc || '').trim()) { toast('Informe o nome do parceiro.'); $('#rd_parc') && $('#rd_parc').focus(); return; }
+  if (S.perfil.ultDono === 'parceiro') lembraParceiro(S.perfil.ultParc);
   await DB.put('meta', S.perfil);
   gpsStart(); wakeOn();
   const loc = await posAtual(30000);
   const now = Date.now();
-  S.ronda = { id: uid(), tecnico: S.perfil.nome.trim(), matricula: S.perfil.matricula, placa: S.perfil.placa, inicio: now, fim: null, pontos: loc ? [loc] : [], eventos: [{ tipo: 'inicio', ts: now, lat: loc && loc.lat, lon: loc && loc.lon }] };
+  const cr = S.modo === 'corretiva' ? { ...(S.cr || {}) } : null; const ac = new Date();
+  if (cr && !String(cr.ticket || '').trim()) { cr.ticket = await proximoTicket(); cr.ticketAuto = true; }
+  S.ronda = { id: uid(), tipo: cr ? 'corretiva' : 'preventiva', ticket: cr ? cr.ticket.trim().toUpperCase() : '', ticketAuto: !!(cr && cr.ticketAuto), ocorrencia: cr ? cr.ocorrencia || '' : '', descricao: cr ? cr.descricao || '' : '', acionamento: cr ? `${pad2(ac.getHours())}:${pad2(ac.getMinutes())}` : '', rotaId: S.perfil.rotaId || null, dono: S.perfil.ultDono, parceiro: S.perfil.ultDono === 'parceiro' ? S.perfil.ultParc.trim() : '', tecnico: S.perfil.nome.trim(), matricula: S.perfil.matricula, placa: S.perfil.placa, inicio: now, fim: null, pontos: loc ? [loc] : [], eventos: [{ tipo: 'inicio', ts: now, lat: loc && loc.lat, lon: loc && loc.lon }] };
   await DB.put('rondas', S.ronda); await DB.put('meta', { id: 'ativa', rondaId: S.ronda.id });
-  toast(loc ? 'Ronda iniciada. Deslocamento sendo registrado.' : 'Ronda iniciada. Aguardando sinal de GPS.');
+  S.cr = {}; toast(loc ? (isCorr(S.ronda) ? (S.ronda.ticketAuto ? `Corretiva ${S.ronda.ticket} iniciada (número automático).` : 'Corretiva iniciada. Deslocamento até o local sendo registrado.') : 'Ronda iniciada. Deslocamento sendo registrado.') : 'Atividade iniciada. Aguardando sinal de GPS.');
   render();
 }
 async function encerrarRonda() {
   if (!S.ronda) return;
-  if (!confirm('Encerrar a ronda agora? O percurso para de ser registrado.')) return;
+  if (!confirm(isCorr(S.ronda) ? 'Encerrar a corretiva agora? O percurso para de ser registrado.' : 'Encerrar a ronda agora? O percurso para de ser registrado.')) return;
   const loc = await posAtual(60000);
   if (loc && S.ronda.pontos.length && loc.ts > S.ronda.pontos[S.ronda.pontos.length - 1].ts) S.ronda.pontos.push(loc);
   S.ronda.fim = Date.now(); S.ronda.eventos.push({ tipo: 'fim', ts: S.ronda.fim, lat: loc && loc.lat, lon: loc && loc.lon });
@@ -341,11 +506,21 @@ async function encerrarRonda() {
   const id = S.ronda.id; S.ronda = null; S.rondaView = await DB.get('rondas', id);
   go('ronda');
 }
+function iniciais(nome) { const p = String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z ]/g, '').split(/\s+/).filter(Boolean); if (!p.length) return 'XX'; return p.length > 1 ? p[0][0] + p[p.length - 1][0] : p[0].slice(0, 2); }
+function prefixo() { return (S.perfil.prefixo || 'CE-BKB').toUpperCase().replace(/\s+/g, '').replace(/-+$/, ''); }
+function montaTag(n) { return `${prefixo()}-${iniciais(S.perfil.nome)}-${String(n).padStart(4, '0')}`; }
+function tagExemplo() { return montaTag((S.seq || 0) + 1); }
+async function proximoTicket() { const m = (await DB.get('meta', 'seqCorr')) || { id: 'seqCorr', n: 0 }; m.n++; await DB.put('meta', m); const d = new Date(); return `COR-${String(d.getFullYear()).slice(2)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${iniciais(S.perfil.nome)}-${String(m.n).padStart(3, '0')}`; }
+async function proximaTag() { const m = (await DB.get('meta', 'seq')) || { id: 'seq', n: 0 }; m.n = Math.max(m.n, S.seq || 0) + 1; S.seq = m.n; await DB.put('meta', m); return montaTag(m.n); }
 async function novaInsp() {
-  toast('Registrando chegada na caixa…', 2000);
+  toast(S.ronda && isCorr(S.ronda) ? 'Registrando chegada no ponto da corretiva…' : 'Registrando chegada na caixa…', 2000);
   const loc = await posAtual(45000);
   const i = novaInspecao(loc);
   if (S.ronda && !S.ronda.fim) { S.ronda.eventos.push({ tipo: 'chegada', ts: i.chegada, inspId: i.id, lat: loc && loc.lat, lon: loc && loc.lon, acc: loc && loc.acc }); if (loc && (!S.ronda.pontos.length || loc.ts > S.ronda.pontos[S.ronda.pontos.length-1].ts)) S.ronda.pontos.push(loc); saveRonda(true); }
+  if (S.ronda && !S.ronda.fim && isCorr(S.ronda)) { i.tipo = 'corretiva'; i.corr = { ticket: S.ronda.ticket || '', ticketAuto: !!S.ronda.ticketAuto, ocorrencia: S.ronda.ocorrencia || '', acionamento: S.ronda.acionamento || '', problema: S.ronda.descricao || '', fibrasAfetadas: '', causa: '', servico: '', sobra: '', normalizacao: '', novaCaixa: false, pendente: false }; i.mat = {}; i.matExtra = []; }
+  else { i.info.tag = await proximaTag(); i.info.tagAuto = true; }
+  const rt = S.ronda && !S.ronda.fim && S.ronda.rotaId ? rotaById(S.ronda.rotaId) : null;
+  if (rt) { i.info.rotaId = rt.id; i.info.rota = rotaLb(rt); ['entrada', 's1', 's2'].forEach(k => { if (rt.cap) i.cabos[k].fibras = String(rt.cap); if (rt.marca) i.cabos[k].marca = rt.marca; }); if (CAPS.includes(+rt.cap)) { i.fo.total = +rt.cap; ensureRows(i); } }
   S.insp = i; S.step = 0; S.inspCache.set(i.id, i); await DB.put('inspecoes', i);
   go('insp');
   if (loc) preencherEndereco(true);
@@ -355,28 +530,33 @@ async function preencherEndereco(soVazios) {
   const a = await reverseGeo(i.loc.lat, i.loc.lon);
   if (!a) { toast('Sem internet para buscar o endereço. Preencha à mão.'); return; }
   ['endereco','bairro','cidade'].forEach(k => { if (a[k] && (!soVazios || !i.info[k])) i.info[k] = a[k]; });
-  i.loc.endCompleto = a.completo; saveInsp(); if (S.view === 'insp' && STEPS[S.step][0] === 'caixa') render(); toast('Endereço preenchido pelo GPS.');
+  i.loc.endCompleto = a.completo; saveInsp(); if (S.view === 'insp' && ST()[S.step][0] === 'caixa') render(); toast('Endereço preenchido pelo GPS.');
 }
 async function concluirInsp() {
   const i = S.insp; if (!i) return;
-  if (!i.info.tag.trim()) { toast('Preencha a TAG da caixa.'); S.step = 0; render(); return; }
+  if (isCorr(i)) { if (!String(i.corr.ticket || '').trim()) { i.corr.ticket = await proximoTicket(); i.corr.ticketAuto = true; toast('Ticket gerado automaticamente: ' + i.corr.ticket); } } else if (!i.info.tag.trim()) { toast('Preencha a TAG da caixa.'); S.step = 0; render(); return; }
   i.status = 'concluida'; i.saida = Date.now();
   const r = S.ronda && S.ronda.id === i.rondaId ? S.ronda : null;
   if (r && !r.eventos.some(e => e.tipo === 'saida' && e.inspId === i.id)) { r.eventos.push({ tipo: 'saida', ts: i.saida, inspId: i.id }); saveRonda(true); }
-  saveInsp(true); toast(r ? 'Inspeção concluída. Percurso até a próxima caixa sendo registrado.' : 'Inspeção concluída.');
+  saveInsp(true); toast(isCorr(i) ? 'Atendimento concluído. Ao sair do local, toque em Encerrar corretiva.' : r ? 'Inspeção concluída. Percurso até a próxima caixa sendo registrado.' : 'Inspeção concluída.');
   S.insp = null; go('home');
 }
 
 /* ============================ navegação e render ============================ */
 function go(v) { S.view = v; window.scrollTo(0, 0); render(); }
+$('#btnPerfil').onclick = () => go('perfil');
+$('#btnRel').onclick = () => go('relatorios');
 $('#btnBack').onclick = () => { saveInsp(true); S.insp = null; go('home'); };
 
 function render() {
   if (S.map) { try { S.map.remove(); } catch (e) {} S.map = null; }
-  const app = $('#app'); $('#btnBack').hidden = S.view === 'home';
+  const app = $('#app'); $('#btnBack').hidden = S.view === 'home'; $('#btnPerfil').hidden = S.view !== 'home'; $('#btnRel').hidden = S.view !== 'home';
   if (S.view === 'home') { app.innerHTML = viewHome(); setBar(''); $('#topTitle').textContent = 'Ronda Preventiva Backbone'; $('#topSub').textContent = S.perfil.nome ? 'Técnico: ' + S.perfil.nome : 'Inspeção de caixas de emenda'; afterHome(); }
-  else if (S.view === 'insp') { app.innerHTML = viewInsp(); $('#topTitle').textContent = S.insp.info.tag ? 'Caixa ' + S.insp.info.tag : 'Nova inspeção'; $('#topSub').textContent = `${STEPS[S.step][1]} · ${S.step + 1} de ${STEPS.length}`; barInsp(); afterInsp(); }
-  else if (S.view === 'ronda') { app.innerHTML = viewRonda(S.rondaView); setBar(''); $('#topTitle').textContent = 'Resumo da ronda'; $('#topSub').textContent = fDH(S.rondaView.inicio); afterRonda(); }
+  else if (S.view === 'insp') { app.innerHTML = viewInsp(); $('#topTitle').textContent = isCorr(S.insp) ? 'Corretiva · Ticket ' + (S.insp.corr.ticket || '—') : S.insp.info.tag ? 'Caixa ' + S.insp.info.tag : 'Nova inspeção'; $('#topSub').textContent = `${ST()[S.step][1]} · ${S.step + 1} de ${ST().length}`; barInsp(); afterInsp(); }
+  else if (S.view === 'perfil') { app.innerHTML = viewPerfil(); setBar(''); $('#topTitle').textContent = 'Perfil do técnico'; $('#topSub').textContent = 'Fica salvo neste celular'; afterPerfil(); }
+  else if (S.view === 'relatorios') { app.innerHTML = viewRelatorios(); setBar(''); $('#topTitle').textContent = 'Meus relatórios'; $('#topSub').textContent = 'Inspeções e rondas salvas neste celular'; afterRelatorios(); }
+  else if (S.view === 'rota') { app.innerHTML = viewRotaForm(S.rotaEdit); setBar(''); $('#topTitle').textContent = S.rotaEdit._novo ? 'Nova rota' : 'Rota ' + S.rotaEdit.codigo; $('#topSub').textContent = 'Cadastro e traçado do cabo'; afterRota(); }
+  else if (S.view === 'ronda') { app.innerHTML = viewRonda(S.rondaView); setBar(''); $('#topTitle').textContent = isCorr(S.rondaView) ? 'Resumo da corretiva' : 'Resumo da ronda'; $('#topSub').textContent = fDH(S.rondaView.inicio); afterRonda(); }
 }
 function setBar(html) { $('#bar').hidden = !html; $('#barIn').innerHTML = html; }
 
@@ -386,42 +566,61 @@ function viewHome() {
   const r = S.ronda;
   let h = '';
   if (!r) {
-    h += `<section class="card"><div class="hero"><span class="lb">Ronda do dia</span><div class="big">Pronto para iniciar a ronda</div><p class="muted small" style="margin:0">Ao iniciar, o app registra o deslocamento até a primeira caixa e depois a rota do cabo entre uma caixa e outra.</p></div>
-      <div class="grid2"><div class="field full"><label class="lb" for="pf_nome">Técnico <span class="req">*</span></label><input type="text" id="pf_nome" data-pf="nome" value="${esc(S.perfil.nome)}" placeholder="Nome completo" autocomplete="name"></div>
-      <div class="field"><label class="lb" for="pf_mat">Matrícula</label><input type="text" id="pf_mat" data-pf="matricula" value="${esc(S.perfil.matricula)}" placeholder="Opcional"></div>
-      <div class="field"><label class="lb" for="pf_placa">Placa do veículo</label><input type="text" id="pf_placa" data-pf="placa" value="${esc(S.perfil.placa)}" placeholder="Opcional" autocapitalize="characters"></div></div>
-      <button class="btn go block" id="bIniciar">${ICON.play}Iniciar ronda</button>
-      <button class="btn block" id="bAvulsa">${ICON.plus}Inspeção avulsa (sem ronda)</button></section>`;
+    h += `<section class="card"><div class="hero"><span class="lb">Atividade do dia</span><div class="big">Iniciar atividade</div><p class="muted small" style="margin:0">${S.modo === 'corretiva' ? 'Ao iniciar, o app registra o deslocamento até o local da corretiva. Chegando, toque em "Encontrei o ponto da corretiva".' : 'Ao iniciar, o app registra o deslocamento até a primeira caixa e depois a rota do cabo entre uma caixa e outra.'}</p></div>
+      ${S.perfil.nome && S.perfil.matricula ? `<div class="item" style="cursor:default"><span class="badge">${esc(iniciais(S.perfil.nome))}</span><span class="tx"><b>${esc(S.perfil.nome)}</b><span>Matrícula ${esc(S.perfil.matricula)}${S.perfil.placa ? ' · Veículo ' + esc(S.perfil.placa) : ''}</span></span><button type="button" class="btn" id="bEditPerfil" style="min-height:40px;padding:0 12px">Editar</button></div>` : `<div class="warnbox">Crie seu perfil (nome e matrícula) antes da primeira ronda. Ele fica salvo neste celular.</div><button type="button" class="btn pri block" id="bCriaPerfil">Criar meu perfil</button>`}
+      <div class="seg" role="group" aria-label="Tipo de atividade" style="min-height:54px"><button type="button" data-modo="preventiva" aria-pressed="${(S.modo || 'preventiva') === 'preventiva'}">Preventiva</button><button type="button" data-modo="corretiva" aria-pressed="${S.modo === 'corretiva'}">Corretiva</button></div>
+      ${S.modo === 'corretiva' ? `<div class="grid2"><div class="field full"><label class="lb" for="cr_ticket">Nº do ticket</label><input type="text" id="cr_ticket" data-cr="ticket" value="${esc((S.cr || {}).ticket || '')}" placeholder="Deixe em branco para gerar automático" autocapitalize="characters"><span class="muted small">Sem ticket, o app cria um número automático (ex.: COR-${String(new Date().getFullYear()).slice(2)}${pad2(new Date().getMonth() + 1)}${pad2(new Date().getDate())}-${esc(iniciais(S.perfil.nome))}-001).</span></div>
+        <div class="field full"><label class="lb" for="cr_ocorr">Tipo de ocorrência</label><select id="cr_ocorr" data-cr="ocorrencia"><option value="">Selecione…</option>${OCORR.map(o => `<option ${(S.cr || {}).ocorrencia === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>
+        <div class="field full"><label class="lb" for="cr_desc">Descrição do chamado</label><textarea id="cr_desc" data-cr="descricao" placeholder="O que foi informado no ticket" style="min-height:72px">${esc((S.cr || {}).descricao || '')}</textarea></div></div>` : ''}
+      <div class="grid2">${donoHtml('rd', S.perfil.ultDono, S.perfil.ultParc)}
+      <div class="field full"><label class="lb" for="pf_rota">Rota</label><select id="pf_rota">${rotaOpts(S.perfil.rotaId, S.rotas && S.rotas.length ? 'Sem rota definida' : 'Nenhuma rota cadastrada')}</select></div></div>
+      <button class="btn go block" id="bIniciar">${ICON.play}${S.modo === 'corretiva' ? 'Iniciar corretiva · deslocamento' : 'Iniciar preventiva (ronda)'}</button>
+      ${S.modo === 'corretiva' ? '' : `<button class="btn block" id="bAvulsa">${ICON.plus}Inspeção avulsa (sem ronda)</button>`}</section>`;
   } else {
     const { t } = totais(r);
-    h += `<section class="card"><div class="row" style="justify-content:space-between"><h2><span class="dot" style="background:var(--ok);width:12px;height:12px"></span>Ronda em andamento</h2><span class="muted small">desde ${fHora(r.inicio)}</span></div>
+    h += `<section class="card"><div class="row" style="justify-content:space-between"><h2><span class="dot" style="background:${isCorr(r) ? 'var(--orange)' : 'var(--ok)'};width:12px;height:12px"></span>${isCorr(r) ? 'Corretiva · Ticket ' + esc(r.ticket) : 'Preventiva em andamento'}</h2><span class="muted small">desde ${fHora(r.inicio)}</span></div>
+      ${isCorr(r) && r.ocorrencia ? `<div class="small">Ocorrência: <b>${esc(r.ocorrencia)}</b></div>` : ''}${r.dono ? `<div class="small">Backbone: <b>${esc(donoLb(r.dono, r.parceiro))}</b></div>` : ''}${r.rotaId && rotaById(r.rotaId) ? `<div class="small">Rota: <b>${esc(rotaLb(rotaById(r.rotaId)))}</b></div>` : ''}
       ${gpsChip()}
       <div class="stats"><div class="stat"><b class="clock" id="stDur">${fClock(t.dur)}</b><span>Tempo</span></div><div class="stat"><b id="stKm">${fKm(t.km)}</b><span>Percorrido</span></div><div class="stat"><b id="stCx">${t.caixas}</b><span>Caixas</span></div><div class="stat"><b id="stPts">${r.pontos.length}</b><span>Pontos GPS</span></div></div>
       <div class="map" id="map" role="img" aria-label="Mapa do percurso da ronda"></div>
       <div class="legend"><span><i style="background:${SEGCOR.desl}"></i>Deslocamento</span><span><i style="background:${SEGCOR.cabo}"></i>Rota do cabo</span><span><i style="background:${SEGCOR.atual}"></i>Trecho atual</span></div>
       <div class="warnbox">Mantenha o app aberto durante a ronda. Com a tela apagada ou o app em segundo plano, o celular pode parar de enviar a posição e o trecho fica marcado como "sem sinal" no relatório.</div>
-      <button class="btn pri block" id="bNova">${ICON.pin}Cheguei na caixa · nova inspeção</button>
-      <div class="row"><button class="btn" id="bVerRonda">Ver resumo</button><button class="btn stop" id="bEncerrar">${ICON.stop}Encerrar ronda</button></div></section>`;
+      <button class="btn pri block" id="bNova">${ICON.pin}${isCorr(r) ? 'Encontrei o ponto da corretiva' : 'Cheguei na caixa · nova inspeção'}</button>
+      <div class="card" style="padding:12px;gap:8px;background:var(--surface-2)"><span class="lb">Foto da rede no trecho (integridade do backbone)</span>${chipsHtml(CATS_REDE, S.fotoCatRede || CATS_REDE[0])}<button class="btn block" id="bFotoRede">${ICON.cam}Tirar foto da rede · ${esc(S.fotoCatRede || CATS_REDE[0])}</button><span class="muted small" id="redeCount">${(S.redeFotos || []).length} foto(s) da rede nesta ronda</span></div>
+      <div class="row"><button class="btn" id="bVerRonda">Ver resumo</button><button class="btn stop" id="bEncerrar">${ICON.stop}${isCorr(r) ? 'Encerrar corretiva' : 'Encerrar ronda'}</button></div></section>`;
     const ins = r.eventos.filter(e => e.tipo === 'chegada').map(e => S.inspCache.get(e.inspId)).filter(Boolean);
-    h += `<section class="card"><h2>Caixas desta ronda</h2>${ins.length ? `<div class="list">${ins.map((i, k) => itemInsp(i, k + 1)).join('')}</div>` : '<p class="muted" style="margin:0">Nenhuma caixa ainda. Ao chegar na primeira caixa, toque em "Cheguei na caixa".</p>'}</section>`;
+    h += `<section class="card"><h2>${isCorr(r) ? 'Pontos atendidos' : 'Caixas desta ronda'}</h2>${ins.length ? `<div class="list">${ins.map((i, k) => itemInsp(i, k + 1)).join('')}</div>` : (isCorr(r) ? '<p class="muted" style="margin:0">Ao chegar no local, toque em "Encontrei o ponto da corretiva".</p>' : '<p class="muted" style="margin:0">Nenhuma caixa ainda. Ao chegar na primeira caixa, toque em "Cheguei na caixa".</p>')}</section>`;
   }
-  h += `<section class="card"><h2>Histórico</h2><div id="hist" class="list"><p class="muted" style="margin:0">Carregando…</p></div></section>`;
+  h += `<section class="card"><h2>Rotas cadastradas</h2><div class="list">${(S.rotas || []).map(rt => `<button class="item" data-rota="${rt.id}"><span class="badge">${rt.cap ? esc(rt.cap) : '—'}</span><span class="tx"><b>${esc(rt.codigo)}${rt.nome ? ' · ' + esc(rt.nome) : ''}</b><span>${esc(rt.pontaA || '?')} > ${esc(rt.pontaB || '?')}${rt.dono ? ' · ' + esc(donoLb(rt.dono, rt.parceiro)) : ''}</span></span></button>`).join('') || '<p class="muted" style="margin:0">Nenhuma rota cadastrada. Cadastre a rota do cabo para vincular rondas e caixas e montar o traçado.</p>'}</div><button class="btn block" id="bNovaRota">${ICON.plus}Cadastrar rota</button></section>`;
+  h += `<section class="card"><h2>Histórico</h2><div id="hist" class="list"><p class="muted" style="margin:0">Carregando…</p></div><button class="btn block" id="bKmzAll">${ICON.pin}Exportar KMZ de todas as rondas e caixas</button></section>`;
   return h;
 }
 function itemInsp(i, n) {
   const nc = Object.values(i.check).filter(v => v === 'NC').length;
   const pill = i.status === 'concluida' ? (nc ? `<span class="pill bad">${nc} N/C</span>` : '<span class="pill ok">Concluída</span>') : '<span class="pill draft">Rascunho</span>';
+  if (isCorr(i)) return `<button class="item" data-open="${i.id}"><span class="badge" style="background:var(--warn-soft);color:var(--orange)">${n}</span><span class="tx"><b>Corretiva · Ticket ${esc(i.corr.ticket || '—')}</b><span>${fHora(i.chegada)} · ${esc(i.corr.ocorrencia || 'Ocorrência não informada')}</span></span>${i.status === 'concluida' ? '<span class="pill ok">Concluída</span>' : '<span class="pill draft">Em atendimento</span>'}</button>`;
   return `<button class="item" data-open="${i.id}"><span class="badge">${n}</span><span class="tx"><b>${esc(i.info.tag || 'Sem TAG')}</b><span>${fHora(i.chegada)} · ${esc(i.info.endereco || 'Endereço não preenchido')}</span></span>${pill}</button>`;
 }
 async function afterHome() {
-  $$('[data-pf]').forEach(el => el.addEventListener('input', () => { S.perfil[el.dataset.pf] = el.value; DB.put('meta', S.perfil); }));
+  $$('[data-pf]').forEach(el => el.addEventListener('input', () => { S.perfil[el.dataset.pf] = el.value; DB.put('meta', S.perfil); const ex = $('#tagEx'); if (ex) ex.textContent = tagExemplo(); }));
   $('#bIniciar') && ($('#bIniciar').onclick = iniciarRonda);
-  $('#bAvulsa') && ($('#bAvulsa').onclick = () => { if (!S.perfil.nome.trim()) { toast('Preencha o nome do técnico.'); return; } DB.put('meta', S.perfil); gpsStart(); novaInsp(); });
+  $$('[data-modo]').forEach(b => b.onclick = () => { S.modo = b.dataset.modo; render(); });
+  $$('[data-cr]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { S.cr = S.cr || {}; S.cr[el.dataset.cr] = el.value; }));
+  $('#bEditPerfil') && ($('#bEditPerfil').onclick = () => go('perfil')); $('#bCriaPerfil') && ($('#bCriaPerfil').onclick = () => go('perfil'));
+  $$('[data-dono="rd"]').forEach(b => b.onclick = () => { S.perfil.ultDono = S.perfil.ultDono === b.dataset.v ? '' : b.dataset.v; DB.put('meta', S.perfil); const y = window.scrollY; render(); window.scrollTo(0, y); });
+  $('#rd_parc') && $('#rd_parc').addEventListener('input', e => { S.perfil.ultParc = e.target.value; DB.put('meta', S.perfil); });
+  $('#pf_rota') && ($('#pf_rota').onchange = e => { S.perfil.rotaId = e.target.value; const rt = rotaById(e.target.value); if (rt && rt.dono) { S.perfil.ultDono = rt.dono; S.perfil.ultParc = rt.parceiro || ''; } DB.put('meta', S.perfil); const y = window.scrollY; render(); window.scrollTo(0, y); });
+  $('#bNovaRota').onclick = () => abrirRota(null);
+  $$('[data-rota]').forEach(b => b.onclick = () => abrirRota(b.dataset.rota));
+  $('#bAvulsa') && ($('#bAvulsa').onclick = () => { if (!S.perfil.nome.trim()) { toast('Crie seu perfil antes.'); go('perfil'); return; } DB.put('meta', S.perfil); gpsStart(); novaInsp(); });
   $('#bNova') && ($('#bNova').onclick = novaInsp);
+  $('#bFotoRede') && ($('#bFotoRede').onclick = () => { S.fotoMode = 'rede'; $('#fileCam').click(); });
+  $$('[data-cat]').forEach(b => b.onclick = () => { S.fotoCatRede = b.dataset.cat; const y = window.scrollY; render(); window.scrollTo(0, y); });
   $('#bEncerrar') && ($('#bEncerrar').onclick = encerrarRonda);
   $('#bVerRonda') && ($('#bVerRonda').onclick = () => { S.rondaView = S.ronda; go('ronda'); });
+  $('#bKmzAll').onclick = async () => { const f = await kmzTodas(); if (f) exportar(f); };
   bindOpen();
-  if (S.ronda) drawLiveMap('map', S.ronda, true);
+  if (S.ronda) { S.redeFotos = await fotosRede(S.ronda.id); const rc = $('#redeCount'); if (rc) rc.textContent = `${S.redeFotos.length} foto(s) da rede nesta ronda`; drawLiveMap('map', S.ronda, true); }
   // histórico
   const rs = (await DB.all('rondas')).filter(r => r.fim).sort((a, b) => b.inicio - a.inicio).slice(0, 30);
   const av = (await DB.all('inspecoes')).filter(i => !i.rondaId).sort((a, b) => b.criado - a.criado).slice(0, 20);
@@ -438,6 +637,7 @@ async function cacheInspRonda(r) { for (const e of r.eventos) if (e.inspId && !S
 
 let lastMapDraw = 0;
 function drawLiveMap(id, r, live) {
+  S.mapFotos = (S.redeFotos || []).filter(f => f.rondaId === r.id);
   const el = document.getElementById(id); if (!el || !window.L) { if (el) el.innerHTML = '<p class="muted small" style="padding:12px">Mapa indisponível sem internet. O percurso continua sendo registrado.</p>'; return; }
   const map = L.map(el, { zoomControl: true, attributionControl: true });
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
@@ -451,6 +651,7 @@ function paintMap(fit) {
   const ini = r.eventos.find(e => e.tipo === 'inicio');
   if (ini && ini.lat != null) L.marker([ini.lat, ini.lon], { icon: L.divIcon({ className: '', html: '<div class="mk start">I</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(g);
   r.eventos.filter(e => e.tipo === 'chegada' && e.lat != null).forEach((e, k) => { const i = S.inspCache.get(e.inspId); L.marker([e.lat, e.lon], { icon: L.divIcon({ className: '', html: `<div class="mk">${k + 1}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] }) }).bindPopup(esc((i && i.info.tag) || 'Caixa ' + (k + 1))).addTo(g); all.push([e.lat, e.lon]); });
+  (S.mapFotos || []).filter(f => f.lat != null).forEach(f => { L.marker([f.lat, f.lon], { icon: L.divIcon({ className: '', html: '<div class="mk foto">F</div>', iconSize: [24, 24], iconAnchor: [12, 12] }) }).bindPopup(esc(f.cat) + ' · ' + fHora(f.ts)).addTo(g); });
   if (S.mapLive && S.gps.last) { L.marker([S.gps.last.lat, S.gps.last.lon], { icon: L.divIcon({ className: '', html: '<div class="mk me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(g); all.push([S.gps.last.lat, S.gps.last.lon]); }
   if (fit) { if (all.length > 1) S.map.fitBounds(all, { padding: [24, 24], maxZoom: 17 }); else if (all.length) S.map.setView(all[0], 16); else S.map.setView([-23.55, -46.63], 11); }
   lastMapDraw = Date.now();
@@ -475,6 +676,8 @@ function inp(k, lb, opts = {}) {
 function stepDone(key) {
   const i = S.insp;
   if (key === 'caixa') return !!(i.info.tag && i.info.endereco);
+  if (key === 'ocorr') return !!(i.corr && i.corr.ticket && i.corr.problema);
+  if (key === 'mat') return !!(i.mat && (Object.entries(i.mat).some(([k, v]) => k !== 'caboSpec' && +String(v).replace(',', '.') > 0) || (i.matExtra || []).some(m => m.nome)));
   if (key === 'cabos') return !!(i.cabos.entrada.lote || i.cabos.entrada.marca);
   if (key === 'check') return CHECK.every(([k]) => i.check[k]);
   if (key === 'fusoes') return i.fo.rows.slice(0, i.fo.total).some(r => r.f);
@@ -482,9 +685,11 @@ function stepDone(key) {
   if (key === 'final') return i.status === 'concluida';
 }
 function viewInsp() {
-  const i = S.insp, key = STEPS[S.step][0];
-  let h = `<nav class="steps" aria-label="Etapas">${STEPS.map(([k, lb], n) => `<button data-step="${n}" class="${stepDone(k) ? 'done' : ''}" ${n === S.step ? 'aria-current="step"' : ''}><span class="chk"></span>${lb}</button>`).join('')}</nav>`;
+  const i = S.insp, key = ST()[S.step][0];
+  let h = `<nav class="steps" aria-label="Etapas">${ST().map(([k, lb], n) => `<button data-step="${n}" class="${stepDone(k) ? 'done' : ''}" ${n === S.step ? 'aria-current="step"' : ''}><span class="chk"></span>${lb}</button>`).join('')}</nav>`;
   if (key === 'caixa') h += stepCaixa(i);
+  if (key === 'ocorr') h += stepOcorr(i);
+  if (key === 'mat') h += stepMat(i);
   if (key === 'cabos') h += stepCabos(i);
   if (key === 'check') h += stepCheck(i);
   if (key === 'fusoes') h += stepFusoes(i);
@@ -500,7 +705,8 @@ function locHtml() {
 function stepCaixa(i) {
   const tipos = [['aerea','Aérea (poste)'],['sub','Subterrânea (CS enterrada)'],['outro','Outro']];
   return `<section class="card"><h2><span class="num">1</span>Identificação</h2>
-    <div class="grid2">${inp('info.tag', 'TAG da caixa', { req: 1, full: 1, caps: 1, ph: 'Ex.: CE-BKB-0123' })}
+    <div class="grid2">${inp('info.tag', 'TAG da caixa', { req: 1, full: 1, caps: 1, ph: 'Ex.: ' + tagExemplo() })}
+    <div class="field full" style="margin-top:-4px"><div class="row"><button type="button" class="btn" id="bGerTag" style="min-height:44px;flex:0 1 auto">Gerar TAG automática</button><span class="muted small" style="flex:1 1 180px">${i.info.tagAuto ? 'TAG gerada pelo app.' : 'TAG digitada.'} Se a caixa já tem plaqueta, digite a TAG dela.</span></div></div>
     ${inp('info.data', 'Data', { type: 'date' })}${inp('info.mes', 'Mês referência', { ph: 'MM/AAAA' })}
     ${inp('info.tecnico', 'Técnico(s) responsável(is)', { req: 1, full: 1 })}
     ${inp('info.modelo', 'Modelo')}${inp('info.fabricante', 'Fabricante')}
@@ -510,11 +716,38 @@ function stepCaixa(i) {
   <section class="card"><h2><span class="num">2</span>Localização</h2>
     <div id="gpsLoc">${locHtml()}</div>
     <div class="row"><button class="btn pri" id="bLoc">${ICON.pin}Capturar localização</button><button class="btn" id="bEnd">Buscar endereço</button></div>
-    <div class="grid2">${inp('info.endereco', 'Endereço (rua, nº, referência)', { full: 1 })}${inp('info.bairro', 'Bairro')}${inp('info.cidade', 'Cidade')}${inp('info.rota', 'Rota (início / fim)', { full: 1 })}</div></section>`;
+    <div class="grid2">${inp('info.endereco', 'Endereço (rua, nº, referência)', { full: 1 })}${inp('info.bairro', 'Bairro')}${inp('info.cidade', 'Cidade')}${donoHtml('in', i.info.dono, i.info.parceiro)}
+    <div class="field full"><label class="lb" for="f_rotaSel">Rota do cabo</label><select id="f_rotaSel">${rotaOpts(i.info.rotaId, 'Rota não cadastrada (digitar abaixo)')}</select></div>
+    ${i.info.rotaId ? '' : inp('info.rota', 'Rota (descrição do trecho)', { full: 1, ph: 'Ex.: Estação Sé > Estação Paraíso' })}</div></section>`;
+}
+function stepOcorr(i) {
+  const c = i.corr; const full = stepCaixa(i); const locPart = full.slice(full.indexOf('<section class="card"><h2><span class="num">2</span>Localização'));
+  return `<section class="card"><h2><span class="num">1</span>Ocorrência</h2>
+    <div class="grid2">${inp('corr.ticket', 'Nº do ticket', { full: 1, caps: 1, ph: 'Em branco: o app gera automático' })}${c.ticketAuto ? '<span class="muted small field full" style="margin-top:-6px">Número gerado pelo app (sem ticket informado). Se o ticket chegar depois, digite por cima.</span>' : ''}
+    <div class="field full"><label class="lb" for="f_ocorr">Tipo de ocorrência</label><select id="f_ocorr" data-k="corr.ocorrencia"><option value="">Selecione…</option>${OCORR.map(o => `<option ${c.ocorrencia === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>
+    ${inp('corr.acionamento', 'Hora do acionamento', { type: 'time' })}${inp('info.data', 'Data', { type: 'date' })}
+    ${inp('corr.fibrasAfetadas', 'Fibras afetadas', { full: 1, ph: 'Ex.: cabo 72 FO, tubos 1 a 3' })}
+    <div class="field full"><label class="lb" for="f_prob">Problema encontrado <span class="req">*</span></label><textarea id="f_prob" data-k="corr.problema" placeholder="Ex.: cabo rompido por queda de árvore entre os postes P-120 e P-121">${esc(c.problema || '')}</textarea></div>
+    ${inp('corr.causa', 'Causa provável', { full: 1 })}
+    ${inp('info.tag', 'TAG da caixa de emenda (se criou ou usou uma)', { full: 1, caps: 1, ph: 'Opcional' })}
+    <div class="field full" style="margin-top:-4px"><div class="row"><button type="button" class="btn" id="bGerTag" style="min-height:44px;flex:0 1 auto">Gerar TAG para caixa nova</button></div></div>
+    ${inp('info.poste', 'Nº poste / CV', { full: 1 })}</div></section>
+  ${locPart}`;
+}
+function stepMat(i) {
+  if (!i.mat) i.mat = {}; if (!i.matExtra) i.matExtra = [];
+  return `<section class="card"><h2><span class="num">5</span>Materiais utilizados</h2><p class="muted small" style="margin:0">Informe a quantidade de cada material usado. Deixe em branco o que não foi usado.</p>
+    <div class="list">${MATERIAIS.map(([k, lb, un]) => `<div class="row" style="flex-wrap:nowrap;gap:10px;border-bottom:1px solid var(--line);padding:6px 0"><label for="m_${k}" style="flex:1;min-width:0;font-weight:600">${esc(lb)}</label><input type="text" inputmode="decimal" id="m_${k}" data-k="mat.${k}" value="${esc(i.mat[k] || '')}" placeholder="0" style="width:84px;min-height:46px;text-align:right"><span class="muted small" style="width:24px">${un}</span></div>`).join('')}</div>
+    ${inp('mat.caboSpec', 'Cabo óptico usado (tipo / nº de fibras)', { full: 1, ph: 'Ex.: AS-80 72 FO' })}
+    <h3>Outros materiais</h3>
+    <div class="list">${i.matExtra.map((m, k) => `<div class="grid3" style="align-items:end"><div class="field"><label class="lb" for="mx_n${k}">Material</label><input type="text" id="mx_n${k}" data-k="matExtra.${k}.nome" value="${esc(m.nome)}"></div><div class="field"><label class="lb" for="mx_q${k}">Qtd.</label><input type="text" inputmode="decimal" id="mx_q${k}" data-k="matExtra.${k}.qtd" value="${esc(m.qtd)}"></div><div class="field"><label class="lb" for="mx_u${k}">Unid.</label><input type="text" id="mx_u${k}" data-k="matExtra.${k}.un" value="${esc(m.un)}" placeholder="un / m"></div></div>`).join('')}</div>
+    <button type="button" class="btn" id="bMatAdd">${ICON.plus}Adicionar outro material</button></section>`;
 }
 function stepCabos(i) {
-  const bloco = (k, nome) => `<h3>${nome}</h3><div class="grid2">${inp(`cabos.${k}.marca`, 'Marca')}${inp(`cabos.${k}.lote`, 'Lote')}${inp(`cabos.${k}.fibras`, 'Nº de fibras', { mode: 'numeric' })}${inp(`cabos.${k}.metragem`, 'Metragem (m)', { mode: 'numeric', ph: 'Marcação na capa' })}</div>`;
-  return `<section class="card"><h2><span class="num">3</span>Cabos</h2><p class="muted small" style="margin:0">Metragem: anote a marcação métrica impressa na capa do cabo, junto à caixa.</p>
+  const capSel = k => { const v = String(i.cabos[k].fibras || ''); return `<div class="field"><label class="lb" for="cap_${k}">Nº de fibras</label><select id="cap_${k}" data-k="cabos.${k}.fibras"><option value="">Selecione…</option>${CAPS.map(c => `<option value="${c}" ${v === String(c) ? 'selected' : ''}>${c} FO</option>`).join('')}</select></div>`; };
+  const padSel = k => { const v = i.cabos[k].padrao || ''; return `<div class="field full"><span class="lb">Padrão de cores deste cabo <span class="req">*</span></span><div class="seg" role="group" aria-label="Padrão de cores">${Object.entries(PADROES).map(([pk, [lb]]) => `<button type="button" data-set="cabos.${k}.padrao" data-v="${pk}" aria-pressed="${v === pk}">${pk === 'ABNT' ? 'Nacional' : 'Americano'}</button>`).join('')}</div>${v ? `<span class="muted small">${pal(v).slice(0, 4).map(c => sw(c[1]) + ' ' + c[0]).join(' · ')} …</span>` : '<span class="fo-warn">Escolha o padrão deste cabo nesta caixa (Nacional ou Americano).</span>'}</div>`; };
+  const bloco = (k, nome) => `<h3>${nome}</h3><div class="grid2">${inp(`cabos.${k}.marca`, 'Marca')}${inp(`cabos.${k}.lote`, 'Lote')}${capSel(k)}${inp(`cabos.${k}.metragem`, 'Metragem (m)', { mode: 'numeric', ph: 'Marcação na capa' })}${padSel(k)}</div>`;
+  return `<section class="card"><h2><span class="num">3</span>Cabos</h2><p class="muted small" style="margin:0">Metragem: anote a marcação métrica impressa na capa do cabo, junto à caixa. O padrão de cores é informado em cada caixa e em cada cabo, porque um cabo americano pode estar ligado a um nacional.</p>
     ${bloco('entrada', 'Cabo de entrada')}${bloco('s1', 'Cabo de saída 1')}
     <label class="row" style="min-height:44px;cursor:pointer"><input type="checkbox" data-k="cabos.temS2" ${i.cabos.temS2 ? 'checked' : ''} style="width:22px;height:22px"> <b>Tem cabo de saída 2</b></label>
     ${i.cabos.temS2 ? bloco('s2', 'Cabo de saída 2') : ''}</section>`;
@@ -524,54 +757,95 @@ function stepCheck(i) {
   <div>${CHECK.map(([k, lb]) => `<div class="check-row"><span class="q">${lb}</span><div class="seg ck" role="group" aria-label="${lb}">${['OK','NC','NA'].map(v => `<button type="button" data-set="check.${k}" data-v="${v}" aria-pressed="${i.check[k] === v}">${v === 'NC' ? 'N/C' : v === 'NA' ? 'N/A' : 'OK'}</button>`).join('')}</div>
     ${i.check[k] === 'NC' ? `<input type="text" data-k="checkObs.${k}" value="${esc(i.checkObs[k] || '')}" placeholder="Descreva a irregularidade" aria-label="Irregularidade: ${lb}">` : ''}</div>`).join('')}</div></section>`;
 }
-function optFib(sel, total) { let o = '<option value="">Fibra…</option>'; for (let n = 1; n <= total; n++) { const { t, f } = tf(n); o += `<option value="${n}" ${String(sel) === String(n) ? 'selected' : ''}>${n} · T${t} ${COLORS[t-1][0]} · F${f} ${COLORS[f-1][0]}</option>`; } return o; }
 function stepFusoes(i) {
-  const tot = i.fo.total; const n = i.fo.rows.slice(0, tot).filter(r => r.f).length;
+  ensureRows(i); const pe = padE(i);
+  const tot = i.fo.total; const n = i.fo.rows.slice(0, tot).filter(r => r.f).length; const nTub = Math.ceil(tot / 12);
+  if (!S.openTubes) S.openTubes = new Set([1]);
+  const usados = {}; for (let k = 0; k < tot; k++) { const r = i.fo.rows[k]; if (r.f && r.fib) { const key = r.cabo + '-' + r.fib; usados[key] = (usados[key] || 0) + 1; } }
   let h = `<section class="card"><h2><span class="num">5</span>Fibras fusionadas</h2>
-    <div class="grid2"><div class="field"><label class="lb" for="foTot">Fibras no cabo de entrada</label><select id="foTot">${[12, 24, 36].map(v => `<option ${v === tot ? 'selected' : ''} value="${v}">${v} FO</option>`).join('')}</select></div>
+    <div class="grid2"><div class="field"><label class="lb" for="foTot">Fibras no cabo de entrada</label><select id="foTot">${CAPS.map(v => `<option ${v === tot ? 'selected' : ''} value="${v}">${v} FO · ${v / 12} tubo${v > 12 ? 's' : ''}</option>`).join('')}</select></div>
     <div class="stat" style="align-self:end"><b>${n} de ${tot}</b><span>Fusionadas</span></div></div>
-    <p class="muted small" style="margin:0">Marque cada fibra de entrada que foi fusionada e diga em qual cabo e fibra de saída ela foi ligada (ex.: fibra 1 com fibra 1, ou fibra 1 com fibra 2).</p>
+    ${i.cabos.entrada.padrao ? `<p class="small" style="margin:0">Padrão de cores da entrada: <b>${esc(padNome(pe))}</b>. Saída 1: <b>${esc(i.cabos.s1.padrao ? padNome(i.cabos.s1.padrao) : 'não informado')}</b>${i.cabos.temS2 ? `. Saída 2: <b>${esc(i.cabos.s2.padrao ? padNome(i.cabos.s2.padrao) : 'não informado')}</b>` : ''}. Para trocar, vá na etapa Cabos.</p>` : '<div class="warnbox">Informe na etapa <b>Cabos</b> o padrão de cores (Nacional ou Americano) dos cabos desta caixa. Até lá as cores aparecem no padrão Nacional.</div>'}
+    <p class="muted small" style="margin:0">Abra o tubo, marque cada fibra de entrada fusionada e escolha em qual cabo, tubo e fibra de saída ela foi ligada. A ligação é livre: fibra 1 com 1, 1 com 2, 3 com 7… Quando for diferente, o app marca como <b>Manobra</b> e pede o motivo.</p>
     <div class="fo-tools"><button class="btn" id="bSeq">Todas 1→1 na Saída 1</button><button class="btn" id="bLimpaFo">Limpar fusões</button></div>
     <div class="list">`;
-  for (let k = 0; k < tot; k++) {
-    const r = i.fo.rows[k], { t, f } = tf(k + 1);
-    h += `<div class="fo ${r.f ? 'on' : ''}"><div class="fo-head"><span class="fo-n">FO ${k + 1}</span><span class="meta">${sw(COLORS[t-1][1])} T${t} ${COLORS[t-1][0]} ${sw(COLORS[f-1][1])} F${f} ${COLORS[f-1][0]}</span><button type="button" class="tog" data-fo="${k}" aria-pressed="${r.f}">${r.f ? 'Fusionada' : 'Marcar fusão'}</button></div>
-      ${r.f ? `<div class="fo-body"><select data-k="fo.rows.${k}.cabo" aria-label="Cabo de saída da FO ${k + 1}"><option ${r.cabo === 'S1' ? 'selected' : ''}>S1</option><option ${r.cabo === 'S2' ? 'selected' : ''}>S2</option></select><select data-k="fo.rows.${k}.fib" aria-label="Fibra de saída da FO ${k + 1}">${optFib(r.fib, 36)}</select><input type="text" inputmode="numeric" data-k="fo.rows.${k}.band" value="${esc(r.band)}" placeholder="Band." aria-label="Bandeja da FO ${k + 1}"></div>` : ''}</div>`;
+  for (let t = 1; t <= nTub; t++) {
+    const ini = (t - 1) * 12, fim = Math.min(t * 12, tot); const nt = i.fo.rows.slice(ini, fim).filter(r => r.f).length;
+    const nd = i.fo.rows.slice(ini, fim).some((r, j) => r.f && r.fib && usados[r.cabo + '-' + r.fib] > 1);
+    const open = S.openTubes.has(t);
+    h += `<details class="tubo" data-tube="${t}" ${open ? 'open' : ''}><summary>${sw(tCor(t, pe))} <b>Tubo ${t}</b> <span class="muted">${esc(tNome(t, pe))}</span><span class="tcount ${nt ? 'on' : ''}">${nt}/${fim - ini}</span>${nd ? '<span class="pill bad">Repetida</span>' : ''}</summary>`;
+    if (open) {
+      h += '<div class="list" style="padding:8px 0 4px">';
+      for (let k = ini; k < fim; k++) {
+        const r = i.fo.rows[k], { f } = tf(k + 1);
+        const mano = r.f && r.fib && +r.fib !== k + 1; const dup = r.f && r.fib && usados[r.cabo + '-' + r.fib] > 1;
+        h += `<div class="fo ${r.f ? 'on' : ''} ${dup ? 'dup' : ''}"><div class="fo-head"><span class="fo-n">FO ${k + 1}</span><span class="meta">${sw(fCor(f, pe)[1])} F${f} ${fCor(f, pe)[0]}${mano ? ' <span class="pill mano">Manobra</span>' : ''}</span><button type="button" class="tog" data-fo="${k}" aria-pressed="${r.f}">${r.f ? 'Fusionada' : 'Marcar fusão'}</button></div>`;
+        if (r.f) {
+          const cap = capSaida(i, r.cabo), st = r.fib ? tf(+r.fib) : { t: 0, f: 0 }, ps = padS(i, r.cabo);
+          h += `<div class="fo-body5"><div class="field"><label class="lb" for="foc${k}">Cabo saída</label><select id="foc${k}" data-k="fo.rows.${k}.cabo" data-fore="1"><option ${r.cabo === 'S1' ? 'selected' : ''}>S1</option><option ${r.cabo === 'S2' ? 'selected' : ''}>S2</option></select></div>
+            <div class="field"><label class="lb" for="fot${k}">Tubo saída</label><select id="fot${k}" data-fot="${k}">${Array.from({ length: Math.ceil(cap / 12) }, (_, x) => `<option value="${x + 1}" ${st.t === x + 1 ? 'selected' : ''}>T${x + 1} ${esc(pal(ps)[x % 12][0])}</option>`).join('')}</select></div>
+            <div class="field"><label class="lb" for="fof${k}">Fibra saída</label><select id="fof${k}" data-fof="${k}">${pal(ps).map((c, x) => `<option value="${x + 1}" ${st.f === x + 1 ? 'selected' : ''}>F${x + 1} ${c[0]}</option>`).join('')}</select></div>
+            <div class="field"><label class="lb" for="fob${k}">Bandeja</label><input id="fob${k}" type="text" inputmode="numeric" data-k="fo.rows.${k}.band" value="${esc(r.band)}" placeholder="—"></div>
+            <div class="fo-mot muted small">Ligada na fibra <b>${esc(r.fib || '—')}</b> da ${esc(r.cabo)}${r.fib ? ' (' + esc(foTxt(+r.fib, ps)) + ')' : ''}</div>
+            ${mano ? `<div class="field fo-mot"><label class="lb" for="fom${k}">Motivo da manobra</label><input id="fom${k}" type="text" data-k="fo.rows.${k}.mot" value="${esc(r.mot || '')}" placeholder="Ex.: fibra ${r.fib} quebrada no trecho"></div>` : ''}
+            ${dup ? `<div class="fo-warn fo-mot">Atenção: outra fibra de entrada já está ligada na fibra ${esc(r.fib)} da ${esc(r.cabo)}.</div>` : ''}</div>`;
+        }
+        h += '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</details>';
   }
   return h + '</div></section>';
 }
+function chipsHtml(cats, sel, cont) { return `<div class="chips" role="radiogroup" aria-label="Tipo da foto">${cats.map(c => `<button type="button" role="radio" data-cat="${esc(c)}" aria-checked="${c === sel}">${esc(c)}${cont ? `<span class="cnt">${cont[c] || 0}</span>` : ''}</button>`).join('')}</div>`; }
 function stepFotos(i) {
-  return `<section class="card"><h2><span class="num">6</span>Evidências (fotos)</h2>
-    <p class="muted small" style="margin:0">Cada foto recebe um carimbo com TAG, data, hora e coordenadas do GPS.</p>
-    <div class="row"><button class="btn pri" id="bCam">${ICON.cam}Tirar foto</button><button class="btn" id="bGal">${ICON.img}Da galeria</button></div>
-    <div class="photos" id="photos">${i.fotos.map((p, k) => `<div class="ph"><img data-ph="${k}" alt="Foto ${k + 1}"><div class="pb"><select data-k="fotos.${k}.cat" aria-label="Categoria da foto ${k + 1}">${CATS.map(c => `<option ${p.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select><input type="text" data-k="fotos.${k}.desc" value="${esc(p.desc)}" placeholder="Descrição (opcional)" aria-label="Descrição da foto ${k + 1}"><button class="del" data-delph="${k}">Remover foto</button></div></div>`).join('')}</div>
+  const cats = catsOf(i); if (!cats.includes(S.fotoCat)) S.fotoCat = cats[0];
+  const cont = {}; i.fotos.forEach(p => cont[p.cat] = (cont[p.cat] || 0) + 1);
+  const falta = obrigOf(i).filter(c => !cont[c]);
+  return `<section class="card"><h2><span class="num">${isCorr(i) ? 4 : 6}</span>Evidências (fotos)</h2>
+    <span class="lb">1. Escolha o tipo da foto</span>
+    ${chipsHtml(cats, S.fotoCat, cont)}
+    <span class="lb">2. Tire a foto</span>
+    <div class="row"><button class="btn pri" id="bCam">${ICON.cam}Tirar foto · ${esc(S.fotoCat)}</button><button class="btn" id="bGal">${ICON.img}Da galeria</button></div>
+    <p class="muted small" style="margin:0">Cada foto recebe um carimbo com o tipo, TAG, data, hora e coordenadas do GPS.</p>
+    ${falta.length ? `<div class="warnbox">${isCorr(i) ? 'Para comprovar o serviço' : 'Para comprovar a integridade'}, ainda faltam fotos de: <b>${falta.map(esc).join(', ')}</b>.</div>` : '<div class="okbox">Todas as fotos obrigatórias foram tiradas.</div>'}
+    <div class="photos" id="photos">${i.fotos.map((p, k) => `<div class="ph"><img data-ph="${k}" alt="Foto ${k + 1}: ${esc(p.cat)}"><span class="tag">${esc(p.cat)}</span><div class="pb"><select data-k="fotos.${k}.cat" data-fore="1" aria-label="Tipo da foto ${k + 1}">${(cats.includes(p.cat) ? cats : [p.cat, ...cats]).map(c => `<option ${p.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><input type="text" data-k="fotos.${k}.desc" value="${esc(p.desc)}" placeholder="Descrição (opcional)" aria-label="Descrição da foto ${k + 1}"><button class="del" data-delph="${k}">Remover foto</button></div></div>`).join('')}</div>
     ${i.fotos.length ? '' : '<p class="muted" style="margin:0">Nenhuma foto ainda.</p>'}</section>`;
 }
 function pendencias(i) {
   const p = [];
-  if (!i.info.tag) p.push('TAG da caixa'); if (!i.info.tecnico) p.push('Técnico');
+  if (isCorr(i)) { if (!i.corr.problema) p.push('Problema encontrado'); if (!i.corr.servico) p.push('Serviço executado'); } else if (!i.info.tag) p.push('TAG da caixa');
+  if (!i.info.dono) p.push('Backbone próprio ou parceiro'); if (!i.info.tecnico) p.push('Técnico');
   if (!i.loc) p.push('Localização (GPS)'); if (!i.info.endereco) p.push('Endereço');
-  const sem = CHECK.filter(([k]) => !i.check[k]).length; if (sem) p.push(`${sem} item(ns) do checklist`);
-  if (!i.fotos.length) p.push('Fotos'); if (!i.assinatura) p.push('Assinatura');
+  const sem = isCorr(i) ? 0 : CHECK.filter(([k]) => !i.check[k]).length; if (sem) p.push(`${sem} item(ns) do checklist`);
+  (isCorr(i) ? [] : [['entrada', 'entrada'], ['s1', 'saída 1'], ...(i.cabos.temS2 ? [['s2', 'saída 2']] : [])]).forEach(([k, n]) => { if (!i.cabos[k].padrao) p.push(`Padrão de cores do cabo de ${n}`); });
+  const faltaF = obrigOf(i).filter(c => !i.fotos.some(f => f.cat === c)); if (faltaF.length) p.push('Fotos de ' + faltaF.join(', ')); if (!i.assinatura) p.push('Assinatura');
   return p;
 }
 function pendHtml(i) { const p = pendencias(i); return p.length ? `<div class="warnbox"><b>Faltando:</b> ${p.map(esc).join(', ')}.<br>O PDF pode ser gerado assim mesmo.</div>` : '<div class="okbox">Tudo preenchido.</div>'; }
 function pendUpd() { const e = $('#pend'); if (e && S.insp) e.innerHTML = pendHtml(S.insp); }
 function stepFinal(i) {
   const p = pendencias(i);
-  return `<section class="card"><h2><span class="num">7</span>Observações</h2><textarea data-k="obs" id="f_obs" aria-label="Observações e irregularidades" placeholder="Irregularidades encontradas, serviços executados, pendências…">${esc(i.obs)}</textarea></section>
+  const servHtml = isCorr(i) ? `<section class="card"><h2><span class="num">6</span>Serviço executado</h2><div class="grid2">
+    <div class="field full"><label class="lb" for="f_serv">O que foi feito <span class="req">*</span></label><textarea id="f_serv" data-k="corr.servico" placeholder="Ex.: puxada sobra técnica de 40 m, instalada caixa de emenda nova, fusionadas 72 fibras, testes OK">${esc(i.corr.servico || '')}</textarea></div>
+    ${inp('corr.sobra', 'Sobra técnica puxada (m)', { mode: 'decimal', ph: '0' })}${inp('corr.normalizacao', 'Normalizado às', { type: 'time' })}
+    <label class="row field full" style="min-height:44px;cursor:pointer"><input type="checkbox" data-k="corr.novaCaixa" ${i.corr.novaCaixa ? 'checked' : ''} style="width:22px;height:22px"> <b>Foi criada caixa de emenda nova</b></label>
+    <label class="row field full" style="min-height:44px;cursor:pointer"><input type="checkbox" data-k="corr.pendente" ${i.corr.pendente ? 'checked' : ''} style="width:22px;height:22px"> <b>Ficou pendência para outra equipe / retorno</b></label></div></section>` : '';
+  return servHtml + `<section class="card"><h2><span class="num">7</span>Observações</h2><textarea data-k="obs" id="f_obs" aria-label="Observações e irregularidades" placeholder="Irregularidades encontradas, serviços executados, pendências…">${esc(i.obs)}</textarea></section>
   <section class="card"><h2><span class="num">8</span>Assinatura do técnico</h2><canvas class="sig" id="sig" aria-label="Área para assinar com o dedo"></canvas><div class="row"><button class="btn" id="bSigClear" style="min-height:44px">Limpar assinatura</button></div></section>
   <section class="card"><h2>Relatório</h2>
     <div id="pend">${p.length ? `<div class="warnbox"><b>Faltando:</b> ${p.map(esc).join(', ')}.<br>O PDF pode ser gerado assim mesmo.</div>` : '<div class="okbox">Tudo preenchido.</div>'}</div>
     <div class="row"><button class="btn wa" id="bWa">${ICON.wa}Enviar PDF no WhatsApp</button><button class="btn" id="bPdf">${ICON.pdf}Baixar PDF</button></div>
-    <button class="btn go block" id="bConcluir">${ICON.check}${i.status === 'concluida' ? 'Salvar e voltar' : 'Concluir inspeção'}</button>
+    <button class="btn block" id="bKmz">${ICON.pin}Exportar KMZ (Google Earth)</button>
+    <button class="btn go block" id="bConcluir">${ICON.check}${i.status === 'concluida' ? 'Salvar e voltar' : isCorr(i) ? 'Concluir atendimento' : 'Concluir inspeção'}</button>
     ${S.ronda && i.rondaId === S.ronda.id && i.status !== 'concluida' ? '<p class="muted small" style="margin:0">Ao concluir, o app passa a registrar a rota do cabo até a próxima caixa.</p>' : ''}</section>`;
 }
 function barInsp() {
-  const last = S.step === STEPS.length - 1;
+  const last = S.step === ST().length - 1;
   setBar(`<button class="btn" id="bPrev" ${S.step === 0 ? 'disabled' : ''}>${ICON.prev}Anterior</button>${last ? `<button class="btn go" id="bConc2">${ICON.check}Concluir</button>` : `<button class="btn pri" id="bNext">Próximo${ICON.next}</button>`}`);
   $('#bPrev').onclick = () => { S.step = Math.max(0, S.step - 1); window.scrollTo(0, 0); render(); };
-  $('#bNext') && ($('#bNext').onclick = () => { S.step = Math.min(STEPS.length - 1, S.step + 1); window.scrollTo(0, 0); render(); });
+  $('#bNext') && ($('#bNext').onclick = () => { S.step = Math.min(ST().length - 1, S.step + 1); window.scrollTo(0, 0); render(); });
   $('#bConc2') && ($('#bConc2').onclick = concluirInsp);
 }
 function afterInsp() {
@@ -582,56 +856,82 @@ function afterInsp() {
     const ev = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
     el.addEventListener(ev, () => {
       setPath(i, el.dataset.k, el.type === 'checkbox' ? el.checked : el.value); saveInsp();
-      if (el.dataset.k === 'info.tag') { $('#topTitle').textContent = el.value ? 'Caixa ' + el.value : 'Nova inspeção'; }
+      if (el.dataset.k === 'info.tag' && !isCorr(i)) { $('#topTitle').textContent = el.value ? 'Caixa ' + el.value : 'Nova inspeção'; }
+      if (el.dataset.k === 'corr.ticket') { i.corr.ticketAuto = false; $('#topTitle').textContent = 'Corretiva · Ticket ' + (el.value || '—'); }
       if (el.dataset.k === 'cabos.temS2') render();
+      if (el.dataset.k === 'cabos.entrada.fibras' && CAPS.includes(+el.value)) { i.fo.total = +el.value; ensureRows(i); }
+      if (el.dataset.fore) { const y = window.scrollY; render(); window.scrollTo(0, y); }
     });
   });
   $$('[data-set]', app).forEach(b => b.onclick = () => { const cur = getPath(i, b.dataset.set); setPath(i, b.dataset.set, cur === b.dataset.v ? '' : b.dataset.v); saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); });
-  const key = STEPS[S.step][0];
-  if (key === 'caixa') {
+  const key = ST()[S.step][0];
+  if (key === 'mat') $('#bMatAdd').onclick = () => { i.matExtra.push({ nome: '', qtd: '', un: 'un' }); saveInsp(); render(); };
+  if (key === 'caixa' || key === 'ocorr') {
     $('#bLoc').onclick = async () => { $('#bLoc').disabled = true; $('#bLoc').textContent = 'Capturando…'; const l = await posAtual(0); if (l) { i.loc = l; saveInsp(); toast(`Localização capturada (±${l.acc} m).`); await preencherEndereco(true); } else toast(S.gps.msg && S.gps.status === 'err' ? S.gps.msg : 'Não foi possível pegar a localização.'); render(); };
     $('#bEnd').onclick = () => { if (!i.loc) { toast('Capture a localização primeiro.'); return; } preencherEndereco(false); };
+    $('#f_rotaSel').onchange = e => { const rt = rotaById(e.target.value); i.info.rotaId = rt ? rt.id : ''; i.info.rota = rt ? rotaLb(rt) : ''; if (rt) ['entrada', 's1', 's2'].forEach(k => { if (!i.cabos[k].fibras && rt.cap) i.cabos[k].fibras = String(rt.cap); }); if (rt && CAPS.includes(+rt.cap) && !i.fo.rows.some(r => r.f)) { i.fo.total = +rt.cap; ensureRows(i); } saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); };
+    $$('[data-dono="in"]').forEach(b => b.onclick = () => { i.info.dono = i.info.dono === b.dataset.v ? '' : b.dataset.v; saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); });
+    $('#in_parc') && $('#in_parc').addEventListener('input', e => { i.info.parceiro = e.target.value; saveInsp(); });
+    $('#in_parc') && $('#in_parc').addEventListener('change', e => lembraParceiro(e.target.value));
+    $('#bGerTag').onclick = async () => { i.info.tag = await proximaTag(); i.info.tagAuto = true; saveInsp(); render(); toast('TAG gerada: ' + i.info.tag); };
+    $('#f_info_tag') && $('#f_info_tag').addEventListener('input', () => { if (i.info.tagAuto) { i.info.tagAuto = false; } });
   }
   if (key === 'check') $('#bAllOk').onclick = () => { CHECK.forEach(([k]) => { if (!i.check[k]) i.check[k] = 'OK'; }); saveInsp(); render(); };
   if (key === 'fusoes') {
-    $('#foTot').onchange = e => { i.fo.total = +e.target.value; saveInsp(); render(); };
+    $('#foTot').onchange = e => { i.fo.total = +e.target.value; i.cabos.entrada.fibras = String(i.fo.total); ensureRows(i); saveInsp(); render(); };
+    $$('details.tubo').forEach(d => d.addEventListener('toggle', () => { const t = +d.dataset.tube; if (d.open === S.openTubes.has(t)) return; if (d.open) S.openTubes.add(t); else S.openTubes.delete(t); const y = window.scrollY; render(); window.scrollTo(0, y); }));
+    const setFib = (k, tub, fib) => { const r = i.fo.rows[k]; r.fib = String((tub - 1) * 12 + fib); saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); };
+    $$('[data-fot]').forEach(el => el.onchange = () => { const k = +el.dataset.fot; const cur = i.fo.rows[k].fib ? tf(+i.fo.rows[k].fib).f : 1; setFib(k, +el.value, cur); });
+    $$('[data-fof]').forEach(el => el.onchange = () => { const k = +el.dataset.fof; const cur = i.fo.rows[k].fib ? tf(+i.fo.rows[k].fib).t : 1; setFib(k, cur, +el.value); });
     $$('[data-fo]').forEach(b => b.onclick = () => { const r = i.fo.rows[+b.dataset.fo]; r.f = !r.f; if (r.f && !r.fib) r.fib = String(+b.dataset.fo + 1); saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); });
-    $('#bSeq').onclick = () => { for (let k = 0; k < i.fo.total; k++) { const r = i.fo.rows[k]; r.f = true; r.cabo = 'S1'; r.fib = String(k + 1); } saveInsp(); render(); toast('Todas as fibras marcadas 1→1 na Saída 1. Ajuste as que forem diferentes.'); };
+    $('#bSeq').onclick = () => { ensureRows(i); for (let k = 0; k < i.fo.total; k++) { const r = i.fo.rows[k]; r.f = true; r.cabo = 'S1'; r.fib = String(k + 1); } saveInsp(); render(); toast('Todas as fibras marcadas 1→1 na Saída 1. Ajuste as que forem diferentes.'); };
     $('#bLimpaFo').onclick = () => { i.fo.rows.forEach(r => { r.f = false; r.fib = ''; r.band = ''; }); saveInsp(); render(); };
   }
   if (key === 'fotos') {
-    $('#bCam').onclick = () => $('#fileCam').click(); $('#bGal').onclick = () => $('#fileGal').click();
+    S.fotoMode = 'insp';
+    $('#bCam').onclick = () => { S.fotoMode = 'insp'; $('#fileCam').click(); }; $('#bGal').onclick = () => { S.fotoMode = 'insp'; $('#fileGal').click(); };
+    $$('[data-cat]').forEach(b => b.onclick = () => { S.fotoCat = b.dataset.cat; const y = window.scrollY; render(); window.scrollTo(0, y); });
     $$('[data-ph]').forEach(img => { const p = i.fotos[+img.dataset.ph]; if (p && p.blob) { img.src = URL.createObjectURL(p.blob); img.onload = () => URL.revokeObjectURL(img.src); } });
     $$('[data-delph]').forEach(b => b.onclick = () => { if (!confirm('Remover esta foto?')) return; i.fotos.splice(+b.dataset.delph, 1); saveInsp(); render(); });
   }
   if (key === 'final') {
     sigInit();
     $('#bPdf').onclick = async () => { const f = await gerarPdfInsp(i); if (f) baixar(f); };
+    $('#bKmz').onclick = async () => { const f = await kmzInsp(i); if (f) exportar(f); };
     $('#bWa').onclick = async () => { const f = await gerarPdfInsp(i); if (f) compartilhar([f], textoInsp(i)); };
     $('#bConcluir').onclick = concluirInsp;
   }
 }
 ['fileCam', 'fileGal'].forEach(id => $('#' + id).addEventListener('change', async e => {
   const files = Array.from(e.target.files || []); e.target.value = '';
-  if (!files.length || !S.insp) return;
+  if (!files.length) return;
+  if (S.fotoMode === 'rede') {
+    const r = S.ronda; if (!r || r.fim) return;
+    toast('Processando foto da rede…', 6000);
+    const loc = await posAtual(60000);
+    for (const f of files) { try { const p = await processarFoto(f, loc, { cat: S.fotoCatRede || CATS_REDE[0], tag: 'Rede', tecnico: r.tecnico }); p.rondaId = r.id; await DB.put('fotos', p); } catch (err) { toast('Não foi possível ler a foto.'); } }
+    S.redeFotos = await fotosRede(r.id); render(); toast('Foto da rede registrada com GPS.'); return;
+  }
+  if (!S.insp) return;
   toast(files.length > 1 ? `Processando ${files.length} fotos…` : 'Processando foto…', 6000);
   const loc = S.gps.last && Date.now() - S.gps.last.ts < 120000 ? S.gps.last : S.insp.loc;
-  for (const f of files) { try { const p = await processarFoto(f, loc); S.insp.fotos.push(p); } catch (err) { toast('Não foi possível ler uma das fotos.'); } }
-  saveInsp(true); render(); toast('Foto adicionada.');
+  for (const f of files) { try { const p = await processarFoto(f, loc, { cat: S.fotoCat || catsOf(S.insp)[0], tag: S.insp.info.tag, ticket: isCorr(S.insp) ? S.insp.corr.ticket : '', tecnico: S.insp.info.tecnico }); S.insp.fotos.push(p); } catch (err) { toast('Não foi possível ler uma das fotos.'); } }
+  saveInsp(true); render(); toast('Foto adicionada: ' + (S.fotoCat || catsOf(S.insp)[0]) + '.');
 }));
-async function processarFoto(file, loc) {
+async function fotosRede(rondaId) { return (await DB.all('fotos')).filter(f => f.rondaId === rondaId).sort((a, b) => a.ts - b.ts); }
+async function processarFoto(file, loc, o) {
   let bmp; try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { bmp = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(file); }); }
   const max = 1600, sc = Math.min(1, max / Math.max(bmp.width, bmp.height)); const w = Math.round(bmp.width * sc), h = Math.round(bmp.height * sc);
   const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(bmp, 0, 0, w, h);
-  const ts = Date.now(), i = S.insp;
+  const ts = Date.now();
   const bh = Math.max(46, Math.round(Math.min(w, h) * 0.085)); x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(0, h - bh, w, bh);
   const fs = Math.round(bh * 0.33); x.fillStyle = '#fff'; x.font = `600 ${fs}px "IBM Plex Sans", Arial, sans-serif`; x.textBaseline = 'middle';
-  const l1 = `TAG ${i.info.tag || '—'}  •  ${fData(ts)} ${fHoraS(ts)}`;
-  const l2 = (loc ? `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)} (±${loc.acc} m)` : 'Sem GPS') + `  •  ${i.info.tecnico || S.perfil.nome || ''}`;
+  const l1 = `${o.cat.toUpperCase()}  •  ${o.ticket ? 'TICKET ' + o.ticket : o.tag === 'Rede' ? 'REDE' : 'TAG ' + (o.tag || '—')}  •  ${fData(ts)} ${fHoraS(ts)}`;
+  const l2 = (loc ? `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)} (±${loc.acc} m)` : 'Sem GPS') + `  •  ${o.tecnico || S.perfil.nome || ''}`;
   x.fillText(l1, Math.round(bh * 0.25), h - bh * 0.7); x.font = `${fs}px "IBM Plex Sans", Arial, sans-serif`; x.fillText(l2, Math.round(bh * 0.25), h - bh * 0.3);
   x.textAlign = 'right'; x.font = `700 ${fs}px "IBM Plex Sans", Arial, sans-serif`; x.fillText('MULTIVALE', w - Math.round(bh * 0.25), h - bh * 0.5);
   const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.82));
-  return { id: uid(), cat: CATS[Math.min(i.fotos.length, CATS.length - 2)], desc: '', blob, w, h, ts, lat: loc && loc.lat, lon: loc && loc.lon };
+  return { id: uid(), cat: o.cat, desc: '', blob, w, h, ts, lat: loc && loc.lat, lon: loc && loc.lon };
 }
 function sigInit() {
   const c = $('#sig'); const i = S.insp; const dpr = window.devicePixelRatio || 1;
@@ -650,21 +950,32 @@ function sigInit() {
 function viewRonda(r) {
   const { t, segs } = totais(r);
   const ins = r.eventos.filter(e => e.tipo === 'chegada').map(e => S.inspCache.get(e.inspId)).filter(Boolean);
-  return `<section class="card"><div class="hero"><span class="lb">${r.fim ? 'Ronda encerrada' : 'Ronda em andamento'}</span><div class="big">${esc(r.tecnico)} · ${fData(r.inicio)}</div><span class="muted small">${fHora(r.inicio)} até ${r.fim ? fHora(r.fim) : 'agora'}${r.placa ? ' · Veículo ' + esc(r.placa) : ''}</span></div>
+  return `<section class="card"><div class="hero"><span class="lb">${isCorr(r) ? 'Corretiva · Ticket ' + esc(r.ticket) + (r.fim ? ' · encerrada' : ' · em andamento') : r.fim ? 'Ronda encerrada' : 'Ronda em andamento'}</span><div class="big">${esc(r.tecnico)} · ${fData(r.inicio)}</div><span class="muted small">${fHora(r.inicio)} até ${r.fim ? fHora(r.fim) : 'agora'}${r.placa ? ' · Veículo ' + esc(r.placa) : ''}</span></div>
     <div class="stats"><div class="stat"><b>${fDur(t.dur)}</b><span>Duração</span></div><div class="stat"><b>${fKm(t.km)}</b><span>Total</span></div><div class="stat"><b>${fKm(t.desl + t.ret)}</b><span>Deslocamento</span></div><div class="stat"><b>${fKm(t.cabo)}</b><span>Rota do cabo</span></div></div>
     <div class="map" id="mapR" role="img" aria-label="Mapa do percurso"></div>
     <div class="legend"><span><i style="background:${SEGCOR.desl}"></i>Deslocamento</span><span><i style="background:${SEGCOR.cabo}"></i>Rota do cabo</span><span><i style="background:${SEGCOR.ret}"></i>Retorno</span></div>
     ${t.gapN ? `<div class="warnbox">${t.gapN} trecho(s) sem registro de GPS por mais de 3 min (total ${fDur(t.gapMs)}). Nesses trechos o app estava fechado, em segundo plano ou sem sinal.</div>` : ''}
-    <div class="row"><button class="btn wa" id="bWaR">${ICON.wa}Enviar ronda no WhatsApp</button><button class="btn" id="bPdfR">${ICON.pdf}Baixar PDF da ronda</button></div>
-    ${ins.length ? `<button class="btn block" id="bTudo">${ICON.wa}Enviar ronda + relatórios das ${ins.length} caixas</button>` : ''}</section>
+    <div class="row"><button class="btn wa" id="bWaR">${ICON.wa}Enviar ${isCorr(r) ? 'resumo' : 'ronda'} no WhatsApp</button><button class="btn" id="bPdfR">${ICON.pdf}Baixar PDF da ronda</button></div>
+    <button class="btn block" id="bKmzR">${ICON.pin}Exportar KMZ do percurso (Google Earth)</button>
+    ${ins.length ? `<button class="btn block" id="bTudo">${ICON.wa}Enviar ${isCorr(r) ? 'resumo + relatório da corretiva' : `ronda + relatórios das ${ins.length} caixas`}</button>` : ''}</section>
   <section class="card"><h2>Trechos</h2><div class="tw"><table class="t"><thead><tr><th>Trecho</th><th>De → Para</th><th>Horário</th><th class="r">Km</th></tr></thead><tbody>
     ${segs.map(s => `<tr><td><b style="color:${SEGCOR[s.tipo]}">${SEGLB[s.tipo]}</b></td><td>${esc(s.de)} → ${esc(s.para)}</td><td>${fHora(s.ini)}–${fHora(s.fim)}<br><span class="muted small">${fDur(s.fim - s.ini)}</span></td><td class="r">${fKm(s.km)}</td></tr>`).join('')}</tbody></table></div></section>
+  <section class="card"><h2>Fotos da rede</h2><div class="photos" id="galRede"><p class="muted" style="margin:0">Carregando…</p></div></section>
   <section class="card"><h2>Caixas inspecionadas</h2>${ins.length ? `<div class="list">${ins.map((i, k) => itemInsp(i, k + 1)).join('')}</div>` : '<p class="muted" style="margin:0">Nenhuma caixa nesta ronda.</p>'}</section>`;
 }
-function afterRonda() {
-  const r = S.rondaView; drawLiveMap('mapR', r, !r.fim); bindOpen();
+function galeriaRede(r) {
+  const g = $('#galRede'); if (!g) return; const fs = S.redeFotos || [];
+  if (!fs.length) { g.outerHTML = '<p class="muted" style="margin:0" id="galRede">Nenhuma foto da rede nesta ronda.</p>'; return; }
+  g.innerHTML = fs.map((p, k) => `<div class="ph"><img data-rph="${k}" alt="${esc(p.cat)}"><span class="tag">${esc(p.cat)}</span><div class="pb"><span class="small">${fHora(p.ts)}${p.lat != null ? ` · <a href="https://maps.google.com/?q=${p.lat},${p.lon}" target="_blank" rel="noopener">ver no mapa</a>` : ''}</span><input type="text" data-rdesc="${k}" value="${esc(p.desc)}" placeholder="Descrição (opcional)" aria-label="Descrição da foto da rede ${k + 1}"><button class="del" data-rdel="${k}">Remover foto</button></div></div>`).join('');
+  $$('[data-rph]', g).forEach(img => { const p = fs[+img.dataset.rph]; img.src = URL.createObjectURL(p.blob); img.onload = () => URL.revokeObjectURL(img.src); });
+  $$('[data-rdesc]', g).forEach(el => el.addEventListener('input', () => { const p = fs[+el.dataset.rdesc]; p.desc = el.value; DB.put('fotos', p); }));
+  $$('[data-rdel]', g).forEach(b => b.onclick = async () => { if (!confirm('Remover esta foto da rede?')) return; await DB.del('fotos', fs[+b.dataset.rdel].id); S.redeFotos = await fotosRede(r.id); galeriaRede(r); });
+}
+async function afterRonda() {
+  const r = S.rondaView; S.redeFotos = await fotosRede(r.id); galeriaRede(r); drawLiveMap('mapR', r, !r.fim); bindOpen();
   $('#bPdfR').onclick = async () => { const f = await gerarPdfRonda(r); if (f) baixar(f); };
   $('#bWaR').onclick = async () => { const f = await gerarPdfRonda(r); if (f) compartilhar([f], textoRonda(r)); };
+  $('#bKmzR').onclick = async () => { const f = await kmzRonda(r); if (f) exportar(f); };
   $('#bTudo') && ($('#bTudo').onclick = async () => {
     const files = []; const f = await gerarPdfRonda(r); if (!f) return; files.push(f);
     for (const e of r.eventos.filter(e => e.tipo === 'chegada')) { const i = S.inspCache.get(e.inspId); if (i) { const g = await gerarPdfInsp(i, true); if (g) files.push(g); } }
@@ -680,11 +991,11 @@ async function logoData() {
   return S.logoData;
 }
 const blobToData = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
-function pdfHeader(doc, logo, titulo, sub, tag) {
+function pdfHeader(doc, logo, titulo, sub, tag, rotulo) {
   if (logo) doc.addImage(logo, 'JPEG', 12, 9, 36, 21.6);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...ACC); doc.text(sub.toUpperCase(), 52, 15);
   doc.setFontSize(14); doc.setTextColor(20); doc.text(titulo, 52, 22, { maxWidth: tag != null ? 94 : 146 });
-  if (tag != null) { doc.setDrawColor(20); doc.setLineWidth(0.6); doc.rect(150, 11, 48, 15); doc.setFontSize(6.5); doc.setTextColor(90); doc.text('TAG DA CAIXA', 152, 15); doc.setFontSize(12); doc.setTextColor(20); doc.text(String(tag || '—'), 152, 23); }
+  if (tag != null) { doc.setDrawColor(20); doc.setLineWidth(0.6); doc.rect(150, 11, 48, 15); doc.setFontSize(6.5); doc.setTextColor(90); doc.text(rotulo || 'TAG DA CAIXA', 152, 15); doc.setFontSize(12); doc.setTextColor(20); doc.text(String(tag || '—'), 152, 23); }
   doc.setDrawColor(20); doc.setLineWidth(0.7); doc.line(12, 33, 198, 33);
   return 39;
 }
@@ -744,12 +1055,19 @@ async function gerarPdfInsp(i, silencioso) {
   if (!silencioso) toast('Gerando PDF…', 8000);
   try {
     const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const logo = await logoData();
-    let y = pdfHeader(doc, logo, 'Inspeção Preventiva Backbone', 'Relatório de inspeção · Rede óptica', i.info.tag);
+    const corr = isCorr(i); let sn = 0;
+    let y = corr ? pdfHeader(doc, logo, 'Relatório de Corretiva Backbone', 'Manutenção corretiva · Rede óptica', i.corr.ticket, 'TICKET') : pdfHeader(doc, logo, 'Inspeção Preventiva Backbone', 'Relatório de inspeção · Rede óptica', i.info.tag);
     const tipo = { aerea: 'Aérea (poste)', sub: 'Subterrânea (CS enterrada)', outro: 'Outro' + (i.info.tipoOutro ? ': ' + i.info.tipoOutro : '') }[i.info.tipo] || '';
     const dataBR = i.info.data ? i.info.data.split('-').reverse().join('/') : '';
-    y = pdfSec(doc, y, 1, 'Identificação da caixa');
-    y = kv(doc, y, [['Data', dataBR], ['Mês referência', i.info.mes], ['Técnico(s)', i.info.tecnico], ['TAG da caixa', i.info.tag], ['Modelo', i.info.modelo], ['Fabricante', i.info.fabricante], ['Tipo de instalação', tipo], ['Nº poste / CV', i.info.poste], ['Endereço', i.info.endereco], ['Bairro', i.info.bairro], ['Cidade', i.info.cidade], ['Rota (início/fim)', i.info.rota], ['Chegada', fHora(i.chegada)], ['Saída', i.saida ? fHora(i.saida) : '—']]);
-    y = pdfSec(doc, y, 2, 'Localização (GPS)');
+    if (corr) {
+      y = pdfSec(doc, y, ++sn, 'Ocorrência');
+      const r0 = i.rondaId ? ((S.ronda && S.ronda.id === i.rondaId) ? S.ronda : await DB.get('rondas', i.rondaId)) : null; const sd = r0 ? segmentos(r0).find(x => x.inspId === i.id) : null;
+      y = kv(doc, y, [['Ticket', i.corr.ticket + (i.corr.ticketAuto ? ' (gerado pelo app)' : '')], ['Ocorrência', i.corr.ocorrencia], ['Backbone', donoLb(i.info.dono, i.info.parceiro) || '—'], ['Rota', i.info.rota], ['Técnico', i.info.tecnico], ['Matrícula', S.perfil.matricula], ['Data', dataBR], ['Acionamento', i.corr.acionamento], ['Início do deslocamento', r0 ? fHora(r0.inicio) : ''], ['Chegada ao local', fHora(i.chegada)], ['Deslocamento', sd ? `${fKm(sd.km)} em ${fDur(sd.fim - sd.ini)}` : ''], ['Normalizado às', i.corr.normalizacao], ['Saída do local', i.saida ? fHora(i.saida) : '—'], ['Tempo no local', i.saida ? fDur(i.saida - i.chegada) : '—'], ['Fibras afetadas', i.corr.fibrasAfetadas], ['Caixa de emenda', [i.info.tag, i.corr.novaCaixa ? '(nova)' : ''].filter(Boolean).join(' ')], ['Endereço', i.info.endereco], ['Bairro / cidade', [i.info.bairro, i.info.cidade].filter(Boolean).join(' - ')], ['Nº poste / CV', i.info.poste], ['Pendência', i.corr.pendente ? 'Sim' : 'Não']]);
+    } else {
+    y = pdfSec(doc, y, ++sn, 'Identificação da caixa');
+    y = kv(doc, y, [['Backbone', donoLb(i.info.dono, i.info.parceiro) || '—'], ['Matrícula', S.perfil.matricula], ['Data', dataBR], ['Mês referência', i.info.mes], ['Técnico(s)', i.info.tecnico], ['TAG da caixa', i.info.tag], ['Modelo', i.info.modelo], ['Fabricante', i.info.fabricante], ['Tipo de instalação', tipo], ['Nº poste / CV', i.info.poste], ['Endereço', i.info.endereco], ['Bairro', i.info.bairro], ['Cidade', i.info.cidade], ['Rota', i.info.rota], ['Chegada', fHora(i.chegada)], ['Saída', i.saida ? fHora(i.saida) : '—']]);
+    }
+    y = pdfSec(doc, y, ++sn, 'Localização (GPS)');
     const l = i.loc;
     y = kv(doc, y, [['Coordenadas', l ? `${l.lat.toFixed(6)}, ${l.lon.toFixed(6)}` : 'Não capturada'], ['Precisão', l ? `±${l.acc} m às ${fHoraS(l.ts)}` : ''], ['Mapa', l ? 'maps.google.com/?q=' + l.lat + ',' + l.lon : '']]);
     if (l) { doc.link(12, y - 13, 186, 7, { url: `https://maps.google.com/?q=${l.lat},${l.lon}` }); }
@@ -757,39 +1075,58 @@ async function gerarPdfInsp(i, silencioso) {
     let seg = null;
     if (i.rondaId) { const r = (S.ronda && S.ronda.id === i.rondaId) ? S.ronda : await DB.get('rondas', i.rondaId); if (r) { await cacheInspRonda(r); seg = segmentos(r).find(s => s.inspId === i.id); } }
     if (l) {
-      const img = await mapaImg(seg ? [{ pts: seg.pts, color: SEGCOR[seg.tipo] }] : [], [{ lat: l.lat, lon: l.lon, label: 'C', color: '#0b5f99' }], 1400, 600);
+      const img = await mapaImg(seg ? [{ pts: seg.pts, color: SEGCOR[seg.tipo] }] : [], [{ lat: l.lat, lon: l.lon, label: corr ? 'P' : 'C', color: corr ? '#d9480f' : '#0b5f99' }], 1400, 600);
       if (img) { if (y > 205) { doc.addPage(); y = 16; } doc.addImage(img, 'JPEG', 12, y - 3, 186, 79.7); y += 79.7; doc.setFontSize(7.5); doc.setTextColor(90); doc.setFont('helvetica', 'normal');
-        doc.text(seg ? `${SEGLB[seg.tipo]}: ${seg.de} > ${seg.para} · ${fKm(seg.km)} · ${fHora(seg.ini)}–${fHora(seg.fim)}` : 'Posição da caixa', 12, y + 1); y += 8; }
+        doc.text(seg ? `${SEGLB[seg.tipo]}: ${corr ? seg.de.replace('Início da ronda', 'Início do deslocamento') : seg.de} > ${corr ? 'ponto da corretiva' : seg.para} · ${fKm(seg.km)} · ${fHora(seg.ini)}–${fHora(seg.fim)}` : 'Posição da caixa', 12, y + 1); y += 8; }
     }
-    y = pdfSec(doc, y, 3, 'Cabos');
+    if (corr) {
+      y = pdfSec(doc, y, ++sn, 'Descrição do atendimento'); y += 3;
+      const bloco = (tit, txt) => { if (y > 270) { doc.addPage(); y = 16; } doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20); doc.text(tit, 12, y + 1); y += 4.5; doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.splitTextToSize(txt || '—', 186).forEach(line => { if (y > 280) { doc.addPage(); y = 16; } doc.text(line, 12, y + 1); y += 4.4; }); y += 3; };
+      bloco('Problema encontrado', i.corr.problema); bloco('Causa provável', i.corr.causa); bloco('Serviço executado', i.corr.servico);
+      bloco('Sobra técnica puxada', i.corr.sobra ? i.corr.sobra + ' m' : 'Não informada'); y += 3;
+    }
+    y = pdfSec(doc, y, ++sn, 'Cabos');
     const cab = [['Entrada', i.cabos.entrada], ['Saída 1', i.cabos.s1]]; if (i.cabos.temS2) cab.push(['Saída 2', i.cabos.s2]);
-    doc.autoTable({ ...TB, startY: y, head: [['Cabo', 'Marca', 'Lote', 'Nº de fibras', 'Metragem (m)']], body: cab.map(([n, c]) => [n, c.marca || '—', c.lote || '—', c.fibras || '—', c.metragem || '—']), columnStyles: { 0: { fontStyle: 'bold' } } });
+    doc.autoTable({ ...TB, startY: y, head: [['Cabo', 'Marca', 'Lote', 'Nº de fibras', 'Padrão de cores', 'Metragem (m)']], body: cab.map(([n, c]) => [n, c.marca || '—', c.lote || '—', c.fibras || '—', (c.padrao ? padNome(c.padrao) : 'Não informado'), c.metragem || '—']), columnStyles: { 0: { fontStyle: 'bold' } } });
     y = doc.lastAutoTable.finalY + 7;
-    y = pdfSec(doc, y, 4, 'Itens inspecionados');
+    if (!corr) {
+    y = pdfSec(doc, y, ++sn, 'Itens inspecionados');
     doc.autoTable({ ...TB, startY: y, head: [['Item', 'Situação', 'Observação']], body: CHECK.map(([k, lb]) => [lb, i.check[k] === 'NC' ? 'N/C' : i.check[k] === 'NA' ? 'N/A' : (i.check[k] || '—'), i.checkObs[k] || '']),
       columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 22, halign: 'center', fontStyle: 'bold' } },
       didParseCell: d => { if (d.section === 'body' && d.column.index === 1) { if (d.cell.raw === 'OK') d.cell.styles.textColor = [31, 122, 58]; if (d.cell.raw === 'N/C') { d.cell.styles.textColor = [255, 255, 255]; d.cell.styles.fillColor = [180, 35, 27]; } } } });
     y = doc.lastAutoTable.finalY + 7;
-    y = pdfSec(doc, y, 5, 'Fibras fusionadas e mapa de fusões');
+    }
+    const temFus = i.fo.rows.slice(0, i.fo.total).some(r => r.f);
+    if (!corr || temFus) {
+    y = pdfSec(doc, y, ++sn, 'Fibras fusionadas e mapa de fusões');
     const fused = i.fo.rows.slice(0, i.fo.total).map((r, k) => ({ ...r, n: k + 1 })).filter(r => r.f);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(20);
-    doc.text(`${fused.length} de ${i.fo.total} fibras do cabo de entrada fusionadas.`, 12, y + 1); y += 4;
+    const nMan = fused.filter(r => r.fib && +r.fib !== r.n).length; doc.text(`${fused.length} de ${i.fo.total} fibras do cabo de entrada fusionadas${nMan ? ` · ${nMan} manobra(s) de fibra` : ''}.`, 12, y + 1); y += 4;
     // grade 3 tubos x 12 fibras
     const gx = 12, cw = 14.5, ch = 6.2; doc.setFontSize(7);
-    for (let f = 0; f < 12; f++) { doc.setFillColor(COLORS[f][1]); doc.rect(gx + 14 + f * cw, y, cw, 3, 'FD'); doc.setTextColor(20); doc.text(String(f + 1), gx + 14 + f * cw + cw / 2, y + 6, { align: 'center' }); }
+    const pe = padE(i); for (let f = 0; f < 12; f++) { doc.setFillColor(fCor(f + 1, pe)[1]); doc.rect(gx + 14 + f * cw, y, cw, 3, 'FD'); doc.setTextColor(20); doc.text(String(f + 1), gx + 14 + f * cw + cw / 2, y + 6, { align: 'center' }); }
     y += 7.5;
-    for (let t = 0; t < i.fo.total / 12; t++) {
-      doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.text(`T${t + 1}`, gx + 1, y + 4.2); doc.setFillColor(COLORS[t][1]); doc.rect(gx + 7, y + 1.7, 4, 3, 'FD'); doc.setFont('helvetica', 'normal');
-      for (let f = 0; f < 12; f++) { const r = i.fo.rows[t * 12 + f]; doc.setDrawColor(150); if (r.f) { doc.setFillColor(...ACC); doc.rect(gx + 14 + f * cw, y, cw, ch, 'FD'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.text('X', gx + 14 + f * cw + cw / 2, y + 4.3, { align: 'center' }); doc.setFont('helvetica', 'normal'); } else doc.rect(gx + 14 + f * cw, y, cw, ch); }
+    for (let t = 0; t < Math.ceil(i.fo.total / 12); t++) {
+      if (y > 276) { doc.addPage(); y = 16; }
+      doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.text(`T${t + 1}`, gx + 1, y + 4.2); doc.setFillColor(tCor(t + 1, pe)); doc.rect(gx + 7, y + 1.7, 4, 3, 'FD'); doc.setFont('helvetica', 'normal');
+      for (let f = 0; f < 12 && t * 12 + f < i.fo.total; f++) { const r = i.fo.rows[t * 12 + f] || {}; doc.setDrawColor(150); if (r.f) { doc.setFillColor(...ACC); doc.rect(gx + 14 + f * cw, y, cw, ch, 'FD'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.text('X', gx + 14 + f * cw + cw / 2, y + 4.3, { align: 'center' }); doc.setFont('helvetica', 'normal'); } else doc.rect(gx + 14 + f * cw, y, cw, ch); }
       y += ch;
     }
     y += 4;
     if (fused.length) {
       doc.autoTable({ ...TB, startY: y, head: [['FO', 'Entrada (tubo / fibra)', 'Band.', 'Cabo saída', 'Fibra de saída (tubo / fibra)', 'Ligação']],
-        body: fused.map(r => [r.n, foTxt(r.n), r.band || '—', r.cabo, r.fib ? `${r.fib} · ${foTxt(+r.fib)}` : '—', r.fib ? `F${r.n} com F${r.fib}` : '—']), columnStyles: { 0: { halign: 'center', fontStyle: 'bold', cellWidth: 11 }, 2: { halign: 'center', cellWidth: 13 }, 3: { halign: 'center', cellWidth: 19 } } });
+        body: fused.map(r => [r.n, foTxt(r.n, pe), r.band || '—', r.cabo, r.fib ? `${r.fib} · ${foTxt(+r.fib, padS(i, r.cabo))}` : '—', r.fib ? (+r.fib === r.n ? `F${r.n} com F${r.fib}` : `F${r.n} com F${r.fib} (MANOBRA)${r.mot ? ' - ' + r.mot : ''}`) : '—']),
+        didParseCell: d => { if (d.section === 'body' && d.column.index === 5 && String(d.cell.raw).includes('MANOBRA')) { d.cell.styles.textColor = [200, 70, 10]; d.cell.styles.fontStyle = 'bold'; } }, columnStyles: { 0: { halign: 'center', fontStyle: 'bold', cellWidth: 11 }, 2: { halign: 'center', cellWidth: 13 }, 3: { halign: 'center', cellWidth: 19 } } });
       y = doc.lastAutoTable.finalY + 7;
     }
-    y = pdfSec(doc, y, 6, 'Observações / irregularidades');
+    }
+    if (corr) {
+      y = pdfSec(doc, y, ++sn, 'Materiais utilizados');
+      const ml = MATERIAIS.filter(([k]) => +String(i.mat[k] || '').replace(',', '.') > 0).map(([k, lb, un]) => [lb + (k === 'cabo' && i.mat.caboSpec ? ' — ' + i.mat.caboSpec : ''), i.mat[k], un]).concat((i.matExtra || []).filter(m => m.nome).map(m => [m.nome, m.qtd || '—', m.un || '']));
+      if (ml.length) { doc.autoTable({ ...TB, startY: y, head: [['Material', 'Quantidade', 'Unid.']], body: ml, columnStyles: { 1: { halign: 'right', cellWidth: 28 }, 2: { cellWidth: 18 } } }); y = doc.lastAutoTable.finalY + 7; }
+      else { doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(20); doc.text('Nenhum material informado.', 12, y + 1); y += 8; }
+    }
+    y = pdfSec(doc, y, ++sn, corr ? 'Observações' : 'Observações / irregularidades');
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(20);
     const ob = doc.splitTextToSize(i.obs || 'Sem observações.', 186); ob.forEach(line => { if (y > 280) { doc.addPage(); y = 16; } doc.text(line, 12, y + 1); y += 4.6; }); y += 4;
     if (y > 245) { doc.addPage(); y = 20; }
@@ -799,7 +1136,7 @@ async function gerarPdfInsp(i, silencioso) {
     // fotos
     if (i.fotos.length) {
       for (let k = 0; k < i.fotos.length; k++) {
-        const p = i.fotos[k]; if (k % 2 === 0) { doc.addPage(); y = pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de inspeção · ' + (i.info.tag || ''), i.info.tag); }
+        const p = i.fotos[k]; if (k % 2 === 0) { doc.addPage(); y = corr ? pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de corretiva · ticket ' + i.corr.ticket, i.corr.ticket, 'TICKET') : pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de inspeção · ' + (i.info.tag || ''), i.info.tag); }
         const data = await blobToData(p.blob); const bw = 186, bh = 112; let w = bw, h = w * p.h / p.w; if (h > bh) { h = bh; w = h * p.w / p.h; }
         doc.addImage(data, 'JPEG', 12 + (bw - w) / 2, y, w, h); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20);
         doc.text(`Foto ${k + 1} — ${p.cat}${p.desc ? ': ' + p.desc : ''}`, 12, y + h + 5, { maxWidth: 186 }); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90);
@@ -809,7 +1146,7 @@ async function gerarPdfInsp(i, silencioso) {
     }
     pdfFooter(doc, `Multivale Engenharia · Ronda Preventiva Backbone · gerado em ${fDH(Date.now())}`);
     const blob = doc.output('blob');
-    return new File([blob], nomeArq(`Inspecao_${i.info.tag || 'sem_TAG'}_${i.info.data || isoDate(i.criado)}`), { type: 'application/pdf' });
+    return new File([blob], nomeArq(isCorr(i) ? `Corretiva_${i.corr.ticket || 'sem_ticket'}_${i.info.data || isoDate(i.criado)}` : `Inspecao_${i.info.tag || 'sem_TAG'}_${i.info.data || isoDate(i.criado)}`), { type: 'application/pdf' });
   } catch (e) { console.error(e); toast('Erro ao gerar o PDF: ' + e.message, 6000); return null; }
 }
 
@@ -820,18 +1157,19 @@ async function gerarPdfRonda(r) {
     await cacheInspRonda(r);
     const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const logo = await logoData();
     const { t, segs } = totais(r);
-    let y = pdfHeader(doc, logo, 'Relatório de Ronda Preventiva', 'Controle de percurso e produção', null);
+    let y = pdfHeader(doc, logo, isCorr(r) ? 'Resumo de Corretiva' : 'Relatório de Ronda Preventiva', isCorr(r) ? 'Deslocamento e atendimento' : 'Controle de percurso e produção', isCorr(r) ? r.ticket : null, 'TICKET');
     y = pdfSec(doc, y, 1, 'Resumo do dia');
-    y = kv(doc, y, [['Técnico', r.tecnico], ['Matrícula', r.matricula], ['Data', fData(r.inicio)], ['Veículo', r.placa], ['Início', fHora(r.inicio)], ['Fim', r.fim ? fHora(r.fim) : 'Em andamento'], ['Duração', fDur(t.dur)], ['Caixas inspecionadas', String(t.caixas)], ['Km total', fKm(t.km)], ['Km deslocamento', fKm(t.desl + t.ret + t.atual)], ['Km rota do cabo', fKm(t.cabo)], ['Sem GPS (>3 min)', t.gapN ? `${t.gapN} trecho(s), ${fDur(t.gapMs)}` : 'Nenhum']]);
+    y = kv(doc, y, [...(isCorr(r) ? [['Ticket', r.ticket + (r.ticketAuto ? ' (gerado pelo app)' : '')], ['Ocorrência', r.ocorrencia]] : []), ['Backbone', donoLb(r.dono, r.parceiro) || '—'], ['Equipe', S.perfil.equipe], ['Técnico', r.tecnico], ['Matrícula', r.matricula], ['Data', fData(r.inicio)], ['Veículo', r.placa], ['Início', fHora(r.inicio)], ['Fim', r.fim ? fHora(r.fim) : 'Em andamento'], ['Duração', fDur(t.dur)], ['Caixas inspecionadas', String(t.caixas)], ['Km total', fKm(t.km)], ['Km deslocamento', fKm(t.desl + t.ret + t.atual)], ['Km rota do cabo', fKm(t.cabo)], ['Sem GPS (>3 min)', t.gapN ? `${t.gapN} trecho(s), ${fDur(t.gapMs)}` : 'Nenhum'], ['Rota', r.rotaId && rotaById(r.rotaId) ? rotaLb(rotaById(r.rotaId)) : '—'], ['Fotos da rede', String((await fotosRede(r.id)).length)]]);
     const ini = r.eventos.find(e => e.tipo === 'inicio');
     const marks = [{ lat: ini && ini.lat, lon: ini && ini.lon, label: 'I', color: '#1f7a3a' }, ...r.eventos.filter(e => e.tipo === 'chegada').map((e, k) => ({ lat: e.lat, lon: e.lon, label: String(k + 1), color: '#0b5f99' }))];
     const fim = r.eventos.find(e => e.tipo === 'fim'); if (fim && fim.lat != null) marks.push({ lat: fim.lat, lon: fim.lon, label: 'F', color: '#b4231b' });
+    const rede = await fotosRede(r.id); rede.forEach((f, k) => { if (f.lat != null) marks.push({ lat: f.lat, lon: f.lon, label: 'R' + (k + 1), color: '#7a3fa0' }); });
     const img = await mapaImg(segs.map(s => ({ pts: s.pts, color: SEGCOR[s.tipo] })), marks, 1400, 1000);
     y = pdfSec(doc, y, 2, 'Mapa do percurso');
     if (img) { if (y > 150) { doc.addPage(); y = 16; } doc.addImage(img, 'JPEG', 12, y - 2, 186, 132.9); y += 133;
       doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); let lx = 12;
       [['desl', 'Deslocamento'], ['cabo', 'Rota do cabo'], ['ret', 'Retorno']].forEach(([k, lb]) => { doc.setFillColor(SEGCOR[k]); doc.rect(lx, y, 6, 1.6, 'F'); doc.setTextColor(60); doc.text(lb, lx + 8, y + 1.6); lx += 36; });
-      doc.text('I = início · F = fim · números = ordem das caixas', 120, y + 1.6); y += 8; }
+      doc.text('I = início · F = fim · números = caixas · R = fotos da rede', 112, y + 1.6); y += 8; }
     y = pdfSec(doc, y, 3, 'Trechos percorridos');
     doc.autoTable({ ...TB, startY: y, head: [['#', 'Tipo', 'De > Para', 'Início', 'Fim', 'Tempo', 'Km']], body: segs.map((s, k) => [k + 1, SEGLB[s.tipo], `${s.de} > ${s.para}`, fHora(s.ini), fHora(s.fim), fDur(s.fim - s.ini), fKm(s.km)]),
       foot: [['', '', 'Total', '', '', fDur(t.dur), fKm(t.km)]], footStyles: { fillColor: [233, 238, 241], textColor: 20, fontStyle: 'bold' }, columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 6: { halign: 'right' } },
@@ -848,14 +1186,120 @@ async function gerarPdfRonda(r) {
     if (t.gapN) { doc.setFontSize(8); doc.setTextColor(150, 70, 10); doc.text(doc.splitTextToSize(`Atenção: ${t.gapN} trecho(s) ficaram mais de 3 minutos sem posição de GPS (total ${fDur(t.gapMs)}). Nesses trechos a distância é estimada em linha reta.`, 186), 12, y); y += 10; }
     if (y > 250) { doc.addPage(); y = 20; }
     doc.setDrawColor(20); doc.setLineWidth(0.4); doc.line(12, y + 18, 92, y + 18); doc.line(118, y + 18, 198, y + 18); doc.setFontSize(7.5); doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.text('TÉCNICO — ' + r.tecnico.toUpperCase(), 12, y + 22); doc.text('SUPERVISOR', 118, y + 22);
+    for (let k = 0; k < rede.length; k++) {
+      const p = rede[k]; if (k % 2 === 0) { doc.addPage(); y = pdfHeader(doc, logo, 'Fotos da rede', 'Integridade do backbone · ronda ' + fData(r.inicio), null); }
+      const data = await blobToData(p.blob); const bw = 186, bh = 112; let w = bw, h = w * p.h / p.w; if (h > bh) { h = bh; w = h * p.w / p.h; }
+      doc.addImage(data, 'JPEG', 12 + (bw - w) / 2, y, w, h); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20);
+      doc.text(`R${k + 1} — ${p.cat}${p.desc ? ': ' + p.desc : ''}`, 12, y + h + 5, { maxWidth: 186 }); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90);
+      doc.text(`${fData(p.ts)} ${fHoraS(p.ts)}${p.lat != null ? ` · ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}` : ''}`, 12, y + h + 9.5); y += h + 16;
+    }
     pdfFooter(doc, `Multivale Engenharia · Ronda Preventiva Backbone · gerado em ${fDH(Date.now())}`);
-    return new File([doc.output('blob')], nomeArq(`Ronda_${isoDate(r.inicio)}_${r.tecnico}`), { type: 'application/pdf' });
+    return new File([doc.output('blob')], nomeArq(isCorr(r) ? `Corretiva_${r.ticket}_${isoDate(r.inicio)}_resumo` : `Ronda_${isoDate(r.inicio)}_${r.tecnico}`), { type: 'application/pdf' });
   } catch (e) { console.error(e); toast('Erro ao gerar o PDF: ' + e.message, 6000); return null; }
 }
 
+/* ============================ KMZ (Google Earth) ============================ */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dT = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dD = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const nm = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30)); lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true); lh.setUint16(10, dT, true); lh.setUint16(12, dD, true); lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true); lh.setUint16(26, nm.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), nm, f.data);
+    const ch = new DataView(new ArrayBuffer(46)); ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true); ch.setUint16(12, dT, true); ch.setUint16(14, dD, true); ch.setUint32(16, crc, true); ch.setUint32(20, sz, true); ch.setUint32(24, sz, true); ch.setUint16(28, nm.length, true); ch.setUint32(42, off, true);
+    central.push(new Uint8Array(ch.buffer), nm); off += 30 + nm.length + sz;
+  }
+  const cs = central.reduce((a, c) => a + c.length, 0);
+  const end = new DataView(new ArrayBuffer(22)); end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cs, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/vnd.google-earth.kmz' });
+}
+const xe = s => String(s ?? '').replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+const kc = hex => { const h = hex.replace('#', ''); return 'ff' + h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2); };
+const iso = ts => new Date(ts).toISOString();
+function kmlStyles() {
+  const ln = Object.entries(SEGCOR).map(([k, c]) => `<Style id="seg_${k}"><LineStyle><color>${kc(c)}</color><width>4</width></LineStyle></Style>`).join('');
+  const pin = (id, icon, sc) => `<Style id="${id}"><IconStyle><scale>${sc}</scale><Icon><href>https://maps.google.com/mapfiles/kml/paddle/${icon}.png</href></Icon><hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/></IconStyle><LabelStyle><scale>0.85</scale></LabelStyle></Style>`;
+  return ln + pin('cx_ok', 'blu-circle', 1.1) + pin('cx_nc', 'red-circle', 1.1) + pin('ini', 'go', 1.1) + pin('fim', 'stop', 1.1) + `<Style id="foto"><IconStyle><scale>1</scale><Icon><href>https://maps.google.com/mapfiles/kml/shapes/camera.png</href></Icon></IconStyle></Style>`;
+}
+function descInsp(i, fotosRef) {
+  const t = { aerea: 'Aérea (poste)', sub: 'Subterrânea (CS enterrada)', outro: 'Outro' }[i.info.tipo] || '—';
+  const nc = CHECK.filter(([k]) => i.check[k] === 'NC').map(([k, lb]) => `${lb}${i.checkObs[k] ? ': ' + i.checkObs[k] : ''}`);
+  const nf = i.fo.rows.slice(0, i.fo.total).filter(r => r.f).length;
+  const row = (a, b) => `<tr><td><b>${xe(a)}</b></td><td>${xe(b || '—')}</td></tr>`;
+  let h = `<table border="1" cellpadding="3" style="border-collapse:collapse;font-family:Arial;font-size:12px">${isCorr(i) ? row('Ticket', i.corr.ticket) + row('Ocorrência', i.corr.ocorrencia) + row('Problema', i.corr.problema) + row('Serviço executado', i.corr.servico) : ''}${row('TAG', i.info.tag)}${row('Data', fDH(i.chegada))}${row('Técnico', i.info.tecnico)}${row('Modelo / fabricante', [i.info.modelo, i.info.fabricante].filter(Boolean).join(' / '))}${row('Instalação', t)}${row('Backbone', donoLb(i.info.dono, i.info.parceiro))}${row('Rota', i.info.rota)}${row('Poste / CV', i.info.poste)}${row('Endereço', [i.info.endereco, i.info.bairro, i.info.cidade].filter(Boolean).join(' - '))}${row('Cabo entrada', [i.cabos.entrada.marca, i.cabos.entrada.lote && 'lote ' + i.cabos.entrada.lote, i.cabos.entrada.fibras && i.cabos.entrada.fibras + ' FO', i.cabos.entrada.metragem && i.cabos.entrada.metragem + ' m'].filter(Boolean).join(' · '))}${row('Fusões', `${nf} de ${i.fo.total} FO`)}${(() => { const m = i.fo.rows.slice(0, i.fo.total).map((r, k) => ({ ...r, n: k + 1 })).filter(r => r.f && r.fib && +r.fib !== r.n); return m.length ? row('Manobras', m.map(r => `F${r.n} com F${r.fib} (${r.cabo})${r.mot ? ' - ' + r.mot : ''}`).join('; ')) : ''; })()}${row('Irregularidades', nc.length ? nc.join('; ') : 'Nenhuma')}${row('Observações', i.obs)}</table>`;
+  (fotosRef || []).forEach((f, k) => { h += `<p style="font-family:Arial;font-size:12px;margin:8px 0 2px"><b>Foto ${k + 1}</b> — ${xe(f.cat)}${f.desc ? ': ' + xe(f.desc) : ''}</p><img src="${f.path}" width="420">`; });
+  return `<![CDATA[${h}]]>`;
+}
+async function kmlCaixa(i, files, comFotos) {
+  if (!i.loc) return '';
+  const fotosRef = [];
+  if (comFotos) for (let k = 0; k < i.fotos.length; k++) { const p = i.fotos[k]; const path = `fotos/${nomeArq(`${i.info.tag || i.id}_${k + 1}`).replace(/\.pdf$/, '')}.jpg`; files.push({ name: path, data: new Uint8Array(await p.blob.arrayBuffer()) }); fotosRef.push({ path, cat: p.cat, desc: p.desc }); }
+  const nc = Object.values(i.check).some(v => v === 'NC');
+  return `<Placemark><name>${xe(isCorr(i) ? 'Corretiva ' + i.corr.ticket : i.info.tag || 'Sem TAG')}</name><TimeStamp><when>${iso(i.chegada)}</when></TimeStamp><styleUrl>#${nc ? 'cx_nc' : 'cx_ok'}</styleUrl><description>${descInsp(i, fotosRef)}</description><Point><coordinates>${i.loc.lon},${i.loc.lat},0</coordinates></Point></Placemark>`;
+}
+function kmlSegs(r) {
+  return segmentos(r).filter(s => s.pts.length > 1).map(s => `<Placemark><name>${xe(SEGLB[s.tipo])}: ${xe(s.de)} &gt; ${xe(s.para)} (${xe(fKm(s.km))})</name><TimeSpan><begin>${iso(s.ini)}</begin><end>${iso(s.fim)}</end></TimeSpan><styleUrl>#seg_${s.tipo}</styleUrl><description>${xe(`${fHora(s.ini)} às ${fHora(s.fim)} · ${fDur(s.fim - s.ini)} · ${fKm(s.km)}`)}</description><LineString><tessellate>1</tessellate><coordinates>${s.pts.map(p => `${p.lon},${p.lat},0`).join(' ')}</coordinates></LineString></Placemark>`).join('');
+}
+async function kmlRede(r, files, comFotos) {
+  const fs = (await fotosRede(r.id)).filter(f => f.lat != null); if (!fs.length) return '';
+  let h = ''; for (let k = 0; k < fs.length; k++) { const f = fs[k]; let img = '';
+    if (comFotos) { const path = `fotos/rede_${isoDate(r.inicio)}_${k + 1}.jpg`; files.push({ name: path, data: new Uint8Array(await f.blob.arrayBuffer()) }); img = `<br><img src="${path}" width="420">`; }
+    h += `<Placemark><name>R${k + 1} · ${xe(f.cat)}</name><TimeStamp><when>${iso(f.ts)}</when></TimeStamp><styleUrl>#foto</styleUrl><description><![CDATA[<p style="font-family:Arial;font-size:12px">${xe(f.cat)}${f.desc ? ': ' + xe(f.desc) : ''}<br>${fDH(f.ts)}</p>${img}]]></description><Point><coordinates>${f.lon},${f.lat},0</coordinates></Point></Placemark>`; }
+  return `<Folder><name>Fotos da rede</name>${h}</Folder>`;
+}
+async function kmlRondaFolder(r, files, comFotos) {
+  await cacheInspRonda(r);
+  const { t } = totais(r); const ini = r.eventos.find(e => e.tipo === 'inicio'), fim = r.eventos.find(e => e.tipo === 'fim');
+  let cx = ''; for (const e of r.eventos.filter(e => e.tipo === 'chegada')) { const i = S.inspCache.get(e.inspId); if (i) cx += await kmlCaixa(i, files, comFotos); }
+  const pm = (e, nome, st) => e && e.lat != null ? `<Placemark><name>${nome}</name><TimeStamp><when>${iso(e.ts)}</when></TimeStamp><styleUrl>#${st}</styleUrl><Point><coordinates>${e.lon},${e.lat},0</coordinates></Point></Placemark>` : '';
+  return `<Folder><name>${isCorr(r) ? 'Corretiva ' + xe(r.ticket) : 'Ronda'} ${fData(r.inicio)} · ${xe(r.tecnico)}</name><description>${xe(`${r.dono ? donoLb(r.dono, r.parceiro) + ' · ' : ''}${fHora(r.inicio)} às ${r.fim ? fHora(r.fim) : 'agora'} · ${t.caixas} caixa(s) · ${fKm(t.km)} (deslocamento ${fKm(t.desl + t.ret + t.atual)}, rota do cabo ${fKm(t.cabo)})${r.placa ? ' · veículo ' + r.placa : ''}`)}</description>
+    <Folder><name>Percurso</name>${kmlSegs(r)}${pm(ini, 'Início da ronda', 'ini')}${pm(fim, 'Fim da ronda', 'fim')}</Folder><Folder><name>Caixas inspecionadas</name>${cx}</Folder>${await kmlRede(r, files, comFotos)}</Folder>`;
+}
+function montaKmz(nome, corpo, files) {
+  const kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xe(nome)}</name>${kmlStyles()}${corpo}</Document></kml>`;
+  const blob = zipStore([{ name: 'doc.kml', data: new TextEncoder().encode(kml) }, ...files]);
+  return new File([blob], nomeArq(nome).replace(/\.pdf$/, '.kmz'), { type: 'application/vnd.google-earth.kmz' });
+}
+async function kmzRonda(r) { try { toast('Gerando KMZ…'); const files = []; const corpo = await kmlRondaFolder(r, files, true); return montaKmz(isCorr(r) ? `Corretiva_${r.ticket}_${isoDate(r.inicio)}` : `Ronda_${isoDate(r.inicio)}_${r.tecnico}`, corpo, files); } catch (e) { console.error(e); toast('Erro ao gerar KMZ: ' + e.message, 6000); return null; } }
+async function kmzInsp(i) {
+  try {
+    if (!i.loc) { toast('Esta caixa ainda não tem localização. Capture o GPS na etapa Caixa.'); return null; }
+    const files = []; let corpo = await kmlCaixa(i, files, true);
+    if (i.rondaId) { const r = (S.ronda && S.ronda.id === i.rondaId) ? S.ronda : await DB.get('rondas', i.rondaId); if (r) { const s = segmentos(r).find(x => x.inspId === i.id); if (s && s.pts.length > 1) corpo += `<Placemark><name>${xe(SEGLB[s.tipo])} até a caixa (${xe(fKm(s.km))})</name><styleUrl>#seg_${s.tipo}</styleUrl><LineString><tessellate>1</tessellate><coordinates>${s.pts.map(p => `${p.lon},${p.lat},0`).join(' ')}</coordinates></LineString></Placemark>`; } }
+    return montaKmz(isCorr(i) ? `Corretiva_${i.corr.ticket}_${i.info.data || isoDate(i.criado)}` : `Caixa_${i.info.tag || 'sem_TAG'}_${i.info.data || isoDate(i.criado)}`, corpo, files);
+  } catch (e) { console.error(e); toast('Erro ao gerar KMZ: ' + e.message, 6000); return null; }
+}
+async function kmzTodas() {
+  try {
+    toast('Gerando KMZ de todas as rondas…');
+    const rs = (await DB.all('rondas')).sort((a, b) => a.inicio - b.inicio); const ins = await DB.all('inspecoes'); ins.forEach(i => S.inspCache.set(i.id, i));
+    let corpo = ''; const files = [];
+    for (const r of rs) corpo += await kmlRondaFolder(r, files, false);
+    let av = ''; for (const i of ins.filter(i => !i.rondaId)) av += await kmlCaixa(i, files, false);
+    if (av) corpo += `<Folder><name>Inspeções avulsas</name>${av}</Folder>`;
+    if (!corpo) { toast('Ainda não há rondas nem caixas para exportar.'); return null; }
+    return montaKmz(`Rondas_Backbone_${isoDate(Date.now())}`, corpo, files);
+  } catch (e) { console.error(e); toast('Erro ao gerar KMZ: ' + e.message, 6000); return null; }
+}
+async function kmzRota(rt) {
+  try {
+    toast('Gerando KMZ da rota…'); const d = await dadosRota(rt); const files = [];
+    const tr = d.trac.map(s => `<Placemark><name>${xe(s.de)} &gt; ${xe(s.para)} (${xe(fKm(s.km))})</name><TimeSpan><begin>${iso(s.ini)}</begin><end>${iso(s.fim)}</end></TimeSpan><styleUrl>#seg_cabo</styleUrl><description>${xe(`Ronda ${fData(s.ronda.inicio)} · ${s.ronda.tecnico}`)}</description><LineString><tessellate>1</tessellate><coordinates>${s.pts.map(p => `${p.lon},${p.lat},0`).join(' ')}</coordinates></LineString></Placemark>`).join('');
+    let cx = ''; for (const i of d.caixas) cx += await kmlCaixa(i, files, false);
+    const desc = xe([rt.nome, `${rt.pontaA || '?'} > ${rt.pontaB || '?'}`, rt.cap && rt.cap + ' FO', rt.marca, rt.extensao && 'previsto ' + rt.extensao + ' km', `traçado GPS ${fKm(d.km)}`, rt.obs].filter(Boolean).join(' · '));
+    return montaKmz(`Rota_${rt.codigo}`, `<description>${desc}</description><Folder><name>Traçado do cabo</name>${tr}</Folder><Folder><name>Caixas</name>${cx}</Folder>`, files);
+  } catch (e) { console.error(e); toast('Erro ao gerar KMZ: ' + e.message, 6000); return null; }
+}
+async function exportar(f) {
+  try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: f.name }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  baixar(f); toast('KMZ salvo em Downloads. Abra no Google Earth ou envie pelo WhatsApp.', 6000);
+}
+
 /* ============================ compartilhar ============================ */
-function textoInsp(i) { const l = i.loc; return `Inspeção preventiva backbone — Caixa ${i.info.tag || 'sem TAG'}\nTécnico: ${i.info.tecnico}\nData: ${fDH(i.chegada)}${l ? `\nLocal: https://maps.google.com/?q=${l.lat},${l.lon}` : ''}`; }
-function textoRonda(r) { const { t } = totais(r); return `Ronda preventiva backbone — ${fData(r.inicio)}\nTécnico: ${r.tecnico}\n${fHora(r.inicio)} às ${r.fim ? fHora(r.fim) : 'agora'} · ${t.caixas} caixa(s) · ${fKm(t.km)}`; }
+function textoInsp(i) { const l = i.loc; if (isCorr(i)) return `Corretiva backbone — Ticket ${i.corr.ticket}\n${i.corr.ocorrencia || ''}\nTécnico: ${i.info.tecnico}\nData: ${fDH(i.chegada)}${l ? `\nLocal: https://maps.google.com/?q=${l.lat},${l.lon}` : ''}`; return `Inspeção preventiva backbone — Caixa ${i.info.tag || 'sem TAG'}\nTécnico: ${i.info.tecnico}\nData: ${fDH(i.chegada)}${l ? `\nLocal: https://maps.google.com/?q=${l.lat},${l.lon}` : ''}`; }
+function textoRonda(r) { const { t } = totais(r); if (isCorr(r)) return `Corretiva backbone — Ticket ${r.ticket}\nTécnico: ${r.tecnico}\n${fData(r.inicio)} ${fHora(r.inicio)} às ${r.fim ? fHora(r.fim) : 'agora'} · ${fKm(t.km)} percorridos`; return `Ronda preventiva backbone — ${fData(r.inicio)}\nTécnico: ${r.tecnico}\n${fHora(r.inicio)} às ${r.fim ? fHora(r.fim) : 'agora'} · ${t.caixas} caixa(s) · ${fKm(t.km)}`; }
 function baixar(f) { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000); toast('PDF salvo em Downloads.'); }
 async function compartilhar(files, texto) {
   try {
@@ -869,7 +1313,9 @@ async function compartilhar(files, texto) {
 /* ============================ início ============================ */
 (async function boot() {
   const ok = await DB.open(); if (!ok) toast('Armazenamento do aparelho indisponível: os dados não serão guardados se o app fechar.', 6000);
-  const pf = await DB.get('meta', 'perfil'); if (pf) S.perfil = pf;
+  const pf = await DB.get('meta', 'perfil'); if (pf) S.perfil = Object.assign({ prefixo: 'CE-BKB' }, pf);
+  const sq = await DB.get('meta', 'seq'); S.seq = sq ? sq.n : 0;
+  await carregaRotas();
   const at = await DB.get('meta', 'ativa');
   if (at && at.rondaId) { const r = await DB.get('rondas', at.rondaId); if (r && !r.fim) { S.ronda = r; await cacheInspRonda(r); gpsStart(); wakeOn(); } }
   render();

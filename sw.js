@@ -1,4 +1,4 @@
-const V = 'ronda-backbone-v2';
+const V = 'ronda-backbone-v9';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'logo.png', 'logo-pdf.jpg', 'icon-192.png', 'icon-512.png',
   'leaflet.js', 'leaflet.css', 'jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
