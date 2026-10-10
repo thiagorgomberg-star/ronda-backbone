@@ -4,4 +4,4 @@ App web (PWA) para ronda preventiva de backbone: ficha de inspeção completa, f
 
 Acesse pelo celular em https://thiagorgomberg-star.github.io/ronda-backbone/ e use "Adicionar à tela inicial".
 
-Os dados ficam salvos no próprio celular do técnico.
+Os dados ficam salvos no próprio celular do técnico e, com a nuvem configurada (Supabase, plano gratuito), sincronizam com o painel do supervisor em admin.html. Veja SUPABASE.md.
