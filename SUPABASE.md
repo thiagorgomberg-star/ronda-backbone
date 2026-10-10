@@ -307,6 +307,65 @@ O botão **Planilha (Excel)** baixa as O.S. da etapa (ou só as selecionadas), c
   - Em **Medição** > **Arquivo** aparece cada mês compactado com o botão **Exportar (.zip)**, com CSV e JSON.
   - O painel marca quem exportou e quando. Meses ainda não exportados aparecem em vermelho.
 
+## Validação do endereço (v33 · Geoapify, sem cartão)
+
+Ao ler o ticket do acionamento, o sistema valida o endereço para o ponto sair certo no mapa e no mapa de calor. Isso vale no painel, na tela de acionamentos, no botão "Achar no mapa" e na importação em lote.
+
+**O que aparece no formulário:**
+- ✅ **Endereço validado**: o número foi achado exato.
+- ⚠️ **Só foi achado um ponto aproximado** (rua, bairro ou cidade): confira, escolha uma das outras opções ou toque no mapa no ponto certo.
+- ❌ **Não encontrado**: corrija o texto ou marque no mapa.
+
+A busca dá preferência à região de atendimento (Vale, Litoral e Sul de Minas). Marcar no mapa ou colar um link/coordenada conta como "marcado à mão".
+
+**Serviço usado: Geoapify.** É grátis, **não pede cartão** e tem 3.000 consultas por dia. Exige o crédito "Powered by Geoapify", que o app já mostra ao lado da validação. O Google ficou como opcional (exige conta de faturamento). Sem nenhuma chave configurada, o app usa o OpenStreetMap e avisa que não houve validação.
+
+**Para ligar (uma vez):**
+1. **Conta:** acesse https://www.geoapify.com e clique em **Get started / Sign up**. Entre com e-mail ou conta Google; não pede cartão.
+2. **Projeto:** no painel (My Projects), crie um projeto, por exemplo "Técnico Plus". A chave de API aparece pronta; copie-a.
+3. **Secret no Supabase:** em Edge Functions > Secrets, crie `GEOAPIFY_KEY` com a chave.
+4. **Função:** em Edge Functions, crie a função **geocode** (ou atualize, se já criou), cole o arquivo `geocode-index.ts` e faça o deploy.
+
+Se você já tinha criado o secret `GOOGLE_MAPS_KEY`, pode apagá-lo: com o `GEOAPIFY_KEY` configurado, a função usa o Geoapify. A chave fica só no Supabase e nunca vai para o site nem para o GitHub. Só o supervisor, o gestor e os despachantes conseguem usar a validação.
+
+## NOC, calendário de recursos, ticket na O.S. e rota de carro (v31)
+
+**NOC.** Link: `https://thiagorgomberg-star.github.io/ronda-backbone/noc.html`.
+- **Como funciona:** o técnico pede a validação e escreve uma mensagem (ex.: "fusões concluídas, sinal normalizado no node X"). O NOC vê o pedido na hora, com som, conversa com o técnico, confere a rede e toca em **Validar e liberar** ou **Recusar**. O supervisor também pode liberar pelo painel.
+- **Sem liberação:** a baixa da O.S. e a saída do local ficam travadas.
+- **Acesso:** o NOC só vê os pedidos de liberação e as conversas.
+- **Para cadastrar alguém no NOC:** crie o usuário em Authentication > Users e rode no SQL Editor:
+  `insert into public.noc (uid, org, nome) values ('UID do usuário', 'multivale', 'Nome');`
+
+**Calendário de recursos** fica no menu do painel.
+- **Grade da semana:** por mini cluster (São José dos Campos, Taubaté, Litoral, Sul de Minas) e cluster (DDD12, DDD13, MG). Mostra o horário de cada técnico, os plantões e as folgas. Dá para filtrar por cluster, mini cluster e classe (equipe mecânica / equipe fusão).
+- **Ficha do técnico:** toque no nome para editar região, classe, telefone, placa e a escala de trabalho (entrada e saída de cada dia). O alarme de "expediente não iniciado" segue essa escala.
+- **Plantonistas do fim de semana:** o botão exporta uma planilha Excel de sexta 18h a segunda 8h, com telefone, placa, região, cluster e classe. Na sexta, a tela lembra de exportar.
+- **No perfil do técnico:** ele também informa a região que atende e a classe.
+
+**Ticket do acionamento na O.S.** O técnico vê o texto original do acionamento e as imagens anexadas. Para anexar uma imagem no formulário da O.S. ou na tela de acionamentos, toque em "+ Imagem" ou cole um print com Ctrl+V.
+
+**Distância por rota de carro.** A distância do técnico até a O.S. é calculada pelo trajeto de carro, com o tempo estimado. Isso vale no celular, na lista de técnicos do painel e no registro do ciente. Se o serviço de rotas (OSRM / OpenStreetMap) não responder, aparece a linha reta, marcada como tal.
+
+**No Supabase:** rode de novo o **supabase.sql**. Ele cria as tabelas `noc`, `ped_msgs` e `recursos`.
+
+## Liberação da corretiva, agenda das O.S. e cobrança de atualização (v29)
+
+**Corretiva travada até o gestor liberar.** Ao terminar o serviço, o técnico toca em **Pedir liberação ao gestor**. O painel mostra o pedido no topo, com os botões **Liberar** e **Recusar**; a recusa leva um motivo. Até a liberação, o técnico não conclui o atendimento, não encerra a corretiva e não inicia outra atividade. Ao ser liberado, o celular avisa com voz e vibração.
+
+**Agenda e remanejamento das O.S.**
+- **Data da O.S.:** cada O.S. tem o campo **Agendada para**. O alarme do técnico só toca no dia agendado, e na lista dele aparece o 📅 do dia.
+- **Supervisor:** remaneja na linha do tempo, em "O.S. agendadas para este dia", ou no próprio formulário da O.S. Sempre há **duas confirmações**.
+- **Técnico:** pede o remanejamento dentro da O.S., em "Pedir para remanejar para outro dia", com o motivo. O gestor aprova ou recusa no topo do painel. Cada remanejamento fica registrado na O.S.
+
+**O.S. com ciente** não toca nem notifica de novo.
+
+**Atualização da O.S.** O app não pede mais a atualização sozinho a cada hora. Quando uma O.S. passa de 1 hora sem atualização, o supervisor vê o aviso e toca em **Cobrar atualização**, no aviso do topo ou dentro da O.S. Só aí o celular do técnico toca e abre a tela de atualização. O técnico pode atualizar a qualquer momento pelo botão "Atualizar O.S.".
+
+**No Supabase:**
+1. Rode de novo o **supabase.sql**. Ele cria a tabela `pedidos`.
+2. Atualize a função **alertas** com o novo `alertas-index.ts`. Com ela, o técnico só recebe aviso quando o supervisor cobra.
+
 ## Centro de custo por projeto (v28)
 
 Fica no menu do painel: **Centro de custo (projetos)**.
@@ -358,13 +417,13 @@ Fica no menu do painel: **Centro de custo (projetos)**.
 
 **Serviços do técnico:** no perfil, o técnico marca o que executa:
 - Corretiva Claro interior
-- Corretiva backbone próprio
-- Corretiva backbone de parceiros
+- Corretiva backbone Multivale
+- Corretiva backbone Master
 - Vistoria de rede
 - Preventiva
 - Implantação
 
-A tela inicial mostra só esses. As O.S. enviadas pelo supervisor chegam sempre.
+A tela inicial mostra só esses. Ao iniciar uma corretiva, ele escolhe entre Backbone Multivale, Backbone Master e Claro interior, apenas entre os que estão liberados no perfil. As O.S. enviadas pelo supervisor chegam sempre.
 
 **Contas de estoque:** cada material tem saldo separado em três contas:
 - **Manutenção Claro**

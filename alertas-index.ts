@@ -119,16 +119,25 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
       }
     }
   }
-  // 5) O.S. em andamento sem atualização há 60 min: avisa o técnico e os gestores, a cada hora
+  // 5) O.S. em andamento sem atualização há 60 min: avisa os gestores a cada hora.
+  //    O técnico só é avisado quando o supervisor cobra a atualização (botão "Cobrar atualização" no painel).
   if (db.emCurso) {
     const curso = await db.emCurso(); const gest = db.gestores ? (await db.gestores()).filter((u) => subs.has(u)) : [];
-    const ks: string[] = []; const venc: any[] = [];
-    for (const a of curso) { const d = a.dados || {}; const ult = +(d.ultAtualiz || d.iniciadaEm || a.atualizado || a.criado) || agora; const min = Math.floor((agora - ult) / MIN); if (min < 60) continue; const k = `upd:${a.id}:${Math.floor(min / 60)}`; ks.push(k); venc.push({ a, min, k }); }
+    const ks: string[] = []; const venc: any[] = []; const cob: any[] = [];
+    for (const a of curso) {
+      const d = a.dados || {}; const ult = +(d.ultAtualiz || d.iniciadaEm || a.atualizado || a.criado) || agora; const min = Math.floor((agora - ult) / MIN);
+      if (+d.cobrarAtualizEm && +d.cobrarAtualizEm > (+d.ultAtualiz || 0)) { const kc = `cob:${a.id}:${d.cobrarAtualizEm}`; ks.push(kc); cob.push({ a, kc, por: d.cobrarPor || "O supervisor" }); }
+      if (min < 60) continue; const k = `upd:${a.id}:${Math.floor(min / 60)}`; ks.push(k); venc.push({ a, min, k });
+    }
     const lg = ks.length ? await db.logLer(ks) : new Map();
+    for (const { a, kc, por } of cob) {
+      if (lg.has(kc)) continue; let n = 0;
+      if (a.tecnico_uid && subs.has(a.tecnico_uid)) n += await envia(a.tecnico_uid, { titulo: `📝 Atualize a O.S. ${a.ticket || ""}`, corpo: `${por} pediu a atualização da O.S. Abra o app e informe a situação.`, tag: "upd-" + a.id, url: "./" });
+      await db.logGravar(kc, agora); out.push(`cob ${a.id} → ${n}`);
+    }
     for (const { a, min, k } of venc) {
       if (lg.has(k)) continue; const h = `${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}`; let n = 0;
-      if (a.tecnico_uid && subs.has(a.tecnico_uid)) n += await envia(a.tecnico_uid, { titulo: `📝 Atualize a O.S. ${a.ticket || ""}`, corpo: `Sem atualização há ${h}. Abra o app e informe a situação.`, tag: "upd-" + a.id, url: "./" });
-      for (const g of gest) n += await envia(g, { titulo: `🕐 O.S. ${a.ticket || ""} sem atualização há ${h}`, corpo: `${a.tecnico_nome || "Sem técnico"} · ${a.status === "no_local" ? "no local" : "em deslocamento"}`, tag: "upd-" + a.id, url: "./index.html?modo=admin" });
+      for (const g of gest) n += await envia(g, { titulo: `🕐 O.S. ${a.ticket || ""} sem atualização há ${h}`, corpo: `${a.tecnico_nome || "Sem técnico"} · ${a.status === "no_local" ? "no local" : "em deslocamento"} · toque em "Cobrar atualização" no painel`, tag: "upd-" + a.id, url: "./index.html?modo=admin" });
       await db.logGravar(k, agora); out.push(`upd ${a.id} → ${n}`);
     }
   }

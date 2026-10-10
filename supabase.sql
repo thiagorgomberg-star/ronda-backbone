@@ -813,3 +813,107 @@ drop policy if exists proj_admin on public.projetos;
 drop policy if exists plan_admin on public.proj_lanc;
 create policy proj_admin on public.projetos  for all to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
 create policy plan_admin on public.proj_lanc for all to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+-- =====================================================================
+-- PEDIDOS DO TÉCNICO AO GESTOR
+--  liberar_corretiva: sair do local / fechar a O.S. corretiva só depois da liberação do gestor
+--  remanejar: mudar a atividade de dia (o gestor aprova)
+--  O técnico só cria e lê os próprios pedidos (sempre como "pedido"); o gestor/supervisor decide.
+-- =====================================================================
+create table if not exists public.pedidos (
+  id            text primary key,
+  org           text not null default 'multivale',
+  tipo          text not null check (tipo in ('liberar_corretiva', 'remanejar')),
+  ref_id        text not null,
+  tecnico_uid   uuid,
+  tecnico_nome  text,
+  dados         jsonb not null default '{}',
+  status        text not null default 'pedido' check (status in ('pedido', 'aprovado', 'recusado', 'cancelado')),
+  criado        bigint not null,
+  decidido_por  text,
+  decidido_em   bigint,
+  obs           text
+);
+create index if not exists pedidos_org_status on public.pedidos (org, status);
+create index if not exists pedidos_tec on public.pedidos (tecnico_uid);
+alter table public.pedidos enable row level security;
+drop policy if exists ped_ler on public.pedidos;
+drop policy if exists ped_admin on public.pedidos;
+drop policy if exists ped_tec_criar on public.pedidos;
+drop policy if exists ped_tec_cancelar on public.pedidos;
+create policy ped_ler          on public.pedidos for select to authenticated using (tecnico_uid = auth.uid() or public.eh_admin(org));
+create policy ped_admin        on public.pedidos for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+create policy ped_tec_criar    on public.pedidos for insert to authenticated with check (tecnico_uid = auth.uid() and status = 'pedido');
+create policy ped_tec_cancelar on public.pedidos for update to authenticated using (tecnico_uid = auth.uid() and status = 'pedido') with check (tecnico_uid = auth.uid() and status in ('pedido', 'cancelado'));
+do $$ begin
+  begin alter publication supabase_realtime add table public.pedidos; exception when others then null; end;
+end $$;
+
+-- =====================================================================
+-- NOC: valida e libera a baixa da O.S. / saída do local (junto com o supervisor)
+--  Cadastro: insert into public.noc (uid, org, nome) values ('UID do usuário', 'multivale', 'Nome');
+--  O NOC só vê os pedidos de liberação e as mensagens deles; não vê produção, RH nem configurações.
+-- =====================================================================
+create table if not exists public.noc (
+  uid  uuid primary key references auth.users (id) on delete cascade,
+  org  text not null default 'multivale',
+  nome text
+);
+alter table public.noc enable row level security;
+drop policy if exists noc_eu on public.noc;
+create policy noc_eu on public.noc for select to authenticated using (uid = auth.uid() or public.eh_admin(org));
+create or replace function public.eh_noc(p_org text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.noc where uid = auth.uid() and org = p_org);
+$$;
+drop policy if exists ped_noc_ler on public.pedidos;
+drop policy if exists ped_noc_decidir on public.pedidos;
+create policy ped_noc_ler     on public.pedidos for select to authenticated using (tipo = 'liberar_corretiva' and public.eh_noc(org));
+create policy ped_noc_decidir on public.pedidos for update to authenticated using (tipo = 'liberar_corretiva' and public.eh_noc(org)) with check (tipo = 'liberar_corretiva' and public.eh_noc(org));
+
+-- mensagens entre o técnico e o NOC/supervisor em cada pedido
+create table if not exists public.ped_msgs (
+  id          text primary key,
+  org         text not null default 'multivale',
+  pedido_id   text not null references public.pedidos (id) on delete cascade,
+  tecnico_uid uuid,              -- dono do pedido (para o técnico ver a conversa dele)
+  autor_uid   uuid,
+  autor_nome  text,
+  papel       text not null default 'tecnico' check (papel in ('tecnico', 'noc', 'supervisor')),
+  texto       text not null,
+  criado      bigint not null
+);
+create index if not exists ped_msgs_ped on public.ped_msgs (pedido_id, criado);
+alter table public.ped_msgs enable row level security;
+drop policy if exists pm_ler on public.ped_msgs;
+drop policy if exists pm_tec on public.ped_msgs;
+drop policy if exists pm_equipe on public.ped_msgs;
+create policy pm_ler    on public.ped_msgs for select to authenticated using (tecnico_uid = auth.uid() or public.eh_admin(org) or public.eh_noc(org));
+create policy pm_tec    on public.ped_msgs for insert to authenticated with check (autor_uid = auth.uid() and tecnico_uid = auth.uid() and papel = 'tecnico'
+  and exists (select 1 from public.pedidos p where p.id = pedido_id and p.tecnico_uid = auth.uid()));
+create policy pm_equipe on public.ped_msgs for insert to authenticated with check (autor_uid = auth.uid() and ((papel = 'noc' and public.eh_noc(org)) or (papel = 'supervisor' and public.eh_admin(org))));
+do $$ begin
+  begin alter publication supabase_realtime add table public.ped_msgs; exception when others then null; end;
+end $$;
+
+-- =====================================================================
+-- CALENDÁRIO DE RECURSOS: ficha de cada técnico (região/mini cluster, classe, telefone, placa)
+-- e a escala de trabalho (entrada e saída por dia da semana). O gestor edita; o técnico lê a dele.
+--  escala: {"1": {"e": "08:00", "s": "17:48"}, ..., "0": null}  (0 = domingo · null = folga)
+-- =====================================================================
+create table if not exists public.recursos (
+  uid        uuid primary key,
+  org        text not null default 'multivale',
+  nome       text,
+  regiao     text,          -- sjc | taubate | litoral | sulminas
+  classe     text,          -- mecanica | fusao
+  telefone   text,
+  placa      text,
+  escala     jsonb,
+  atualizado bigint
+);
+alter table public.recursos enable row level security;
+drop policy if exists rec_ler on public.recursos;
+drop policy if exists rec_admin on public.recursos;
+create policy rec_ler   on public.recursos for select to authenticated using (uid = auth.uid() or public.eh_admin(org) or public.eh_despacho(org));
+create policy rec_admin on public.recursos for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));

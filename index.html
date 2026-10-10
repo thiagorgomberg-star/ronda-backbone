@@ -172,7 +172,9 @@ table.t th,table.t td{border-bottom:1px solid var(--line);padding:8px 6px;text-a
 table.t th{font-family:var(--f-cond);text-transform:uppercase;font-size:12px;letter-spacing:.05em;color:var(--muted)}
 table.t td.r,table.t th.r{text-align:right}
 .tw{overflow-x:auto}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:600;z-index:50;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.anx{display:flex;flex-wrap:wrap;gap:8px}.anxi{position:relative;width:96px;height:96px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}.anxi img{width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block}.anxx{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:16px;line-height:1;cursor:pointer}.anxadd{width:96px;height:96px;border:2px dashed var(--line-strong);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--accent);cursor:pointer}
+.lightbox{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px}.lightbox img{max-width:100%;max-height:82vh;border-radius:6px}
+.toast{pointer-events:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:600;z-index:50;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
 .hero{display:flex;flex-direction:column;gap:6px}
 .hero .big{font-family:var(--f-cond);font-size:28px;font-weight:700;line-height:1.1;text-wrap:balance}
 .clock{font-variant-numeric:tabular-nums}
@@ -299,6 +301,7 @@ a.btn{text-decoration:none;color:inherit}
 @media (max-width:880px){.fila2{grid-template-columns:minmax(0,1fr)}.fila2>div{border-right:0!important;border-bottom:1px solid var(--line)}}
 .fila2>div{min-width:0;border-right:1px solid var(--line)}.fila2>div:last-child{border-right:0}
 .fila2 h3{margin:0!important;padding:10px 16px;border-bottom:1px solid var(--line);font-size:14px!important;color:var(--ink)!important;display:flex;justify-content:space-between;background:var(--surface-2)}
+.gag{padding:10px 12px;display:flex;flex-direction:column;gap:2px;font-size:14px}
 .gexp{position:absolute;top:5px;bottom:5px;background:var(--ok-soft);border:1px dashed var(--ok);border-radius:4px;z-index:0;pointer-events:none}
 .bi2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}@media (max-width:880px){.bi2{grid-template-columns:minmax(0,1fr)}}
 .bars{display:flex;flex-direction:column;gap:6px}
@@ -413,7 +416,9 @@ body.adm main{max-width:1280px}
 'use strict';
 const MODO = new URLSearchParams(location.search).get('modo');
 const ACION = MODO === 'acionamento'; // link só de acionamentos Claro
-const ADMIN = MODO === 'admin' || ACION;
+const NOC = MODO === 'noc'; // link do NOC: valida e libera a baixa das corretivas
+const ADMIN = MODO === 'admin' || ACION || NOC;
+const RESTRITO = ACION || NOC;
 /* ============================ utilidades ============================ */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -772,21 +777,29 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches('select[data-lista]')) e.target.dataset.ant = e.target.value; });
 // serviços que o técnico executa (escolhidos no perfil). Vazio = todos.
-const SERVICOS = { claro_int: 'Corretiva Claro interior', bb_proprio: 'Corretiva backbone próprio', bb_parceiro: 'Corretiva backbone de parceiros', vistoria: 'Vistoria de rede', preventiva: 'Preventiva (ativar rota)', implantacao: 'Implantação' };
-function meusServ() { const l = S.perfil.servicos; return Array.isArray(l) && l.length ? l.filter(k => SERVICOS[k]) : Object.keys(SERVICOS); }
-function modosPermitidos() { if (S.perfil.funcao === 'fiscal') return ['vistoria']; const s = meusServ(); const m = []; if (s.includes('preventiva')) m.push('preventiva'); if (s.some(x => x === 'bb_proprio' || x === 'bb_parceiro' || x === 'claro_int')) m.push('corretiva'); if (s.includes('implantacao')) m.push('implantacao'); if (s.includes('vistoria')) m.push('vistoria'); return m.length ? m : ['corretiva']; }
-// na corretiva: quais donos de backbone aparecem
-function donosPermitidos() { const s = meusServ(); const d = []; if (s.includes('bb_proprio')) d.push('proprio'); if (s.includes('bb_parceiro') || s.includes('claro_int')) d.push('parceiro'); return d.length ? d : ['proprio', 'parceiro']; }
-function soClaro() { const s = meusServ(); return s.includes('claro_int') && !s.includes('bb_parceiro'); }
+// clusters e mini clusters de atendimento; classe da equipe
+const CLUSTERS = { ddd12: 'Cluster DDD12', ddd13: 'Cluster DDD13', mg: 'Cluster MG' };
+const MINI = { sjc: ['São José dos Campos', 'ddd12'], taubate: ['Taubaté', 'ddd12'], litoral: ['Litoral', 'ddd13'], sulminas: ['Sul de Minas', 'mg'] };
+const CLASSES = { mecanica: 'Equipe mecânica', fusao: 'Equipe fusão' };
+const SERVICOS = { claro_int: 'Corretiva Claro interior', bb_multivale: 'Corretiva backbone Multivale', bb_master: 'Corretiva backbone Master', vistoria: 'Vistoria de rede', preventiva: 'Preventiva (ativar rota)', implantacao: 'Implantação' };
+// perfis antigos: "backbone próprio" vira Multivale e "backbone de parceiros" vira Master
+const SERV_ANTIGO = { bb_proprio: 'bb_multivale', bb_parceiro: 'bb_master' };
+function meusServ() { const l = S.perfil.servicos; return Array.isArray(l) && l.length ? [...new Set(l.map(k => SERV_ANTIGO[k] || k))].filter(k => SERVICOS[k]) : Object.keys(SERVICOS); }
+function modosPermitidos() { if (S.perfil.funcao === 'fiscal') return ['vistoria']; const s = meusServ(); const m = []; if (s.includes('preventiva')) m.push('preventiva'); if (s.some(x => x === 'bb_multivale' || x === 'bb_master' || x === 'claro_int')) m.push('corretiva'); if (s.includes('implantacao')) m.push('implantacao'); if (s.includes('vistoria')) m.push('vistoria'); return m.length ? m : ['corretiva']; }
+// na corretiva: de quem é o backbone (Multivale = próprio · Master e Claro interior = parceiro)
+const CORR_OPC = { multivale: ['Backbone Multivale', 'proprio', ''], master: ['Backbone Master', 'parceiro', 'Master'], claro: ['Claro interior', 'parceiro', 'Claro'] };
+function corrOpcoes() { const s = meusServ(); const o = []; if (s.includes('bb_multivale')) o.push('multivale'); if (s.includes('bb_master')) o.push('master'); if (s.includes('claro_int')) o.push('claro'); return o.length ? o : ['multivale', 'master', 'claro']; }
+function corrAtual(dono, parc) { return dono === 'proprio' ? 'multivale' : dono === 'parceiro' && /master/i.test(parc || '') ? 'master' : dono === 'parceiro' && /claro/i.test(parc || '') ? 'claro' : ''; }
+function soClaro() { const o = corrOpcoes(); return o.length === 1 && o[0] === 'claro'; }
 function conjHtml(i) { const v = i.info.dono === 'parceiro' && /master/i.test(i.info.parceiro || '') ? 'master' : 'multivale'; return `<div class="field full"><span class="lb">Esta ${isVist(i) ? 'anotação' : 'caixa'} é do backbone</span><div class="seg" role="group" aria-label="Backbone"><button type="button" data-conj="multivale" aria-pressed="${v === 'multivale'}">Multivale</button><button type="button" data-conj="master" aria-pressed="${v === 'master'}">Master</button></div><span class="muted small">Preventiva conjunta: cada caixa entra no relatório do dono dela.</span></div>`; }
 function rondaConj(i) { const r = i && (S.ronda && S.ronda.id === i.rondaId ? S.ronda : null); return !!(r && r.dono === 'conjunta') || !!(i && i.conjunta); }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-conj]'); if (!b || !S.insp) return; const m = b.dataset.conj === 'master'; S.insp.info.dono = m ? 'parceiro' : 'proprio'; S.insp.info.parceiro = m ? 'Master' : ''; S.donoConj = b.dataset.conj; saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); });
 function donoHtml(prefix, dono, parc) {
   if (prefix === 'rd' && S.modo === 'corretiva' && !S.atvPend) {
-    const D = donosPermitidos();
-    if (D.length === 1 && dono !== D[0]) { S.perfil.ultDono = dono = D[0]; }
-    if (dono === 'parceiro' && soClaro() && parc !== 'Claro') { S.perfil.ultParc = parc = 'Claro'; }
-    if (D.length === 1) return `<div class="field full"><span class="lb">Backbone</span><b>${dono === 'proprio' ? 'Próprio' : soClaro() ? 'Claro interior' : 'Parceiro'}</b></div>${dono === 'parceiro' && !soClaro() ? selAdd(prefix + '_parc', 'parceiro', parc || '', 'Parceiro', `data-parc="${prefix}"`, true) : ''}`;
+    const O = corrOpcoes(); let at = corrAtual(dono, parc);
+    if (!O.includes(at)) { at = O[0]; S.perfil.ultDono = CORR_OPC[at][1]; S.perfil.ultParc = CORR_OPC[at][2]; }
+    if (O.length === 1) return `<div class="field full"><span class="lb">Backbone</span><b>${CORR_OPC[at][0]}</b></div>`;
+    return `<div class="field full"><span class="lb">Corretiva de</span><div class="seg" role="group" aria-label="Corretiva de">${O.map(k => `<button type="button" data-dcorr="${k}" aria-pressed="${at === k}">${CORR_OPC[k][0]}</button>`).join('')}</div></div>`;
   }
   const ps = [...new Set(['Master', ...(S.perfil.parceiros || [])])];
   return `<div class="field full"><span class="lb">Backbone</span><div class="seg" role="group" aria-label="Dono do backbone"><button type="button" data-dono="${prefix}" data-v="proprio" aria-pressed="${dono === 'proprio'}">Próprio</button><button type="button" data-dono="${prefix}" data-v="parceiro" aria-pressed="${dono === 'parceiro'}">Parceiro</button></div></div>
@@ -810,6 +823,8 @@ function viewPerfil() {
     <div class="grid2"><div class="field full"><label class="lb" for="pf_nome">Nome <span class="req">*</span></label><input type="text" id="pf_nome" data-pf="nome" value="${v('nome')}" autocomplete="name"></div>
     <div class="field full"><label class="lb" for="pf_mat">Matrícula <span class="req">*</span></label><input type="text" id="pf_mat" data-pf="matricula" value="${v('matricula')}" inputmode="numeric"></div>
     <div class="field full"><span class="lb">Função${S.perfil.funcaoTravada ? ' <span class="muted small" style="font-weight:400">· definida pelo supervisor</span>' : ''}</span><div class="seg" role="group" aria-label="Função">${['tecnico', 'fibra', 'fiscal'].map(f => `<button type="button" data-funcao="${f}" aria-pressed="${(S.perfil.funcao || 'tecnico') === f}" ${S.perfil.funcaoTravada ? 'disabled' : ''}>${FUNCAO_LB[f]}</button>`).join('')}</div></div>
+    <div class="field"><label class="lb" for="pf_reg">Região que atendo</label><select id="pf_reg" data-pf="regiao"><option value="">Selecione…</option>${Object.entries(MINI).map(([k, v]) => `<option value="${k}" ${S.perfil.regiao === k ? 'selected' : ''}>${v[0]} · ${CLUSTERS[v[1]]}</option>`).join('')}</select></div>
+    <div class="field"><label class="lb" for="pf_cla">Minha classe</label><select id="pf_cla" data-pf="classe"><option value="">Selecione…</option>${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}" ${S.perfil.classe === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="field full"><span class="lb">Serviços que eu executo</span><div class="chips" role="group" aria-label="Serviços que eu executo" style="flex-wrap:wrap">${Object.entries(SERVICOS).map(([k, l]) => `<button type="button" data-serv="${k}" role="checkbox" aria-checked="${meusServ().includes(k)}">${l}</button>`).join('')}</div><span class="muted small">Só esses aparecem na tela inicial. O.S. enviadas pelo supervisor chegam sempre, de qualquer tipo.</span></div>
     ${selAdd('pf_veic', 'veiculo', S.perfil.veiculoTxt || '', 'Veículo (placa e modelo)', 'data-pf="veiculoTxt"', true)}
     <div class="field full"><label class="lb" for="pf_casa">Endereço da residência <span class="req">*</span></label><input type="text" id="pf_casa" value="${esc((S.perfil.casa || {}).endereco || '')}" placeholder="Rua, nº, bairro, cidade" autocomplete="street-address">
@@ -1073,8 +1088,50 @@ async function iniciarRonda() {
   S.cr = {}; S.odoIni = ''; S.odoFotoIni = null; Nuvem.aoVivo(true); toast(loc ? (isCorr(S.ronda) ? (S.ronda.ticketAuto ? `Corretiva ${S.ronda.ticket} iniciada (número automático).` : 'Corretiva iniciada. Deslocamento até o local sendo registrado.') : isImpl(S.ronda) ? 'Designação iniciada. Deslocamento sendo registrado.' : isVist(S.ronda) ? 'Vistoria iniciada. Deslocamento sendo registrado.' : 'Ronda iniciada. Deslocamento sendo registrado.') : 'Atividade iniciada. Aguardando sinal de GPS.');
   render();
 }
+/* ---------- corretiva: sair do local / fechar a O.S. só com a liberação do gestor ---------- */
+const Lib = {
+  mapa: new Map(), // ref_id -> pedido mais recente
+  ref(r) { return r ? r.atividadeId || r.id : null; },
+  de(r) { return this.mapa.get(this.ref(r)) || null; },
+  precisa(r) { return !!r && isCorr(r) && Nuvem.ativo() && !r.semLiberacao; },
+  liberada(r) { if (!this.precisa(r)) return true; const p = this.de(r); return !!(p && p.status === 'aprovado'); },
+  guarda(p) { if (!p || p.tipo !== 'liberar_corretiva') return; const ant = this.mapa.get(p.ref_id); if (!ant || (p.criado || 0) >= (ant.criado || 0)) this.mapa.set(p.ref_id, p); }
+};
+S.pedMsgs = new Map(); // pedido_id -> [mensagens]
+function guardaMsg(m) { if (!m || !m.pedido_id) return; const l = S.pedMsgs.get(m.pedido_id) || []; if (!l.some(x => x.id === m.id)) { l.push(m); l.sort((a, b) => a.criado - b.criado); } S.pedMsgs.set(m.pedido_id, l); }
+const PAPEL_LB = { tecnico: 'Técnico', noc: 'NOC', supervisor: 'Supervisor' };
+function conversaHtml(pid, eu) { const l = S.pedMsgs.get(pid) || []; return l.length ? `<div class="list" style="gap:4px">${l.map(m => `<div style="align-self:${m.papel === eu ? 'flex-end' : 'flex-start'};max-width:88%;background:${m.papel === eu ? 'var(--accent-soft)' : 'var(--surface-2)'};border:1px solid var(--line);border-radius:10px;padding:6px 10px"><span class="small muted">${esc(PAPEL_LB[m.papel] || m.papel)} · ${esc(m.autor_nome || '')} · ${fHora(m.criado)}</span><div style="white-space:pre-wrap">${esc(m.texto)}</div></div>`).join('')}</div>` : ''; }
+function liberaHtml(r) {
+  if (!Lib.precisa(r)) return '';
+  const p = Lib.de(r);
+  if (p && p.status === 'aprovado') return `<div class="okbox"><b>Baixa e saída liberadas</b>${p.decidido_por ? ' (' + esc(p.decidido_por) + ')' : ''}${p.decidido_em ? ' às ' + fHora(+p.decidido_em) : ''}. Pode concluir e encerrar.</div>`;
+  if (p && p.status === 'pedido') return `<div class="warnbox" style="display:flex;flex-direction:column;gap:8px"><span><b>Aguardando a validação do NOC ou do supervisor</b> desde ${fHora(+p.criado)}. A O.S. fica travada até a liberação.${Date.now() - p.criado > 10 * 60000 ? ' <button type="button" class="lnk" data-libpede>Pedir de novo</button>' : ''}</span>${conversaHtml(p.id, 'tecnico')}<div class="row" style="gap:6px;flex-wrap:nowrap"><input type="text" id="libMsg" placeholder="Mensagem para o NOC / supervisor" style="flex:1;min-width:0"><button type="button" class="btn" data-libmsg="${esc(p.id)}">Enviar</button></div></div>`;
+  if (p && p.status === 'recusado') return `<div class="warnbox" style="border-color:var(--bad);background:var(--bad-soft)"><b>O gestor não liberou a saída</b>${p.obs ? ': ' + esc(p.obs) : ''}. <button type="button" class="lnk" data-libpede>Pedir de novo</button></div>`;
+  return `<div class="warnbox" style="display:flex;flex-direction:column;gap:8px"><span><b>Para dar baixa na O.S. e sair do local, peça a validação ao NOC.</b> O NOC ou o supervisor confere e libera. Sem isso a corretiva fica travada.</span><textarea id="libTxt" rows="2" placeholder="Ex.: fusões concluídas, sinal normalizado no node XYZ. Pode validar?"></textarea><button type="button" class="btn pri block" data-libpede>Pedir validação ao NOC</button></div>`;
+}
+async function pedirLiberacao(r) {
+  if (!r) return; if (!Nuvem.on) { toast('Sem internet: conecte para pedir a liberação ao gestor.', 6000); return; }
+  const loc = S.gps.last; const ref = Lib.ref(r);
+  const p = { id: 'lib_' + ref + '_' + Date.now(), org: Nuvem.org(), tipo: 'liberar_corretiva', ref_id: ref, tecnico_uid: Nuvem.user.id, tecnico_nome: S.perfil.nome, dados: { ticket: r.ticket || '', ocorrencia: r.ocorrencia || '', inicio: r.inicio, rondaId: r.id, lat: loc && loc.lat, lon: loc && loc.lon, caixas: r.eventos.filter(e => e.tipo === 'chegada').length }, status: 'pedido', criado: Date.now() };
+  const txt = String(($('#libTxt') || {}).value || '').trim();
+  try { await Nuvem.pedCriar(p); Lib.guarda(p); if (txt) { const m = { id: 'pm_' + uid(), org: Nuvem.org(), pedido_id: p.id, tecnico_uid: Nuvem.user.id, autor_uid: Nuvem.user.id, autor_nome: S.perfil.nome, papel: 'tecnico', texto: txt, criado: Date.now() }; await Nuvem.msgCriar(m); guardaMsg(m); } toast('Pedido enviado ao NOC e ao supervisor. Assim que liberarem, você conclui e encerra.', 6000); render(); } catch (e) { toast('Não foi possível enviar: ' + (e.message || e), 6000); }
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-libpede]'); if (!b) return; pedirLiberacao(S.ronda); });
+document.addEventListener('click', async e => { const b = e.target.closest && e.target.closest('[data-libmsg]'); if (!b || ADMIN) return; const inp = $('#libMsg'); const txt = String(inp && inp.value || '').trim(); if (!txt) { toast('Escreva a mensagem.'); return; }
+  const m = { id: 'pm_' + uid(), org: Nuvem.org(), pedido_id: b.dataset.libmsg, tecnico_uid: Nuvem.user.id, autor_uid: Nuvem.user.id, autor_nome: S.perfil.nome, papel: 'tecnico', texto: txt, criado: Date.now() };
+  try { await Nuvem.msgCriar(m); guardaMsg(m); const y = window.scrollY; render(); window.scrollTo(0, y); } catch (x) { toast('Não foi possível enviar: ' + (x.message || x), 6000); } });
+function aoPedidoTec(p) {
+  if (p && p.tipo === 'remanejar') { S.pedRem = S.pedRem || new Map(); const ant = S.pedRem.get(p.ref_id); S.pedRem.set(p.ref_id, p); if (p.status !== 'pedido' && (!ant || ant.status === 'pedido')) toast(p.status === 'aprovado' ? `Remanejamento aprovado: a O.S. passou para ${fDiaCurto(p.dados.para)}.` : 'O gestor não aprovou o remanejamento' + (p.obs ? ': ' + p.obs : '.'), 8000); if (S.view === 'home') render(); return; }
+  if (!p || p.tipo !== 'liberar_corretiva') return; const ant = Lib.mapa.get(p.ref_id); Lib.guarda(p);
+  if (p.status !== 'pedido' && (!ant || ant.status === 'pedido')) {
+    const ok = p.status === 'aprovado'; toast(ok ? `${p.decidido_por || 'O gestor'} liberou a baixa e a saída. Pode concluir e encerrar a corretiva.` : `${p.decidido_por || 'O gestor'} não liberou` + (p.obs ? ': ' + p.obs : '.'), 8000);
+    try { navigator.vibrate && navigator.vibrate([300, 120, 300]); if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(ok ? 'Baixa e saída liberadas.' : 'A saída não foi liberada.'); u.lang = 'pt-BR'; speechSynthesis.speak(u); } } catch (x) {}
+  }
+  if (S.view === 'home' || S.view === 'insp') { const y = window.scrollY; render(); window.scrollTo(0, y); }
+}
 async function encerrarRonda() {
   if (!S.ronda) return;
+  if (!Lib.liberada(S.ronda)) { toast('A corretiva só encerra com a liberação do gestor. Peça a liberação.', 6000); const el = document.querySelector('[data-libpede]'); el && el.scrollIntoView({ block: 'center' }); return; }
   if (kmNum(S.ronda.odoIni) != null && kmNum(S.ronda.odoFim) == null) { toast('Informe o odômetro final do veículo antes de encerrar.'); $('#odoFim') && $('#odoFim').focus(); return; }
   if (kmNum(S.ronda.odoIni) != null && kmNum(S.ronda.odoFim) < kmNum(S.ronda.odoIni)) { toast('O odômetro final está menor que o inicial. Confira.'); $('#odoFim') && $('#odoFim').focus(); return; }
   if (!confirm(isCorr(S.ronda) ? 'Encerrar a corretiva agora? O percurso para de ser registrado.' : 'Encerrar a ronda agora? O percurso para de ser registrado.')) return;
@@ -1196,6 +1253,7 @@ function tentaGeo() { const i = S.insp; if (!i || !i.loc || S.geoBusy) return; i
 window.addEventListener('online', () => { S.geoTry = 0; tentaGeo(); });
 async function concluirInsp() {
   const i = S.insp; if (!i) return;
+  if (isCorr(i) && S.ronda && S.ronda.id === i.rondaId && !Lib.liberada(S.ronda)) { const p = Lib.de(S.ronda); if (!p || p.status === 'recusado') { if (confirm('Para concluir e sair do local é preciso a liberação do gestor. Pedir agora?')) pedirLiberacao(S.ronda); } else toast('Aguardando a liberação do gestor para concluir.', 6000); return; }
   if (isCorr(i)) { if (!String(i.corr.ticket || '').trim()) { i.corr.ticket = await proximoTicket(); i.corr.ticketAuto = true; toast('Ticket gerado automaticamente: ' + i.corr.ticket); } } else if (isVist(i)) { if (!String(i.vist.descricao || '').trim()) { toast('Escreva o registro da vistoria.'); S.step = 0; render(); return; } } else if (isImpl(i) && !usaImpl(i, 'caixa')) { if (!String(i.impl.designacao || '').trim()) { toast('Informe a designação.'); S.step = 0; render(); return; } } else if (!i.info.tag.trim()) { toast('Preencha a TAG da caixa.'); S.step = isImpl(i) ? 1 : 0; render(); return; }
   i.status = 'concluida'; i.saida = Date.now();
   const r = S.ronda && S.ronda.id === i.rondaId ? S.ronda : null;
@@ -1207,7 +1265,7 @@ async function concluirInsp() {
 /* ============================ navegação e render ============================ */
 function go(v) { S.view = v; window.scrollTo(0, 0); render(); }
 const TOPO = ['home', 'eventos', 'producao', 'veiculo', 'materiais', 'relatorios', 'rotas', 'perfil'];
-const ADM_TOPO = ['adm', 'admMed', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj'];
+const ADM_TOPO = ['adm', 'admMed', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj', 'admCal'];
 function menu(abrir) {
   $('#drawer').hidden = !abrir; $('#scrim').hidden = !abrir; $('#btnMenu').setAttribute('aria-expanded', abrir);
   if (!abrir) return;
@@ -1226,13 +1284,16 @@ $('#btnBack').onclick = () => { if (S.view === 'evento') { go(S.evVolta || 'even
 function render() {
   if (S.map) { try { S.map.remove(); } catch (e) {} S.map = null; }
   if (S.mapVivo) { try { S.mapVivo.remove(); } catch (e) {} S.mapVivo = null; }
-  const app = $('#app'); const inicio = ADMIN ? admInicio() : 'home'; const topo = ADMIN ? (!ACION && ADM_TOPO.includes(S.view)) : TOPO.includes(S.view); $('#btnMenu').hidden = !topo; $('#btnBack').hidden = topo || S.view === inicio || S.view === 'admLogin'; if (S.mapCalor) { try { S.mapCalor.remove(); } catch (e) {} S.mapCalor = null; }
+  const app = $('#app'); const inicio = ADMIN ? admInicio() : 'home'; const topo = ADMIN ? (!RESTRITO && ADM_TOPO.includes(S.view)) : TOPO.includes(S.view); $('#btnMenu').hidden = !topo; $('#btnBack').hidden = topo || S.view === inicio || S.view === 'admLogin'; if (S.mapCalor) { try { S.mapCalor.remove(); } catch (e) {} S.mapCalor = null; }
   if (ACION && S.view !== 'admLogin' && S.view !== 'acion') S.view = 'acion';
+  if (NOC && S.view !== 'admLogin' && S.view !== 'noc') S.view = 'noc';
+  if (S.view === 'noc') { app.innerHTML = viewNoc(); setBar(''); $('#topTitle').textContent = 'NOC · liberações'; $('#topSub').textContent = (Nuvem.admin || {}).nome || ''; afterNoc(); return; }
   if (S.view === 'acion') { app.innerHTML = viewAcion(); setBar(''); $('#topTitle').textContent = 'Acionamentos Claro'; $('#topSub').textContent = `${(Nuvem.admin && Nuvem.admin.nome) || ''} · ${fData(Date.now())}`; afterAcion(); return; }
-  if (S.view === 'admLogin') { app.innerHTML = viewAdmLogin(); setBar(''); $('#topTitle').textContent = ACION ? 'Acionamentos Claro' : 'Painel do supervisor'; $('#topSub').textContent = 'Técnico Plus - Multivale'; afterAdmLogin(); return; }
+  if (S.view === 'admLogin') { app.innerHTML = viewAdmLogin(); setBar(''); $('#topTitle').textContent = ACION ? 'Acionamentos Claro' : NOC ? 'NOC' : 'Painel do supervisor'; $('#topSub').textContent = 'Técnico Plus - Multivale'; afterAdmLogin(); return; }
   if (S.mapAtv) { try { S.mapAtv.remove(); } catch (e) {} S.mapAtv = null; }
   if (S.view === 'admEquipe') { app.innerHTML = viewAdmEquipe(); setBar(''); $('#topTitle').textContent = 'Equipe e cadastros'; $('#topSub').textContent = 'Técnicos, técnicos de fibra e fiscais de campo'; afterAdmEquipe(); return; }
   if (S.view === 'admCalor') { app.innerHTML = viewAdmCalor(); setBar(''); $('#topTitle').textContent = 'Mapa de calor'; $('#topSub').textContent = `Executadas ${fDM(S.adm.de)} a ${fDM(S.adm.ate)} · pendentes e em andamento agora`; afterAdmCalor(); return; }
+  if (S.view === 'admCal') { app.innerHTML = viewAdmCal(); setBar(''); $('#topTitle').textContent = 'Calendário de recursos'; $('#topSub').textContent = 'Escala, plantões e regiões'; afterAdmCal(); pintaLimites(); return; }
   if (S.view === 'admProj') { app.innerHTML = viewAdmProj(); setBar(''); $('#topTitle').textContent = 'Centro de custo'; $('#topSub').textContent = 'Projetos, equipes e resultado'; afterAdmProj(); pintaLimites(); return; }
   if (S.view === 'admPrev') { app.innerHTML = viewAdmPrev(); setBar(''); $('#topTitle').textContent = 'Preventivas do mês'; $('#topSub').textContent = 'Relatório consolidado por backbone'; afterAdmPrev(); pintaLimites(); return; }
   if (S.view === 'admMat') { app.innerHTML = viewAdmMat(); setBar(''); $('#topTitle').textContent = 'Almoxarifado'; $('#topSub').textContent = 'Materiais, saídas e saldos dos técnicos'; afterAdmMat(); pintaLimites(); return; }
@@ -1322,6 +1383,7 @@ function viewHome() {
       ${(r.diario || []).length ? `<div class="list">${r.diario.slice().reverse().map(n => `<div class="item" style="cursor:default;align-items:flex-start"><span class="badge" style="font-size:12px">${fHora(n.ts)}</span><span class="tx"><span style="white-space:pre-wrap;color:var(--ink);font-size:14.5px">${esc(n.txt)}</span></span></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nenhuma anotação ainda.</p>'}</section>` : ''}
     <section class="card"><h2>Foto da rede no trecho</h2>${r.dono === 'conjunta' ? `<div class="seg" role="group" aria-label="Backbone da foto"><button type="button" data-conjrede="multivale" aria-pressed="${S.donoConj !== 'master'}">Multivale</button><button type="button" data-conjrede="master" aria-pressed="${S.donoConj === 'master'}">Master</button></div>` : ''}${chipsHtml(CATS_REDE, S.fotoCatRede || CATS_REDE[0])}<button class="btn block" id="bFotoRede">${ICON.cam}Tirar foto · ${esc(S.fotoCatRede || CATS_REDE[0])}</button><span class="muted small" id="redeCount">${(S.redeFotos || []).length} foto(s) da rede nesta ronda</span></section>
     <section class="card"><h2>${corr ? 'Encerrar corretiva' : isImpl(r) ? 'Encerrar designação' : isVist(r) ? 'Encerrar vistoria' : 'Encerrar rota'}</h2>
+      ${corr ? liberaHtml(r) : ''}
       ${kmNum(r.odoIni) != null ? `<div class="grid2"><div class="field"><label class="lb" for="odoFim">Odômetro final (km) <span class="req">*</span></label><input type="text" inputmode="numeric" id="odoFim" value="${esc(r.odoFim || '')}" placeholder="Ao encerrar"></div>
       <div class="field" style="justify-content:flex-end"><button type="button" class="btn" id="bFotoOdoFim" style="min-height:48px">${ICON.cam}${r.odoFotoFim ? 'Foto ✓' : 'Foto do painel'}</button></div>
       <span class="muted small field full">Inicial: ${fOdo(kmNum(r.odoIni))}${veicTxt(r.veiculo) ? ' · ' + esc(veicTxt(r.veiculo)) : ''}</span></div>` : ''}
@@ -1375,6 +1437,7 @@ async function afterHome() {
   $('#odoIni') && $('#odoIni').addEventListener('input', e => { S.odoIni = e.target.value; const b = $('#bIniciar'); if (b) b.disabled = kmNum(S.odoIni) == null; });
   $('#bFotoOdoIni') && ($('#bFotoOdoIni').onclick = () => { S.fotoMode = 'odoIni'; $('#fileCam').click(); });
   $('#bEditPerfil') && ($('#bEditPerfil').onclick = () => go('perfil')); $('#bCriaPerfil') && ($('#bCriaPerfil').onclick = () => go('perfil'));
+  $$('[data-dcorr]').forEach(b => b.onclick = () => { const o = CORR_OPC[b.dataset.dcorr]; S.perfil.ultDono = o[1]; S.perfil.ultParc = o[2]; DB.put('meta', S.perfil); const y = window.scrollY; render(); window.scrollTo(0, y); });
   $$('[data-dono="rd"]').forEach(b => b.onclick = () => { S.perfil.ultDono = S.perfil.ultDono === b.dataset.v ? '' : b.dataset.v; DB.put('meta', S.perfil); const y = window.scrollY; render(); window.scrollTo(0, y); });
 
   $('#pf_rota') && ($('#pf_rota').onchange = e => { S.perfil.rotaId = e.target.value; const rt = rotaById(e.target.value); if (rt && rt.dono) { S.perfil.ultDono = rt.dono; S.perfil.ultParc = rt.parceiro || ''; } DB.put('meta', S.perfil); const y = window.scrollY; render(); window.scrollTo(0, y); });
@@ -1475,7 +1538,7 @@ function stepDone(key) {
 }
 function viewInsp() {
   const i = S.insp, key = ST()[S.step][0];
-  let h = `<nav class="steps" aria-label="Etapas">${ST().map(([k, lb], n) => `<button data-step="${n}" class="${stepDone(k) ? 'done' : ''}" ${n === S.step ? 'aria-current="step"' : ''}><span class="chk"></span>${lb}</button>`).join('')}</nav>`;
+  let h = (isCorr(i) && S.ronda && S.ronda.id === i.rondaId ? liberaHtml(S.ronda) : '') + `<nav class="steps" aria-label="Etapas">${ST().map(([k, lb], n) => `<button data-step="${n}" class="${stepDone(k) ? 'done' : ''}" ${n === S.step ? 'aria-current="step"' : ''}><span class="chk"></span>${lb}</button>`).join('')}</nav>`;
   if (key === 'caixa') h += stepCaixa(i);
   if (key === 'ocorr') h += stepOcorr(i);
   if (key === 'mat') h += stepMat(i);
@@ -2276,9 +2339,70 @@ async function compartilhar(files, texto) {
 /* ============================ despacho de atividades ============================ */
 function distTecAtv(uid, a) { const v = (S.vivo || new Map()).get(uid); if (!v || v.lat == null || !a || a.lat == null || Date.now() - (v.ts || 0) > 3 * 3600000) return null; return hav(v, a); }
 function tecOptsAtv(a) {
-  const L = (S.adm.tecnicos || []).map(t => ({ t, si: situacaoTec(t.uid), d: distTecAtv(t.uid, a) }));
-  if (a.lat != null) L.sort((x, y) => (x.d ?? 1e12) - (y.d ?? 1e12));
-  return '<option value="">Sem técnico (fica na fila)</option>' + L.map(({ t, si, d }) => `<option value="${t.uid}" ${a.tecnicoUid === t.uid ? 'selected' : ''}>${esc(t.nome)} · ${esc(si.txt)}${d != null ? ' · 📍 ' + fDist(d) + ' da O.S.' : a.lat != null ? ' · sem GPS' : ''}</option>`).join('');
+  const R = a.lat != null ? Rota.paraTecs(a, posTecs(), reRota) : null;
+  const L = (S.adm.tecnicos || []).map(t => ({ t, si: situacaoTec(t.uid), d: distTecAtv(t.uid, a), r: R && R.get(t.uid) }));
+  if (a.lat != null) L.sort((x, y) => ((x.r ? x.r.s : x.d != null ? x.d / 12 : 1e12) - (y.r ? y.r.s : y.d != null ? y.d / 12 : 1e12)));
+  return '<option value="">Sem técnico (fica na fila)</option>' + L.map(({ t, si, d, r }) => `<option value="${t.uid}" ${a.tecnicoUid === t.uid ? 'selected' : ''}>${esc(t.nome)} · ${esc(si.txt)}${r ? ' · 🚗 ' + fRota(r) : d != null ? ' · 📍 ~' + fDist(d) + ' (linha reta)' : a.lat != null ? ' · sem GPS' : ''}</option>`).join('');
+}
+// agenda: dia em que a O.S. deve ser feita (sem agenda = desde que foi criada)
+const agendaDe = a => (a && a.agendaDia) || isoDate((a && a.criado) || Date.now());
+const atvFutura = a => !!(a && a.agendaDia && a.agendaDia > isoDate(Date.now()));
+const fDiaCurto = d => { const dt = new Date(diaIni(d) + 43200000); return dt.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }); };
+/* ---------- ticket do acionamento e imagens anexadas à O.S. ---------- */
+async function reduzImagem(file, max = 1600) {
+  const bmp = await createImageBitmap(file); const sc = Math.min(1, max / Math.max(bmp.width, bmp.height)); const c = document.createElement('canvas'); c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.82)); return { blob, w: c.width, h: c.height };
+}
+function anexosEditHtml(a) {
+  const l = a.anexos || [];
+  return `<div class="field full"><span class="lb">Imagens do acionamento <span class="muted small" style="font-weight:400">(o técnico vê na O.S. · também dá para colar um print com Ctrl+V)</span></span>
+    <div class="anx">${l.map((x, k) => `<span class="anxi"><img data-anxsrc="${esc(x.path)}" alt="Imagem ${k + 1}"><button type="button" class="anxx" data-anxdel="${k}" aria-label="Tirar imagem">×</button></span>`).join('')}<label class="anxadd">+ Imagem<input type="file" accept="image/*" multiple id="anxFile" hidden></label></div></div>`;
+}
+async function anexosSobe(a, files, depois) {
+  if (!Nuvem.on) { toast('Sem conexão com a nuvem.'); return; } a.anexos = a.anexos || []; let n = 0;
+  for (const f of files) { if (!/^image\//.test(f.type)) continue; try { toast(`Enviando imagem ${++n}…`); const r = await reduzImagem(f); const path = `${Nuvem.org()}/acion/${a.id || 'novo'}/${uid()}.jpg`; const up = await Nuvem.sb.storage.from(Nuvem.BUCKET).upload(path, r.blob, { contentType: 'image/jpeg', upsert: true }); if (up.error) throw up.error; a.anexos.push({ path, w: r.w, h: r.h, nome: f.name || 'print', em: Date.now() }); } catch (e) { toast('Não foi possível enviar a imagem: ' + (e.message || e), 6000); } }
+  if (n) { toast(`${n} imagem(ns) anexada(s). Salve a O.S. para enviar ao técnico.`, 5000); depois && depois(); }
+}
+const ANX_URL = new Map();
+async function pintaAnexos(root) {
+  for (const img of $$('[data-anxsrc]', root || document)) { const path = img.dataset.anxsrc; if (img.src) continue; let u = ANX_URL.get(path); if (!u) { const b = await fotoBlob({ path }); if (!b) continue; u = URL.createObjectURL(b); ANX_URL.set(path, u); } img.src = u; img.onclick = () => verImagem(u); }
+}
+function verImagem(u) { const d = document.createElement('div'); d.className = 'lightbox'; d.innerHTML = `<img src="${u}" alt="Imagem do acionamento"><button type="button" class="btn" aria-label="Fechar">Fechar</button>`; d.onclick = () => d.remove(); document.body.appendChild(d); }
+function bindAnexos(a, depois) {
+  const f = $('#anxFile'); if (f) f.onchange = () => anexosSobe(a, [...f.files], depois);
+  $$('[data-anxdel]').forEach(b => b.onclick = () => { a.anexos.splice(+b.dataset.anxdel, 1); depois && depois(); });
+  ['#atTxt', '#acTxt', '#anxFile'].forEach(sel => { const el = sel === '#anxFile' ? document : $(sel); if (!el || el._anxPaste) return; el._anxPaste = true; el.addEventListener('paste', e => { const fs = [...((e.clipboardData || {}).items || [])].filter(i => i.kind === 'file' && /^image\//.test(i.type)).map(i => i.getAsFile()); if (fs.length && $('#anxFile')) { e.preventDefault(); anexosSobe(S.acA && ACION ? S.acA : a, fs, depois); } }); });
+  pintaAnexos();
+}
+function ticketAcionHtml(a) {
+  const t = a._txt || a.textoAcion || ''; const l = a.anexos || [];
+  if (!t && !l.length) return '';
+  return `${t ? `<details ${a.vistaEm ? '' : 'open'}><summary style="cursor:pointer;font-weight:600;min-height:36px;display:flex;align-items:center">Ticket do acionamento</summary><pre style="white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;margin:4px 0 0;max-height:260px;overflow:auto">${esc(t)}</pre></details>` : ''}
+    ${l.length ? `<div><span class="lb">Imagens do acionamento (${l.length}) · toque para ampliar</span><div class="anx">${l.map((x, k) => `<span class="anxi"><img data-anxsrc="${esc(x.path)}" alt="Imagem ${k + 1} do acionamento"></span>`).join('')}</div></div>` : ''}`;
+}
+/* ---------- validação do endereço (Geoapify ou Google, pela função "geocode"; reserva: OpenStreetMap) ---------- */
+async function geocodifica(endereco) {
+  const q = String(endereco || '').trim(); if (!q) return null;
+  if (ADMIN && Nuvem.on && Nuvem.sb && Nuvem.sb.functions) {
+    try { const r = await Nuvem.sb.functions.invoke('geocode', { body: { endereco: q } }); const d = r && r.data;
+      if (d && d.ok) return { lat: +d.lat, lon: +d.lon, fonte: d.fonte || 'google', formatado: d.formatado, preciso: !!d.preciso, nivel: d.nivel || '', candidatos: d.candidatos || [], em: Date.now() };
+      if (d && d.motivo === 'nao_encontrado') return { naoAchou: true, fonte: 'validador', em: Date.now() };
+    } catch (e) { /* função não configurada: usa o OpenStreetMap */ }
+  }
+  try { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&addressdetails=0&q=${encodeURIComponent(q)}`, { headers: { 'Accept-Language': 'pt-BR' } }); const j = await r.json();
+    if (j.length) return { lat: +j[0].lat, lon: +j[0].lon, fonte: 'osm', formatado: j[0].display_name, preciso: false, nivel: 'OpenStreetMap', em: Date.now() };
+    return { naoAchou: true, fonte: 'osm', em: Date.now() }; } catch (e) { return null; }
+}
+// aplica o resultado na O.S. e guarda como foi validado (aparece no formulário e no mapa de calor)
+function aplicaGeo(a, g) { if (!a) return; if (!g) { a.geo = null; return; } if (g.naoAchou) { a.geo = { fonte: g.fonte, naoAchou: true, em: g.em }; return; } a.lat = g.lat; a.lon = g.lon; a.geo = { fonte: g.fonte, formatado: g.formatado, preciso: g.preciso, nivel: g.nivel, em: g.em, alternativas: (g.candidatos || []).slice(1, 4) }; }
+function geoInfoHtml(a) {
+  const g = a && a.geo; if (!g) return '';
+  if (g.manual) return `<p class="small" style="margin:0;color:var(--ok)">📍 Local marcado à mão no mapa.</p>`;
+  const FONTE = { google: 'Google', geoapify: 'Geoapify' }; const nomeF = FONTE[g.fonte]; const cred = g.fonte === 'geoapify' ? ' <span class="muted">· Powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a> · © OpenStreetMap</span>' : '';
+  if (g.naoAchou) return `<div class="warnbox small" style="border-color:var(--bad);background:var(--bad-soft)">❌ O endereço não foi encontrado. Confira o texto ou marque o local no mapa.</div>`;
+  if (nomeF && g.preciso) return `<div class="okbox small">✅ <b>Endereço validado</b> (${esc(g.nivel)}): ${esc(g.formatado || '')}${cred}</div>`;
+  if (nomeF) return `<div class="warnbox small">⚠️ <b>Só foi achado um ponto aproximado (${esc(g.nivel)})</b>: ${esc(g.formatado || '')}. Confira e, se precisar, arraste/toque no mapa no ponto certo.${(g.alternativas || []).length ? ` Outras opções: ${g.alternativas.map((c, k) => `<button type="button" class="lnk" data-geoalt="${k}">${esc(c.formatado)}</button>`).join(' · ')}` : ''}${cred}</div>`;
+  return `<div class="warnbox small">⚠️ Localizado só pelo OpenStreetMap (sem o validador configurado): ${esc((g.formatado || '').slice(0, 120))}. Confira no mapa.</div>`;
 }
 function stAtv(a) { return a && a.status === 'recebida' ? (a.vistaEm ? 'Vista pelo técnico' : 'Entregue · aguardando ciente') : ATV_ST[a && a.status] || (a && a.status) || ''; }
 const ATV_ST = { vista: 'Vista pelo técnico', pendente: 'Aguardando', recebida: 'Recebida', em_deslocamento: 'Em deslocamento', no_local: 'No local', concluida: 'Concluída', cancelada: 'Cancelada' };
@@ -2326,12 +2450,12 @@ const Alarme = {
   parar() { if (!this.ativo) return; this.ativo = false; this.motivo = null; this.fala = null; this.falaN = 0; try { 'speechSynthesis' in window && speechSynthesis.cancel(); } catch (e) {} if (NATIVO) Nativo.alarme(false); clearInterval(this.t); try { navigator.vibrate && navigator.vibrate(0); } catch (e) {} $$('.alerta .topo').forEach(x => x.classList.remove('toca')); },
   revisa() {
     if (ADMIN) return;
-    const l = [...S.atvs.values()].filter(a => (a.status === 'pendente' || a.status === 'recebida') && !a.vistaEm && !(S.ronda && S.ronda.atividadeId === a.id));
+    const l = [...S.atvs.values()].filter(a => (a.status === 'pendente' || a.status === 'recebida') && !a.vistaEm && !atvFutura(a) && !(S.ronda && S.ronda.atividadeId === a.id));
     const atv = l.length > 0; const exp = expAtrasado(), ref = refEstourada(), upd = !!updVencida();
     const deve = atv || exp || ref || upd;
     if (NATIVO) Nativo.fundo();
-    if (deve) { const a1 = l[0]; this.tocar(ref ? 'Tempo de refeição encerrado' : exp ? 'Expediente não iniciado' : atv ? `Nova O.S. ${a1 && a1.ticket ? a1.ticket : ''}`.trim() : 'Atualize a O.S. em andamento', ref ? 'Volte ao app e encerre a refeição.' : exp ? 'Inicie o expediente no app.' : atv ? `${a1 ? atvTitulo(a1) : ''}${a1 && distOS(a1) != null ? ' · a ' + fDist(distOS(a1)) : ''} · Toque e confirme "O.S. recebida".` : `Já faz ${ATUALIZA_MIN} min sem atualização. Informe a situação.`, atv && !ref && !exp ? 'Nova O S recebida. Iniciar deslocamento.' : null); } else this.parar();
-    const bn = $('#atvBanner'); if (bn) { bn.hidden = !deve || !$('#atvAlerta').hidden; const sp = bn.querySelector('span'); if (sp) sp.textContent = ref ? 'Tempo de refeição encerrado' : exp ? 'Expediente não iniciado' : upd && !atv ? 'Atualize a O.S. em andamento' : 'Atividade aguardando início do deslocamento'; bn.dataset.motivo = upd && !atv && !ref && !exp ? 'upd' : ref ? 'ref' : exp ? 'exp' : 'atv'; }
+    if (deve) { const a1 = l[0]; this.tocar(ref ? 'Tempo de refeição encerrado' : exp ? 'Expediente não iniciado' : atv ? `Nova O.S. ${a1 && a1.ticket ? a1.ticket : ''}`.trim() : 'Atualize a O.S. em andamento', ref ? 'Volte ao app e encerre a refeição.' : exp ? 'Inicie o expediente no app.' : atv ? `${a1 ? atvTitulo(a1) : ''}${a1 && distTxt(a1) ? ' · ' + distTxt(a1).replace(/ \(.*\)$/, '') : ''} · Toque e confirme "O.S. recebida".` : 'O supervisor pediu a atualização da O.S. Informe a situação.', atv && !ref && !exp ? 'Nova O S recebida. Iniciar deslocamento.' : null); } else this.parar();
+    const bn = $('#atvBanner'); if (bn) { bn.hidden = !deve || !$('#atvAlerta').hidden; const sp = bn.querySelector('span'); if (sp) sp.textContent = ref ? 'Tempo de refeição encerrado' : exp ? 'Expediente não iniciado' : upd && !atv ? 'O supervisor pediu atualização da O.S.' : 'Atividade aguardando início do deslocamento'; bn.dataset.motivo = upd && !atv && !ref && !exp ? 'upd' : ref ? 'ref' : exp ? 'exp' : 'atv'; }
   }
 };
 ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => Alarme.destrava(), { passive: true }));
@@ -2363,7 +2487,7 @@ async function recebeAtv(a, inicial) {
   await guardaAtv(a);
   if (S.ronda && S.ronda.atividadeId === a.id && a.log && S.ronda.atvLog !== a.log) { S.ronda.atvLog = a.log; saveRonda(true); }
   if (a.status === 'pendente') { await atvStatus(a, 'recebida', { recebidaEm: Date.now() }); }
-  if ((nova || a.status === 'recebida') && (a.status === 'recebida' || a.status === 'pendente') && !a.vistaEm && !(S.ronda && S.ronda.atividadeId === a.id)) {
+  if ((nova || a.status === 'recebida') && (a.status === 'recebida' || a.status === 'pendente') && !a.vistaEm && !atvFutura(a) && !(S.ronda && S.ronda.atividadeId === a.id)) {
     if (nova && !inicial) notificaAtv(a);
     if (!S.alertaId) mostraAlerta(a);
   }
@@ -2374,29 +2498,62 @@ function mostraAlerta(a) {
   const ocupado = !!S.ronda && S.ronda.atividadeId !== a.id; const em = atvEmerg(a); const g = gpsUrl(a), w = gpsUrl(a, 'waze');
   const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>` : '';
   const rt = a.rotaId ? rotaById(a.rotaId) : null; const pend = a.status === 'pendente' || a.status === 'recebida';
-  el.innerHTML = `<div class="box" role="alertdialog" aria-modal="true" aria-labelledby="alT"><div class="topo ${em ? '' : 'prev'} ${Alarme.ativo ? 'toca' : ''}"><small>${a._apoio ? '🤝 APOIO · ' : ''}${pend ? 'NOVA ATIVIDADE' : 'ATIVIDADE'} · ${em ? 'EMERGENCIAL' : atvImpl(a) ? 'IMPLANTAÇÃO · ' + esc((IMPL_SERV[a.servico] || '').toUpperCase()) : 'PREVENTIVA'}</small><b id="alT">${esc(a.ticket || 'Sem ticket')}</b><span>Enviada às ${fHora(a.criado)}${a.criadoPorNome ? ' por ' + esc(a.criadoPorNome) : ''} · ${esc(stAtv(a))}</span></div>
+  el.innerHTML = `<div class="box" role="alertdialog" aria-modal="true" aria-labelledby="alT"><div class="topo ${em ? '' : 'prev'} ${Alarme.ativo ? 'toca' : ''}"><small>${a._apoio ? '🤝 APOIO · ' : ''}${pend && !a.vistaEm ? 'NOVA ATIVIDADE' : 'ATIVIDADE'} · ${em ? 'EMERGENCIAL' : atvImpl(a) ? 'IMPLANTAÇÃO · ' + esc((IMPL_SERV[a.servico] || '').toUpperCase()) : 'PREVENTIVA'}</small><b id="alT">${esc(a.ticket || 'Sem ticket')}</b><span>Enviada às ${fHora(a.criado)}${a.criadoPorNome ? ' por ' + esc(a.criadoPorNome) : ''} · ${esc(stAtv(a))}</span></div>
     <div class="corpo">${a._apoio ? `<div class="okbox small"><b>Você é apoio nesta O.S.</b> O técnico principal é <b>${esc(a.tecnicoNome || '—')}</b>: ele lança a produção. Registre seu deslocamento e chegada normalmente.</div>` : (a.apoioNomes || []).length ? `<div class="okbox small">Equipe de apoio: <b>${esc(a.apoioNomes.join(', '))}</b></div>` : ''}${logTag(a.log)}${atvImpl(a) ? kv('Designação', a.designacao) + kv('Projeto', a.projeto) + kv('Sites', [a.siteA, a.siteB].filter(Boolean).join(' ⇄ ')) : ''}${a.cliente === 'Claro' ? kv('Cliente', 'Claro' + (a.programada ? ' · programada' : ' · emergencial')) + kv('Node', a.node) + kv('Rede', a.rede) + kv('Solicitante', a.solicitante) : a.cliente ? kv('Cliente', a.cliente) + kv('Chamado', [a.ticket, a.tsk].filter(Boolean).join(' / ')) + kv('Trecho', a.trecho) + kv('Ponta A', a.pontaA) + kv('Ponta B', a.pontaB) + kv('Designação', a.designacao) + kv('Equipamento', a.equipamento) + kv('Horário da falha', a.dataAcionamento) : ''}${kv('Faturamento', CENTROS[a.centro])}${kv('Ocorrência', a.ocorrencia)}${kv('Referência', atvRef(a))}${kv('Rota', rt ? rotaLb(rt) : '')}${kv('Endereço', a.endereco)}${kv('Descrição', a.descricao)}
+      ${ticketAcionHtml(a)}
       ${distOSHtml(a)}
+      ${pend && !a._apoio ? (() => { const pr = (S.pedRem || new Map()).get(a.id); return `<div class="kv"><span>Agendada para</span><b>${esc(fDiaCurto(agendaDe(a)))}</b></div>${pr && pr.status === 'pedido' ? `<div class="warnbox small">Remanejamento para <b>${esc(fDiaCurto(pr.dados.para))}</b> aguardando o gestor.</div>` : `<details><summary class="small" style="cursor:pointer;min-height:36px;display:flex;align-items:center;color:var(--accent);font-weight:600">Pedir para remanejar para outro dia</summary><div class="grid2"><div class="field"><label class="lb" for="remDia">Novo dia</label><input type="date" id="remDia" min="${isoDate(Date.now())}" value="${isoDate(Date.now() + 86400000)}"></div><div class="field"><label class="lb" for="remMot">Motivo</label><input type="text" id="remMot" placeholder="Ex.: sem acesso hoje"></div></div><button type="button" class="btn block" id="bRemPede">Enviar pedido ao gestor</button></details>`}`; })() : ''}
       ${g ? `<div class="row"><a class="btn pri" href="${esc(g)}" target="_blank" rel="noopener">${ICON.pin}Abrir no GPS</a>${w ? `<a class="btn" href="${esc(w)}" target="_blank" rel="noopener">Waze</a>` : ''}</div>` : '<p class="muted small" style="margin:0">Sem endereço ou localização. Use a referência da rota.</p>'}
       ${pend && !a.vistaEm ? `<button type="button" class="btn go block" id="alVista">${ICON.check}O.S. recebida</button><p class="muted small" style="margin:0">Avisa o supervisor que você viu a O.S. e para o alarme. Em seguida você informa o odômetro para liberar o deslocamento.</p><button type="button" class="btn block" id="alMin">Minimizar (o alarme continua até confirmar)</button>`
         : pend ? `<div class="okbox small">Você confirmou o recebimento às ${fHora(a.vistaEm)}.</div>${ocupado ? `<p class="muted small" style="margin:0">Encerre a atividade atual para iniciar o deslocamento desta.</p><button type="button" class="btn block" id="alMin">Fechar</button>` : `<button type="button" class="btn go block" id="alIniciar">${ICON.play}Informar odômetro e iniciar deslocamento</button><button type="button" class="btn block" id="alMin">Fechar</button>`}`
         : `<button type="button" class="btn block" id="alMin">Fechar</button>`}
     </div></div>`;
-  el.hidden = false; const bn = $('#atvBanner'); if (bn) bn.hidden = true; try { posLeve(); } catch (e) {}
+  el.hidden = false; const bn = $('#atvBanner'); if (bn) bn.hidden = true; try { posLeve(); } catch (e) {} pintaAnexos(el);
   $('#alIniciar') && ($('#alIniciar').onclick = () => atenderAtv(a));
   $('#alVista') && ($('#alVista').onclick = async () => { await confirmaVista(a); Alarme.revisa(); if (S.ronda && S.ronda.atividadeId !== a.id) { fechaAlerta(); toast('Recebimento enviado ao supervisor. Encerre a atividade atual para iniciar esta.', 6000); if (S.view === 'home') render(); return; } toast('Recebimento enviado ao supervisor. Agora informe o odômetro.', 5000); atenderAtv(a); });
   $('#alMin') && ($('#alMin').onclick = () => { fechaAlerta(); Alarme.revisa(); });
+  $('#bRemPede') && ($('#bRemPede').onclick = async () => { const para = $('#remDia').value, mot = $('#remMot').value.trim(); if (!para) { toast('Escolha o dia.'); return; } if (para === agendaDe(a)) { toast('Escolha um dia diferente.'); return; } if (!mot) { toast('Escreva o motivo.'); $('#remMot').focus(); return; } if (!Nuvem.on) { toast('Sem internet: conecte para pedir.'); return; }
+    const pd = { id: 'rem_' + a.id + '_' + Date.now(), org: Nuvem.org(), tipo: 'remanejar', ref_id: a.id, tecnico_uid: Nuvem.user.id, tecnico_nome: S.perfil.nome, dados: { titulo: atvTitulo(a), de: agendaDe(a), para, deTxt: fDiaCurto(agendaDe(a)), paraTxt: fDiaCurto(para), motivo: mot }, status: 'pedido', criado: Date.now() };
+    try { await Nuvem.pedCriar(pd); S.pedRem = S.pedRem || new Map(); S.pedRem.set(a.id, pd); toast('Pedido enviado ao gestor.'); mostraAlerta(a); } catch (e) { toast('Não foi possível enviar: ' + (e.message || e), 6000); } });
   setTimeout(() => { const b = $('#alVista') || $('#alIniciar') || $('#alMin'); b && b.focus(); }, 50);
 }
+/* ---------- distância pelo trajeto de carro (OSRM / OpenStreetMap) ---------- */
+// Rota de carro com tempo estimado. Se o serviço de rotas não responder, mostra a linha reta como reserva.
+const OSRM = 'https://router.project-osrm.org';
+const fMin = s => { const m = Math.max(1, Math.round(s / 60)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${pad2(m % 60)}`; };
+const fRota = r => `${fDist(r.m)} · ${fMin(r.s)} de carro`;
+const Rota = {
+  cache: new Map(), pend: new Map(), tecs: new Map(), tecsPend: new Set(),
+  k: (a, b) => [a.lat, a.lon, b.lat, b.lon].map(x => (+x).toFixed(3)).join(','),
+  async busca(url) { const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000); try { const r = await fetch(url, { signal: ctl.signal }); clearTimeout(t); if (!r.ok) return null; const j = await r.json(); return j && j.code === 'Ok' ? j : null; } catch (e) { clearTimeout(t); return null; } },
+  // rota de um ponto até a O.S. (fica em cache por ~110 m de deslocamento)
+  de(a, b, depois) {
+    if (!a || !b || a.lat == null || b.lat == null) return null; const k = this.k(a, b); const c = this.cache.get(k);
+    if (c && Date.now() - c.ts < 20 * 60000) return c.r;
+    if (!this.pend.has(k)) { this.pend.set(k, true); this.busca(`${OSRM}/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`).then(j => { this.pend.delete(k); const rt = j && j.routes && j.routes[0]; this.cache.set(k, { ts: Date.now(), r: rt ? { m: rt.distance, s: rt.duration } : null }); depois && depois(); }); }
+    return c ? c.r : undefined; // undefined = calculando
+  },
+  // rota de vários técnicos até a mesma O.S. (uma consulta só)
+  paraTecs(a, pos, depois) {
+    if (!a || a.lat == null || !pos.length) return null; const k = (+a.lat).toFixed(4) + ',' + (+a.lon).toFixed(4); const c = this.tecs.get(k);
+    if (c && Date.now() - c.ts < 5 * 60000) return c.m;
+    if (!this.tecsPend.has(k)) { this.tecsPend.add(k); const coords = [[a.lon, a.lat], ...pos.map(p => [p.lon, p.lat])].map(x => x.join(',')).join(';');
+      this.busca(`${OSRM}/table/v1/driving/${coords}?sources=${pos.map((_, i) => i + 1).join(';')}&destinations=0&annotations=distance,duration`).then(j => { this.tecsPend.delete(k); const m = new Map(); if (j) pos.forEach((p, i) => { const s2 = j.durations && j.durations[i] && j.durations[i][0], d = j.distances && j.distances[i] && j.distances[i][0]; if (s2 != null && d != null) m.set(p.uid, { m: d, s: s2 }); }); this.tecs.set(k, { ts: Date.now(), m, falhou: !j }); depois && depois(); }); }
+    return c ? c.m : null;
+  }
+};
+function posTecs() { const agora = Date.now(); return [...(S.vivo || new Map()).values()].filter(v => v.lat != null && agora - (v.ts || 0) < 3 * 3600000).map(v => ({ uid: v._uid, lat: v.lat, lon: v.lon })); }
+let reRotaT = null; const reRota = () => { clearTimeout(reRotaT); reRotaT = setTimeout(() => { if (S.view === 'admAtv' || S.view === 'acion' || S.view === 'adm') { const y = window.scrollY; render(); window.scrollTo(0, y); } }, 150); };
 function minhaPos() { const g = S.gps && S.gps.last; return g && g.lat != null && Date.now() - (g.ts || Date.now()) < 30 * 60000 ? g : null; }
 function distOS(a) { const g = minhaPos(); return g && a && a.lat != null && a.lon != null ? hav(g, a) : null; }
-function distOSHtml(a, cls = '') { if (!a || a.lat == null) return ''; const d = distOS(a); return `<div class="kv ${cls}" data-distos="${a.id}"><span>Distância até a O.S.</span><b>${d != null ? fDist(d) + ' em linha reta' : 'aguardando o GPS…'}</b></div>`; }
-function pintaDistOS() { $$('[data-distos]').forEach(el => { const a = S.atvs.get(el.dataset.distos); if (!a) return; const d = distOS(a); const b = el.querySelector('b'); if (b) b.textContent = d != null ? fDist(d) + ' em linha reta' : 'aguardando o GPS…'; }); }
+function distTxt(a) { const g = minhaPos(); if (!g || !a || a.lat == null) return null; const r = Rota.de(g, a, () => pintaDistOS()); if (r) return fRota(r); const d = hav(g, a); return r === undefined ? `calculando a rota… (~${fDist(d)} em linha reta)` : `~${fDist(d)} em linha reta (rota indisponível)`; }
+function distOSHtml(a, cls = '') { if (!a || a.lat == null) return ''; const t = distTxt(a); return `<div class="kv ${cls}" data-distos="${a.id}"><span>Distância até a O.S.</span><b>${t != null ? esc(t) : 'aguardando o GPS…'}</b></div>`; }
+function pintaDistOS() { $$('[data-distos]').forEach(el => { const a = S.atvs.get(el.dataset.distos); if (!a) return; const t = distTxt(a); const b = el.querySelector('b'); if (b) b.textContent = t != null ? t : 'aguardando o GPS…'; }); }
 setInterval(() => { try { if (!ADMIN) pintaDistOS(); } catch (e) {} }, 10000);
 async function confirmaVista(a) {
   if (!a || a.vistaEm) return; const now = Date.now(); const u = { ts: now, sit: 'recebida', txt: 'Técnico confirmou o recebimento da O.S.', prev: '', por: S.perfil.nome };
-  const d = distOS(a); if (d != null) { u.txt += ` · a ${fDist(d)} do local`; }
-  await atvStatus(a, a.status === 'pendente' ? 'recebida' : a.status, { vistaEm: now, recebidaEm: a.recebidaEm || now, distVista: d != null ? Math.round(d) : null, atualizacoes: [...(a.atualizacoes || []), u].slice(-60) });
+  const g = minhaPos(); const rt = g && a.lat != null ? Rota.de(g, a) : null; const d = rt ? rt.m : distOS(a); if (d != null) { u.txt += rt ? ` · a ${fRota(rt)} do local` : ` · a ~${fDist(d)} do local (linha reta)`; }
+  await atvStatus(a, a.status === 'pendente' ? 'recebida' : a.status, { vistaEm: now, recebidaEm: a.recebidaEm || now, distVista: d != null ? Math.round(d) : null, tempoVista: rt ? Math.round(rt.s) : null, atualizacoes: [...(a.atualizacoes || []), u].slice(-60) });
 }
 function fechaAlerta() { const el = $('#atvAlerta'); if (el) { el.hidden = true; el.innerHTML = ''; } S.alertaId = null; if (S.view === 'home') { const bn = $('#atvBanner'); if (bn) bn.hidden = !Alarme.ativo; } }
 function atenderAtv(a) {
@@ -2470,17 +2627,17 @@ function expBarHtml(comFim) {
   return `<div class="expbar"><span class="dot"></span><span>Expediente desde <b>${fHora(S.exp.inicio)}</b></span><button type="button" class="btn" id="bRefIni" style="margin-left:auto;min-height:42px">Refeição (${J.refeicaoMin} min)</button>${comFim ? '<button type="button" class="lnk" id="bExpFim">Encerrar expediente</button>' : ''}</div>`;
 }
 function minhasAtvHtml() {
-  const l = [...S.atvs.values()].filter(atvAberta).filter(a => !(S.ronda && S.ronda.atividadeId === a.id)).sort((x, y) => (atvEmerg(y) - atvEmerg(x)) || (atvImpl(x) - atvImpl(y)) || x.criado - y.criado);
+  const l = [...S.atvs.values()].filter(atvAberta).filter(a => !(S.ronda && S.ronda.atividadeId === a.id)).sort((x, y) => (atvFutura(x) - atvFutura(y)) || agendaDe(x).localeCompare(agendaDe(y)) || (atvEmerg(y) - atvEmerg(x)) || (atvImpl(x) - atvImpl(y)) || x.criado - y.criado);
   if (!l.length) return '';
   return `<section class="acts"><div class="ah"><span>Minhas atividades</span><span class="muted small" style="font-weight:500">${l.filter(atvEmerg).length} emerg. · ${l.filter(a => a.tipo === 'preventiva').length} prev. · ${l.filter(atvImpl).length} impl.</span></div>
-    ${l.map(a => `<button type="button" class="act ${atvEmerg(a) ? 'nc' : atvImpl(a) ? 'done' : 'pend'}" data-atv="${a.id}"><span class="st"></span><span class="tm">${fHora(a.criado)}<span>${atvEmerg(a) ? 'Emerg.' : atvImpl(a) ? 'Impl.' : 'Prev.'}</span></span><span class="bd"><b>${a._apoio ? '🤝 Apoio · ' : ''}${esc(atvTitulo(a))}</b><span>${a._apoio ? 'Principal: ' + esc(a.tecnicoNome || '—') + ' · ' : (a.apoioNomes || []).length ? 'Apoio: ' + esc(a.apoioNomes.join(', ')) + ' · ' : ''}${esc(atvSub(a))}</span></span><span class="ic">${logTag(a.log)}<span class="pill ${a.status === 'recebida' || a.status === 'pendente' ? 'bad' : 'ok'}">${stAtv(a)}</span>${ICON.next}</span></button>`).join('')}</section>`;
+    ${l.map(a => `<button type="button" class="act ${atvEmerg(a) ? 'nc' : atvImpl(a) ? 'done' : 'pend'}" data-atv="${a.id}"><span class="st"></span><span class="tm">${fHora(a.criado)}<span>${atvEmerg(a) ? 'Emerg.' : atvImpl(a) ? 'Impl.' : 'Prev.'}</span></span><span class="bd"><b>${a._apoio ? '🤝 Apoio · ' : ''}${esc(atvTitulo(a))}</b><span>${a._apoio ? 'Principal: ' + esc(a.tecnicoNome || '—') + ' · ' : (a.apoioNomes || []).length ? 'Apoio: ' + esc(a.apoioNomes.join(', ')) + ' · ' : ''}${esc(atvSub(a))}</span></span><span class="ic">${logTag(a.log)}${atvFutura(a) ? `<span class="pill">📅 ${esc(fDiaCurto(a.agendaDia))}</span>` : `<span class="pill ${a.status === 'recebida' || a.status === 'pendente' ? 'bad' : 'ok'}">${stAtv(a)}</span>`}${ICON.next}</span></button>`).join('')}</section>`;
 }
 
 
 /* ---------- jornada (expediente obrigatório) e refeição ---------- */
-function jornada() { const j = window.JORNADA || {}; return { inicio: j.inicio || '08:00', fim: j.fim || '18:00', refeicaoMin: +j.refeicaoMin || 60, dias: Array.isArray(j.dias) && j.dias.length ? j.dias : [0, 1, 2, 3, 4, 5, 6] }; }
+function jornada(ts = Date.now()) { const R = S.recurso && S.recurso.escala; if (R && !ADMIN) { const t = R[new Date(ts).getDay()]; const dias = [0, 1, 2, 3, 4, 5, 6].filter(d => R[d] && R[d].e); return { inicio: t ? t.e : '00:00', fim: t ? t.s : '00:00', refeicaoMin: +((window.JORNADA || {}).refeicaoMin) || 60, dias }; } const j = window.JORNADA || {}; return { inicio: j.inicio || '08:00', fim: j.fim || '18:00', refeicaoMin: +j.refeicaoMin || 60, dias: Array.isArray(j.dias) && j.dias.length ? j.dias : [0, 1, 2, 3, 4, 5, 6] }; }
 const hm = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
-function emJornada(ts = Date.now()) { const J = jornada(), d = new Date(ts), m = d.getHours() * 60 + d.getMinutes(); return J.dias.includes(d.getDay()) && m >= hm(J.inicio) && m < hm(J.fim); }
+function emJornada(ts = Date.now()) { const J = jornada(ts), d = new Date(ts), m = d.getHours() * 60 + d.getMinutes(); return J.dias.includes(d.getDay()) && m >= hm(J.inicio) && m < hm(J.fim); }
 const hojeIso = () => isoDate(Date.now());
 function expAtrasado() { if (ADMIN || !S.perfil.nome || S.exp) return false; if (S.expFimDia === hojeIso() || folgaHoje()) return false; return emJornada(); }
 function refAtiva() { return S.exp && S.exp.refeicao && !S.exp.refeicao.fim ? S.exp.refeicao : null; }
@@ -2502,7 +2659,8 @@ async function encerrarRefeicao() {
 const ATUALIZA_MIN = 60; // o técnico atualiza a O.S. em andamento a cada 60 min
 const SIT_OS = { deslocamento: 'Em deslocamento', execucao: 'No local, em execução', material: 'Aguardando material', acesso: 'Aguardando acesso / liberação', equipe: 'Aguardando outra equipe', clima: 'Parado por chuva / clima', finalizando: 'Finalizando / testes' };
 function atvEmCurso() { const r = S.ronda; if (!r || r.fim || !r.atividadeId) return null; const a = S.atvs.get(r.atividadeId); return a && !a._apoio && atvAberta(a) ? a : null; }
-function updVencida() { const a = atvEmCurso(); if (!a) return null; const ult = a.ultAtualiz || a.iniciadaEm || S.ronda.inicio; return Date.now() - ult >= ATUALIZA_MIN * 60000 ? a : null; }
+// a atualização só é pedida quando o supervisor cobra (botão no painel); o técnico pode atualizar quando quiser
+function updVencida() { const a = atvEmCurso(); if (!a) return null; return +a.cobrarAtualizEm && +a.cobrarAtualizEm > (+a.ultAtualiz || 0) ? a : null; }
 async function salvarAtualizacao(a, sit, txt, prev) {
   const now = Date.now(); const u = { ts: now, sit, txt: String(txt || '').trim(), prev: prev || '', por: S.perfil.nome };
   const lista = [...(a.atualizacoes || []), u].slice(-60);
@@ -2514,11 +2672,11 @@ function mostraAviso(tipo) {
   if (tipo === 'upd') {
     const el = $('#atvAlerta'); const a = atvEmCurso(); if (!el || !a) return; S.alertaId = 'aviso:upd';
     const ult = a.ultAtualiz || a.iniciadaEm || S.ronda.inicio; const min = Math.round((Date.now() - ult) / 60000);
-    el.innerHTML = `<div class="box" role="alertdialog" aria-modal="true" aria-labelledby="avT"><div class="topo prev ${Alarme.ativo ? 'toca' : ''}"><small>ATUALIZE A O.S. · A CADA ${ATUALIZA_MIN} MIN</small><b id="avT">${esc(a.ticket || 'O.S. em andamento')}</b><span>Última atualização há ${fHm(min)}</span></div>
+    el.innerHTML = `<div class="box" role="alertdialog" aria-modal="true" aria-labelledby="avT"><div class="topo prev ${Alarme.ativo ? 'toca' : ''}"><small>${a.cobrarAtualizEm && a.cobrarAtualizEm > (a.ultAtualiz || 0) ? 'O SUPERVISOR PEDIU ATUALIZAÇÃO' + (a.cobrarPor ? ' · ' + esc(String(a.cobrarPor).toUpperCase()) : '') : 'ATUALIZAR A O.S.'}</small><b id="avT">${esc(a.ticket || 'O.S. em andamento')}</b><span>Última atualização há ${fHm(min)}</span></div>
       <div class="corpo"><div class="field"><label class="lb" for="upSit">Situação agora</label><select id="upSit">${Object.entries(SIT_OS).map(([k, l]) => `<option value="${k}" ${(a.situacao || (a.status === 'no_local' ? 'execucao' : 'deslocamento')) === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label class="lb" for="upTxt">O que foi feito / o que falta</label><textarea id="upTxt" rows="3" placeholder="Ex.: localizado o rompimento no km 12, iniciando as fusões"></textarea></div>
       <div class="field"><label class="lb" for="upPrev">Previsão de término</label><input type="time" id="upPrev" value="${esc(a.previsao || '')}"></div>
-      <button type="button" class="btn go block" id="avOk">${ICON.check}Enviar atualização</button><p class="muted small" style="margin:0">O alarme só para depois da atualização. O supervisor é avisado quando a O.S. passa de ${ATUALIZA_MIN} min sem atualização.</p></div></div>`;
+      <button type="button" class="btn go block" id="avOk">${ICON.check}Enviar atualização</button><p class="muted small" style="margin:0">${a.cobrarAtualizEm && a.cobrarAtualizEm > (a.ultAtualiz || 0) ? 'O alarme só para depois da atualização.' : 'A atualização vai direto para o supervisor.'}</p></div></div>`;
     el.hidden = false; const bn = $('#atvBanner'); if (bn) bn.hidden = true;
     $('#avOk').onclick = async () => { const txt = $('#upTxt').value; if (String(txt).trim().length < 5) { toast('Escreva rapidamente o que foi feito ou o que falta.'); $('#upTxt').focus(); return; } await salvarAtualizacao(a, $('#upSit').value, txt, $('#upPrev').value); fechaAlerta(); Alarme.revisa(); toast('Atualização enviada ao supervisor.'); if (S.view === 'home') render(); };
     setTimeout(() => $('#upTxt') && $('#upTxt').focus(), 50); return;
@@ -2539,7 +2697,7 @@ function checaJornada() {
   const exp = expAtrasado(), ref = refEstourada();
   if (ref && !S.alertaId) { mostraAviso('ref'); notificaAviso('Tempo de refeição encerrado', 'Encerre a refeição para voltar ao trabalho.'); }
   else if (exp && !S.alertaId) { mostraAviso('exp'); notificaAviso('Expediente não iniciado', `Seu expediente começa às ${jornada().inicio}. Abra o app e inicie.`); }
-  const upd = updVencida(); if (upd && !S.alertaId) { mostraAviso('upd'); notificaAviso('Atualize a O.S. ' + (upd.ticket || ''), `Já faz ${ATUALIZA_MIN} min sem atualização. Abra o app e informe a situação.`); }
+  const upd = updVencida(); if (upd && !S.alertaId) { mostraAviso('upd'); notificaAviso('Atualize a O.S. ' + (upd.ticket || ''), `${upd.cobrarPor || 'O supervisor'} pediu a atualização da O.S. Abra o app e informe a situação.`); }
   if (!exp && S.alertaId === 'aviso:exp') fechaAlerta(); if (!ref && S.alertaId === 'aviso:ref') fechaAlerta(); if (!upd && S.alertaId === 'aviso:upd') fechaAlerta();
   const J = jornada(), d = new Date(), m = d.getHours() * 60 + d.getMinutes();
   if (S.exp && !S.ronda && m >= hm(J.fim) && S.lembreteFim !== hojeIso()) { S.lembreteFim = hojeIso(); Alarme.destrava(); Alarme.bip(); notificaAviso('Fim do expediente', `São ${J.fim}. Encerre o expediente no app.`); toast(`São ${J.fim}: lembre de encerrar o expediente.`, 8000); }
@@ -3129,11 +3287,12 @@ function lerAcionamento(txt) {
 const LONGA_MS = 2 * 3600000;
 function tecPickerHtml(a) {
   const agora = Date.now(); const vivo = S.vivo || new Map(); const abertas = [...(S.atvsAdm || new Map()).values()].filter(x => atvAberta(x) && x.id !== a.id);
-  const L = (S.adm.tecnicos || []).map(t => { const v = vivo.get(t.uid); const si = situacaoTec(t.uid); const ativo = !!(v && v.ativo); const dur = ativo && v.inicio ? agora - v.inicio : 0; const livre = si.cls === 'ok' && !ativo; const longa = ativo && dur >= LONGA_MS; const d = a.lat != null && v && v.lat != null && agora - (v.ts || 0) < 3 * 3600000 ? hav(a, v) : null; const fila = abertas.filter(x => x.tecnicoUid === t.uid).length; return { t, si, ativo, dur, livre, longa, d, fila, v }; })
-    .sort((x, y) => (y.livre - x.livre) || (y.longa - x.longa) || (x.fila - y.fila) || ((x.d ?? 1e9) - (y.d ?? 1e9)));
+  const R = a.lat != null ? Rota.paraTecs(a, posTecs(), reRota) : null;
+  const L = (S.adm.tecnicos || []).map(t => { const v = vivo.get(t.uid); const si = situacaoTec(t.uid); const ativo = !!(v && v.ativo); const dur = ativo && v.inicio ? agora - v.inicio : 0; const livre = si.cls === 'ok' && !ativo; const longa = ativo && dur >= LONGA_MS; const d = a.lat != null && v && v.lat != null && agora - (v.ts || 0) < 3 * 3600000 ? hav(a, v) : null; const r = R && R.get(t.uid); const fila = abertas.filter(x => x.tecnicoUid === t.uid).length; return { t, si, ativo, dur, livre, longa, d, r, fila, v }; })
+    .sort((x, y) => (y.livre - x.livre) || (y.longa - x.longa) || (x.fila - y.fila) || ((x.r ? x.r.s : x.d != null ? x.d / 12 : 1e9) - (y.r ? y.r.s : y.d != null ? y.d / 12 : 1e9)));
   if (!L.length) return '';
   return `<div class="field" id="tecPicker"><span class="lb">Escolha o técnico</span><div class="list" style="gap:6px">${L.map(x => { const cor = x.livre ? 'var(--ok)' : x.longa ? '#d9a400' : 'var(--line)'; const tag = x.livre ? '<span class="pill ok">Sem atividade</span>' : x.longa ? `<span class="pill draft">Há ${fDur(x.dur)} na mesma atividade</span>` : x.ativo ? `<span class="pill done">Em atividade há ${fDur(x.dur)}</span>` : `<span class="pill ${x.si.cls === 'bad' ? 'bad' : ''}" style="${x.si.cls ? '' : 'background:var(--surface-2);color:var(--muted)'}">${esc(x.si.txt)}</span>`;
-    return `<button type="button" class="item" data-pick="${x.t.uid}" aria-pressed="${a.tecnicoUid === x.t.uid}" style="border:2px solid ${cor};border-radius:8px;padding:10px 12px;${x.si.cls === 'ok' || x.ativo ? '' : 'opacity:.75'}"><span class="badge" style="background:${x.livre ? 'var(--ok)' : x.longa ? '#d9a400' : 'var(--accent-soft)'};color:${x.livre || x.longa ? '#fff' : 'var(--accent)'}">${esc(iniciais(x.t.nome))}</span><span class="tx"><b>${esc(x.t.nome)}</b><span style="white-space:normal">${x.ativo ? esc((TIPOLB[x.v.tipo] || 'Atividade') + (x.v.ticket ? ' ' + x.v.ticket : '')) + ' · ' : ''}${esc(x.si.txt)}${x.d != null ? ` · a ${fDist(x.d)} do local` : ''} · ${x.fila ? x.fila + ' na fila' : 'fila vazia'}</span></span>${tag}</button>`; }).join('')}</div><span class="muted small">Ao salvar, a atividade entra na fila de execução do técnico escolhido. Se ele estiver ocupado, ela fica aguardando e o alarme toca quando terminar a atual.</span></div>`;
+    return `<button type="button" class="item" data-pick="${x.t.uid}" aria-pressed="${a.tecnicoUid === x.t.uid}" style="border:2px solid ${cor};border-radius:8px;padding:10px 12px;${x.si.cls === 'ok' || x.ativo ? '' : 'opacity:.75'}"><span class="badge" style="background:${x.livre ? 'var(--ok)' : x.longa ? '#d9a400' : 'var(--accent-soft)'};color:${x.livre || x.longa ? '#fff' : 'var(--accent)'}">${esc(iniciais(x.t.nome))}</span><span class="tx"><b>${esc(x.t.nome)}</b><span style="white-space:normal">${x.ativo ? esc((TIPOLB[x.v.tipo] || 'Atividade') + (x.v.ticket ? ' ' + x.v.ticket : '')) + ' · ' : ''}${esc(x.si.txt)}${x.r ? ` · 🚗 ${fRota(x.r)} até o local` : x.d != null ? ` · ~${fDist(x.d)} do local (linha reta)` : ''} · ${x.fila ? x.fila + ' na fila' : 'fila vazia'}</span></span>${tag}</button>`; }).join('')}</div><span class="muted small">Ao salvar, a atividade entra na fila de execução do técnico escolhido. Se ele estiver ocupado, ela fica aguardando e o alarme toca quando terminar a atual.</span></div>`;
 }
 function sugereTecnico(a) {
   const agora = Date.now(); const vivo = S.vivo || new Map();
@@ -3188,6 +3347,9 @@ function viewAdmAtv(a) {
     ${a.cliente && a.cliente !== 'Claro' ? `<div class="okbox small"><b>Chamado ${esc(a.cliente)}${a.tsk ? ' · ' + esc(a.tsk) : ''}</b>${a.trecho ? ' · trecho ' + esc(a.trecho) : ''}${a.designacao ? ' · ' + esc(a.designacao) : ''}${a.equipamento ? ' · ' + esc(a.equipamento) : ''}${a.dataAcionamento ? ' · falha em ' + esc(a.dataAcionamento) : ''}</div>` : ''}
     ${a.cliente === 'Claro' ? `<div class="okbox small"><b>Corretiva Claro${a.programada ? ' · programada' : a.emergencial === false ? '' : ' · emergencial'}</b>${a.node ? ' · Node ' + esc(a.node) : ''}${a.rede ? ' · ' + esc(a.rede) : ''}${a.solicitante ? ' · solicitante ' + esc(a.solicitante) : ''}${a.dataAcionamento ? ' · acionado em ' + esc(a.dataAcionamento) : ''}</div>` : ''}
     ${(a.atualizacoes || []).length ? `<details class="card" style="background:var(--surface-2);box-shadow:none;border:1px solid var(--line);padding:12px" open><summary style="cursor:pointer;font-weight:600">Atualizações do técnico (${a.atualizacoes.length})</summary><div class="list">${a.atualizacoes.slice().reverse().map(u => `<div class="item" style="cursor:default"><span class="badge" style="width:auto;padding:0 8px;border-radius:6px">${fHora(u.ts)}</span><span class="tx"><b>${esc(SIT_OS[u.sit] || (u.sit === 'recebida' ? '✅ O.S. recebida' : u.sit) || '')}${u.prev ? ' · previsão ' + esc(u.prev) : ''}</b><span style="white-space:normal">${esc(u.txt || '')} · ${fData(u.ts).slice(0, 5)} · ${esc(u.por || '')}</span></span></div>`).join('')}</div></details>` : ''}
+    ${anexosEditHtml(a)}
+    ${!novo && (a.status === 'em_deslocamento' || a.status === 'no_local') ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn go" data-upcobra2="${a.id}">Cobrar atualização do técnico</button><span class="muted small">${a.ultAtualiz ? 'Última atualização ' + fHora(a.ultAtualiz) : 'Ainda sem atualização'}${a.cobrarAtualizEm && a.cobrarAtualizEm > (a.ultAtualiz || 0) ? ' · cobrada às ' + fHora(a.cobrarAtualizEm) : ''}</span></div>` : ''}
+    <div class="field"><label class="lb" for="at_agenda">Agendada para</label><input type="date" id="at_agenda" data-atf="agendaDia" value="${esc(a.agendaDia || isoDate(Date.now()))}"><span class="muted small">O alarme do técnico só toca nesse dia.${(a.remanejos || []).length ? ' Remanejada: ' + a.remanejos.map(x => `${fDM(x.de).slice(0, 5)}→${fDM(x.para).slice(0, 5)} (${esc(x.por || '')}${x.pedidoPor ? ', pedido de ' + esc(x.pedidoPor) : ''})`).join(', ') : ''}</span></div>
     <div class="field"><label class="lb" for="at_centro">Centro de custo / faturamento</label><select id="at_centro" data-atf="centro"><option value="">Não definido</option>${Object.entries(CENTROS).map(([k, l]) => `<option value="${k}" ${a.centro === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="seg" role="group" aria-label="Tipo"><button type="button" data-attipo="emergencial" aria-pressed="${em}">Emergencial</button><button type="button" data-attipo="preventiva" aria-pressed="${a.tipo === 'preventiva'}">Preventiva</button><button type="button" data-attipo="implantacao" aria-pressed="${a.tipo === 'implantacao'}">Implantação</button></div>
     ${a.tipo === 'implantacao' ? `<div class="grid2"><div class="field"><label class="lb" for="at_serv">Serviço</label><select id="at_serv" data-atf="servico">${Object.entries(IMPL_SERV).map(([k, l]) => `<option value="${k}" ${(a.servico || 'roteamento') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div><div class="field"><label class="lb" for="at_des">Designação</label><input type="text" id="at_des" data-atf="designacao" value="${esc(a.designacao || '')}" autocapitalize="characters"></div>
@@ -3197,12 +3359,12 @@ function viewAdmAtv(a) {
     ${em ? `<div class="field"><label class="lb" for="at_ocorr">Ocorrência</label><select id="at_ocorr" data-atf="ocorrencia"><option value="">Selecione…</option>${[...OCORR, ...(a.ocorrencia && !OCORR.includes(a.ocorrencia) ? [a.ocorrencia] : [])].map(o => `<option ${a.ocorrencia === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>` : '<div></div>'}</div>
     <div class="field"><label class="lb" for="at_rota">Rota do cabo</label><select id="at_rota">${rotaOpts(a.rotaId, 'Sem rota')}</select></div>
     ${rt ? `<div class="field">${refRotaHtml(rt, a.refSentido, a.refKm, 'at')}</div>` : `<div class="field"><span class="lb">Referência (opcional)</span><div class="row" style="flex-wrap:nowrap;gap:8px;align-items:center"><input type="text" inputmode="decimal" id="at_refKm" data-atf="refKm" value="${esc(a.refKm)}" placeholder="km" style="width:84px;text-align:right" aria-label="km"><span style="font-weight:600;white-space:nowrap">km de</span><input type="text" id="at_cidade" data-atf="refLocal" value="${esc(a.refLocal)}" placeholder="Cidade" style="flex:1;min-width:0" aria-label="Cidade"></div></div>`}
-    <div class="field"><label class="lb" for="at_end">Endereço</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="at_end" data-atf="endereco" value="${esc(a.endereco)}" placeholder="Rua, nº, cidade" style="flex:1;min-width:0"><button type="button" class="btn" id="bAtGeo" style="min-height:48px;flex:0 0 auto">Achar no mapa</button></div></div>
+    <div class="field"><label class="lb" for="at_end">Endereço</label><div class="row" style="flex-wrap:nowrap"><input type="text" id="at_end" data-atf="endereco" value="${esc(a.endereco)}" placeholder="Rua, nº, cidade" style="flex:1;min-width:0"><button type="button" class="btn" id="bAtGeo" style="min-height:48px;flex:0 0 auto">Achar no mapa</button></div>${geoInfoHtml(a)}</div>
     <div class="field"><label class="lb" for="at_loc">Localização do Google Maps</label><input type="text" id="at_loc" value="${esc(a.mapsUrl || (a.lat != null ? a.lat + ', ' + a.lon : ''))}" placeholder="Cole o link do Google Maps ou as coordenadas"><span class="muted small" id="atLocInfo">${esc(locTxt)} Você também pode tocar no mapa.</span></div>
     <div class="map" id="mapAtv" style="height:260px" role="img" aria-label="Mapa para marcar o local"></div>
     <div class="field"><label class="lb" for="at_desc">Descrição</label><textarea id="at_desc" data-atf="descricao" placeholder="O que o técnico precisa saber" style="min-height:72px">${esc(a.descricao)}</textarea></div>
     ${tecPickerHtml(a)}
-    <div class="field"><label class="lb" for="at_tec">Técnico</label>${a._sug ? `<span class="small" style="color:var(--ok);font-weight:600">${esc(a._sug)}</span>` : ''}<select id="at_tec">${tecOptsAtv(a)}</select><span class="muted small" id="atDistInfo">${a.lat != null ? 'Distância em linha reta da posição atual (GPS) de cada técnico até a O.S.' : 'Marque o local da O.S. para ver a distância de cada técnico.'}</span>${a.distVista != null ? `<span class="small">Ao confirmar o recebimento, o técnico estava a <b>${fDist(a.distVista)}</b> do local.</span>` : ''}</div>
+    <div class="field"><label class="lb" for="at_tec">Técnico</label>${a._sug ? `<span class="small" style="color:var(--ok);font-weight:600">${esc(a._sug)}</span>` : ''}<select id="at_tec">${tecOptsAtv(a)}</select><span class="muted small" id="atDistInfo">${a.lat != null ? 'Distância e tempo pelo trajeto de carro, da posição atual (GPS) de cada técnico até a O.S.' : 'Marque o local da O.S. para ver a distância de cada técnico.'}</span>${a.distVista != null ? `<span class="small">Ao confirmar o recebimento, o técnico estava a <b>${a.tempoVista != null ? fRota({ m: a.distVista, s: a.tempoVista }) : fDist(a.distVista) + ' (linha reta)'}</b> do local.</span>` : ''}</div>
     <div class="field"><span class="lb">Equipe de apoio <span class="muted small" style="font-weight:400">(opcional · recebem a O.S. com alarme; a produção fica com o técnico principal)</span></span><div class="chips" id="atApoio" role="group" aria-label="Equipe de apoio" style="flex-wrap:wrap">${(S.adm.tecnicos || []).filter(t => t.uid !== a.tecnicoUid).map(t => { const si = situacaoTec(t.uid); const on = (a.apoioUids || []).includes(t.uid); const st = (a.apoioSt || {})[t.uid]; return `<button type="button" data-apoio="${t.uid}" aria-checked="${on}" title="${esc(si.txt)}">${on ? ICON.check : ''}${esc(t.nome)}${on && st ? ` · ${esc(ATV_ST[st] || st)}` : ''}</button>`; }).join('') || '<span class="muted small">Cadastre mais técnicos para usar o apoio.</span>'}</div></div>
     ${a.status === 'concluida' || a.status === 'cancelada' ? '' : `<button type="button" class="btn pri block" id="bAtSalvar">${ICON.check}${novo ? 'Salvar e enviar ao técnico' : 'Salvar alterações'}</button>`}
     ${!novo && (a.log || 0) >= 4 ? `<button type="button" class="btn block" id="bAtEsc" style="border-color:var(--st-nc);color:var(--st-nc)">Escalonar ao gerente (WhatsApp)</button>` : ''}
@@ -3212,6 +3374,7 @@ function viewAdmAtv(a) {
 function afterAdmAtv() {
   const a = S.atvEdit; const re = () => { const y = window.scrollY; render(); window.scrollTo(0, y); };
   $$('[data-atf]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { a[el.dataset.atf] = el.value; }));
+  bindAnexos(a, () => { const y = window.scrollY; render(); window.scrollTo(0, y); });
   $$('[data-attipo]').forEach(b => b.onclick = () => { a.tipo = b.dataset.attipo; if (a.tipo === 'implantacao' && !a.servico) a.servico = 'roteamento'; re(); });
   $('#at_rota').onchange = e => { a.rotaId = e.target.value; a.refSentido = ''; re(); };
   $$('[data-atsent]').forEach(b => b.onclick = () => { a.refSentido = b.dataset.atsent; re(); });
@@ -3220,19 +3383,20 @@ function afterAdmAtv() {
   const pintaApoio = () => { a.apoioUids = (a.apoioUids || []).filter(u => u !== a.tecnicoUid); a.apoioNomes = a.apoioUids.map(u => (S.adm.tecnicos.find(t => t.uid === u) || {}).nome || '').filter(Boolean); const y = window.scrollY; render(); window.scrollTo(0, y); };
   $$('[data-apoio]').forEach(b => b.onclick = () => { const u = b.dataset.apoio; a.apoioUids = (a.apoioUids || []).includes(u) ? a.apoioUids.filter(x => x !== u) : [...(a.apoioUids || []), u]; pintaApoio(); });
   $('#at_tec').onchange = e => { a.tecnicoUid = e.target.value; { const t0 = S.adm.tecnicos.find(x => x.uid === a.tecnicoUid); a.tecnicoNome = t0 ? t0.nome : ''; } if ((a.apoioUids || []).includes(a.tecnicoUid)) { pintaApoio(); return; } $$('[data-pick]').forEach(x => x.setAttribute('aria-pressed', x.dataset.pick === a.tecnicoUid)); const t = S.adm.tecnicos.find(x => x.uid === a.tecnicoUid); a.tecnicoNome = t ? t.nome : ''; };
-  let mk = null; const marca = (lat, lon, zoom) => { a.lat = lat; a.lon = lon; { const sel = $('#at_tec'); if (sel) { const v = sel.value; sel.innerHTML = tecOptsAtv({ ...a, tecnicoUid: v }); sel.value = v; } const inf = $('#atDistInfo'); if (inf) inf.textContent = 'Distância em linha reta da posição atual (GPS) de cada técnico até a O.S.'; } if (S.mapAtv) { if (mk) mk.setLatLng([lat, lon]); else mk = L.marker([lat, lon], { icon: L.divIcon({ className: '', html: '<div class="mk" style="background:#c2311d">!</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(S.mapAtv); S.mapAtv.setView([lat, lon], zoom || Math.max(S.mapAtv.getZoom(), 15)); } $('#atLocInfo').textContent = `Ponto definido: ${lat.toFixed(5)}, ${lon.toFixed(5)}`; };
-  if (window.L && $('#mapAtv')) { S.mapAtv = L.map('mapAtv'); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(S.mapAtv); S.mapAtv.setView([-22.6, -45.6], 8); if (a.lat != null) marca(a.lat, a.lon, 15); S.mapAtv.on('click', ev => { marca(ev.latlng.lat, ev.latlng.lng); a.mapsUrl = ''; $('#at_loc').value = `${ev.latlng.lat.toFixed(6)}, ${ev.latlng.lng.toFixed(6)}`; }); }
-  $('#at_loc').addEventListener('input', e => { const p = parseLoc(e.target.value); if (p && p.lat != null) { a.mapsUrl = /^https?:/i.test(e.target.value.trim()) ? e.target.value.trim() : ''; marca(p.lat, p.lon, 16); } else if (p && p.url) { a.mapsUrl = p.url; a.lat = null; a.lon = null; $('#atLocInfo').textContent = 'Link do Google guardado: o técnico abre direto no GPS. (Link curto não mostra o ponto aqui no mapa.)'; } else if (!e.target.value.trim()) { a.mapsUrl = ''; } });
+  let mk = null; const marca = (lat, lon, zoom, manual) => { a.lat = lat; a.lon = lon; if (manual) a.geo = { manual: true, em: Date.now() }; { const sel = $('#at_tec'); if (sel) { const v = sel.value; sel.innerHTML = tecOptsAtv({ ...a, tecnicoUid: v }); sel.value = v; } const inf = $('#atDistInfo'); if (inf) inf.textContent = 'Distância e tempo pelo trajeto de carro, da posição atual (GPS) de cada técnico até a O.S.'; } if (S.mapAtv) { if (mk) mk.setLatLng([lat, lon]); else mk = L.marker([lat, lon], { icon: L.divIcon({ className: '', html: '<div class="mk" style="background:#c2311d">!</div>', iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(S.mapAtv); S.mapAtv.setView([lat, lon], zoom || Math.max(S.mapAtv.getZoom(), 15)); } $('#atLocInfo').textContent = `Ponto definido: ${lat.toFixed(5)}, ${lon.toFixed(5)}`; };
+  if (window.L && $('#mapAtv')) { S.mapAtv = L.map('mapAtv'); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(S.mapAtv); S.mapAtv.setView([-22.6, -45.6], 8); if (a.lat != null) marca(a.lat, a.lon, 15); S.mapAtv.on('click', ev => { marca(ev.latlng.lat, ev.latlng.lng, undefined, true); a.mapsUrl = ''; $('#at_loc').value = `${ev.latlng.lat.toFixed(6)}, ${ev.latlng.lng.toFixed(6)}`; }); }
+  $('#at_loc').addEventListener('input', e => { const p = parseLoc(e.target.value); if (p && p.lat != null) { a.mapsUrl = /^https?:/i.test(e.target.value.trim()) ? e.target.value.trim() : ''; marca(p.lat, p.lon, 16, true); } else if (p && p.url) { a.mapsUrl = p.url; a.lat = null; a.lon = null; $('#atLocInfo').textContent = 'Link do Google guardado: o técnico abre direto no GPS. (Link curto não mostra o ponto aqui no mapa.)'; } else if (!e.target.value.trim()) { a.mapsUrl = ''; } });
   $('#bAtLer') && ($('#bAtLer').onclick = async () => {
     const txt = $('#atTxt').value; const p = lerAcionamento(txt);
     if (!p.ok) { toast('Não reconheci o texto. Acionamento Claro precisa de ENDEREÇO e ORIUNDO DO EVENTO; chamado de parceiro precisa do número do chamado e do trecho ou designação.', 7000); return; }
     Object.assign(a, p.atividade, { _txt: txt, _colar: false, tipo: 'emergencial' }); const bt = $('#bAtLer'); bt.disabled = true; bt.textContent = 'Localizando o endereço…';
-    if (a.endereco) { try { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(a.endereco + ', SP')}`, { headers: { 'Accept-Language': 'pt-BR' } }); const j = await r.json(); if (j.length) { a.lat = +j[0].lat; a.lon = +j[0].lon; } } catch (e) {} }
+    if (a.endereco) { bt.textContent = 'Validando o endereço…'; aplicaGeo(a, await geocodifica(a.endereco)); }
     a._sug = 'Escolha o técnico abaixo: em verde quem está sem atividade, em amarelo quem está há muito tempo na mesma atividade.';
-    toast(`Acionamento lido: ${a.ticket || 'sem evento'}${a.lat != null ? ' · endereço localizado' : ' · endereço não localizado: marque no mapa'}. Agora escolha o técnico.`, 6000); re();
+    toast(`Acionamento lido: ${a.ticket || 'sem evento'}${a.geo && (a.geo.fonte === 'google' || a.geo.fonte === 'geoapify') && a.geo.preciso ? ' · endereço validado' : a.lat != null ? ' · endereço aproximado: confira no mapa' : ' · endereço não localizado: marque no mapa'}. Agora escolha o técnico.`, 6000); re();
     setTimeout(() => { const pk = $('#tecPicker'); if (pk) pk.scrollIntoView({ block: 'center' }); }, 150);
   });
-  $('#bAtGeo').onclick = async () => { const q = (a.endereco || '').trim(); if (!q) { toast('Digite o endereço.'); return; } try { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(q)}`, { headers: { 'Accept-Language': 'pt-BR' } }); const j = await r.json(); if (!j.length) { toast('Endereço não encontrado. Marque no mapa ou cole o link do Google.'); return; } marca(+j[0].lat, +j[0].lon, 16); } catch (e) { toast('Sem conexão para buscar o endereço.'); } };
+  $('#bAtGeo').onclick = async () => { const q = (a.endereco || '').trim(); if (!q) { toast('Digite o endereço.'); return; } const b = $('#bAtGeo'); b.disabled = true; b.textContent = 'Validando…'; const g = await geocodifica(q); b.disabled = false; b.textContent = 'Achar no mapa'; if (!g) { toast('Sem conexão para buscar o endereço.'); return; } aplicaGeo(a, g); if (g.naoAchou) { toast('Endereço não encontrado. Marque no mapa ou cole o link do Google.', 6000); re(); return; } marca(g.lat, g.lon, 16); re(); };
+  $$('[data-geoalt]').forEach(b => b.onclick = () => { const c = a.geo.alternativas[+b.dataset.geoalt]; if (!c) return; a.lat = c.lat; a.lon = c.lon; a.geo = { ...a.geo, formatado: c.formatado, preciso: c.tipo === 'ROOFTOP' || c.tipo === 'RANGE_INTERPOLATED', alternativas: [] }; re(); });
   $('#bAtSalvar') && ($('#bAtSalvar').onclick = async () => {
     const bt = $('#bAtSalvar'); bt.disabled = true;
     try {
@@ -3241,6 +3405,10 @@ function afterAdmAtv() {
       if (!a.rotaId && !a.endereco && a.lat == null && !a.mapsUrl && !a.refLocal) { toast('Informe a rota, o endereço ou a localização.'); bt.disabled = false; return; }
       const novo = a._novo; delete a._novo; const ant = novo ? null : S.atvsAdm.get(a.id);
       if (!novo && ant && ant.tecnicoUid !== a.tecnicoUid) { a.status = 'pendente'; a.recebidaEm = null; a.vistaEm = null; }
+      if (!novo && ant && (a.status === 'pendente' || a.status === 'recebida') && agendaDe(ant) !== agendaDe(a)) {
+        if (!confirm(`Remanejar a O.S. ${a.ticket} de ${fDiaCurto(agendaDe(ant))} para ${fDiaCurto(agendaDe(a))}?`) || !confirm(`Confirma de novo: a O.S. passa para ${fDiaCurto(agendaDe(a))}.`)) { bt.disabled = false; return; }
+        a.remanejos = [...(ant.remanejos || []), { de: agendaDe(ant), para: agendaDe(a), por: (Nuvem.admin && Nuvem.admin.nome) || 'Supervisor', em: Date.now() }].slice(-20);
+      }
       a.criadoPorNome = a.criadoPorNome || (Nuvem.admin && Nuvem.admin.nome) || ''; if (novo) { a.criado = Date.now(); a.origem = 'supervisor'; a.status = 'pendente'; }
       const r = novo ? await Nuvem.atvCriar(a) : await Nuvem.atvSalvar(a);
       if (r) S.atvsAdm.set(r.id, r); Nuvem.avisaFuncao();
@@ -3405,13 +3573,13 @@ const Nuvem = {
   async sdk() {
     if (this.sb) return this.sb;
     if (!window.supabase || !window.supabase.createClient) await carregaScript('supabase.min.js');
-    this.sb = window.supabase.createClient(window.SUPABASE_URL.replace(/\/+$/, ''), window.SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: ADMIN ? 'rb-supervisor' : 'rb-tecnico' } });
+    this.sb = window.supabase.createClient(window.SUPABASE_URL.replace(/\/+$/, ''), window.SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: NOC ? 'rb-noc' : ADMIN ? 'rb-supervisor' : 'rb-tecnico' } });
     return this.sb;
   },
   ok(r) { if (r && r.error) throw new Error(r.error.message || String(r.error)); return r ? r.data : null; },
   tab(n) { return this.sb.from(n); },
   async todos(fn) { const out = []; for (let i = 0; ; i += 1000) { const d = this.ok(await fn().range(i, i + 999)); out.push(...(d || [])); if (!d || d.length < 1000) break; } return out; },
-  async euAdmin(uid) { let r = await this.tab('admins').select('nome, org, papel').eq('uid', uid).eq('org', this.org()).maybeSingle(); if (r && r.error) r = await this.tab('admins').select('nome, org').eq('uid', uid).eq('org', this.org()).maybeSingle(); let d = this.ok(r); if (d && !d.papel) d.papel = 'supervisor'; if (!d && ACION) { try { const x = this.ok(await this.tab('despachantes').select('nome, org').eq('uid', uid).eq('org', this.org()).maybeSingle()); if (x) d = { ...x, papel: 'despacho' }; } catch (e) {} } return d; },
+  async euAdmin(uid) { let r = await this.tab('admins').select('nome, org, papel').eq('uid', uid).eq('org', this.org()).maybeSingle(); if (r && r.error) r = await this.tab('admins').select('nome, org').eq('uid', uid).eq('org', this.org()).maybeSingle(); let d = this.ok(r); if (d && !d.papel) d.papel = 'supervisor'; if (!d && NOC) { try { const x = this.ok(await this.tab('noc').select('nome, org').eq('uid', uid).eq('org', this.org()).maybeSingle()); if (x) d = { ...x, papel: 'noc' }; } catch (e) {} } if (!d && ACION) { try { const x = this.ok(await this.tab('despachantes').select('nome, org').eq('uid', uid).eq('org', this.org()).maybeSingle()); if (x) d = { ...x, papel: 'despacho' }; } catch (e) {} } return d; },
   async medTodas() {
     const m = new Map(); const A = S.adm || {};
     try { const c0 = cicloDe(diaIni(A.de || isoDate(Date.now())) + 43200000)[0], c1 = cicloDe(diaIni(A.ate || isoDate(Date.now())) + 43200000)[0];
@@ -3434,7 +3602,7 @@ const Nuvem = {
     if (r.error) { const e = new Error(r.error.message); e.code = /invalid/i.test(r.error.message) ? 'auth/invalid-credential' : r.error.code; throw e; }
     this.user = r.data.user;
     const ad = await this.euAdmin(this.user.id);
-    if (!ad) { await this.sb.auth.signOut(); this.user = null; throw new Error(ACION ? 'Este usuário não tem acesso aos acionamentos.' : 'Este usuário não está cadastrado como supervisor.'); }
+    if (!ad) { await this.sb.auth.signOut(); this.user = null; throw new Error(ACION ? 'Este usuário não tem acesso aos acionamentos.' : NOC ? 'Este usuário não está cadastrado no NOC.' : 'Este usuário não está cadastrado como supervisor.'); }
     this.on = true; this.admin = ad; this.set('ok', 'Supervisor conectado'); return ad;
   },
   async sessaoAdmin() {
@@ -3452,7 +3620,7 @@ const Nuvem = {
       this.todos(() => this.tab('rotas').select('dados').eq('org', org)),
       this.todos(() => { let q = this.tab('rondas').select('dados').eq('org', org).gte('inicio', a).lte('inicio', b); if (tec) q = q.eq('uid', tec); return q.order('inicio'); }),
       this.todos(() => { let q = this.tab('eventos').select('dados').eq('org', org).gte('chegada', a).lte('chegada', b); if (tec) q = q.eq('uid', tec); return q.order('chegada'); })]);
-    S.adm.tecnicos = tecs.map(t => ({ uid: t.uid, nome: (t.dados || {}).nome || (t.dados || {})._tecnico || '(sem nome)', matricula: (t.dados || {}).matricula || '', equipe: (t.dados || {}).equipe || '', funcao: (t.dados || {}).funcao || 'tecnico' })).sort((x, y) => x.nome.localeCompare(y.nome));
+    S.adm.tecnicos = tecs.map(t => ({ uid: t.uid, nome: (t.dados || {}).nome || (t.dados || {})._tecnico || '(sem nome)', matricula: (t.dados || {}).matricula || '', equipe: (t.dados || {}).equipe || '', funcao: (t.dados || {}).funcao || 'tecnico', fone: (t.dados || {}).fone || '', placa: (t.dados || {}).placa || (t.dados || {}).veiculoTxt || '', regiao: (t.dados || {}).regiao || '', classe: (t.dados || {}).classe || '' })).sort((x, y) => x.nome.localeCompare(y.nome));
     rotas.forEach(r => { const rt = { ...r.dados }; if (!rt.kml) delete rt.kml; M.rotas.set(rt.id, rt); });
     rondas.forEach(r => { const v = { ...r.dados }; v.pontos = v.pontos || []; M.rondas.set(v.id, v); });
     const idsR = new Set(M.rondas.keys());
@@ -3592,6 +3760,17 @@ const Nuvem = {
   async projLancLista() { return (await this.todos(() => this.tab('proj_lanc').select('*').eq('org', this.org()).order('data'))).map(l => ({ ...l, valor: +l.valor })); },
   async projLancSalvar(l) { this.ok(await this.tab('proj_lanc').upsert(l)); },
   async projLancApagar(id) { this.ok(await this.tab('proj_lanc').delete().eq('id', id)); },
+  async pedCriar(p) { this.ok(await this.tab('pedidos').insert(p)); },
+  async pedMeus() { return this.ok(await this.tab('pedidos').select('*').eq('tecnico_uid', this.user.id).gte('criado', Date.now() - 7 * 86400000)) || []; },
+  async pedAbertos() { return this.ok(await this.tab('pedidos').select('*').eq('org', this.org()).eq('status', 'pedido').order('criado')) || []; },
+  async pedDecidir(id, status, obs) { const a = this.admin || {}; this.ok(await this.tab('pedidos').update({ status, obs: obs || null, decidido_por: (a.papel === 'noc' ? 'NOC · ' : '') + (a.nome || 'Gestor'), decidido_em: Date.now() }).eq('id', id)); },
+  async pedNoc() { return this.ok(await this.tab('pedidos').select('*').eq('org', this.org()).eq('tipo', 'liberar_corretiva').gte('criado', Date.now() - 36 * 3600000).order('criado', { ascending: false })) || []; },
+  async msgCriar(m) { this.ok(await this.tab('ped_msgs').insert(m)); },
+  async msgsMeus() { return this.ok(await this.tab('ped_msgs').select('*').eq('tecnico_uid', this.user.id).gte('criado', Date.now() - 3 * 86400000).order('criado')) || []; },
+  async msgsOrg() { return this.ok(await this.tab('ped_msgs').select('*').eq('org', this.org()).gte('criado', Date.now() - 36 * 3600000).order('criado')) || []; },
+  async recursosLista() { return this.ok(await this.tab('recursos').select('*').eq('org', this.org())) || []; },
+  async recursoSalvar(r) { this.ok(await this.tab('recursos').upsert(r)); },
+  async meuRecurso() { return this.ok(await this.tab('recursos').select('*').eq('uid', this.user.id).maybeSingle()); },
   async movApagar(id) { this.ok(await this.tab('mat_mov').delete().eq('id', id)); },
   async movRevincular(deId, m) { this.ok(await this.tab('mat_mov').update({ material_id: m.id, descricao: m.descricao, unidade: m.unidade }).eq('org', this.org()).eq('material_id', deId)); },
   async abastAdmin(a, b) { try { return (await this.todos(() => this.tab('abastecimentos').select('*').eq('org', this.org()).gte('ts', a - 40 * 86400000).lte('ts', b))).map(r => ({ ...(r.dados || {}), id: r.id, uid: r.uid, ts: +r.ts })); } catch (e) { return []; } },
@@ -3631,7 +3810,7 @@ const Nuvem = {
   },
   async assinarPush() {
     try {
-      if (ACION || !this.on || !window.VAPID_PUBLIC || !('PushManager' in window) || !('serviceWorker' in navigator) || Notification.permission !== 'granted') return false;
+      if (RESTRITO || !this.on || !window.VAPID_PUBLIC || !('PushManager' in window) || !('serviceWorker' in navigator) || Notification.permission !== 'granted') return false;
       const reg = await navigator.serviceWorker.ready; const chave = Uint8Array.from(atob(window.VAPID_PUBLIC.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - window.VAPID_PUBLIC.length % 4) % 4)), c => c.charCodeAt(0));
       let sub = await reg.pushManager.getSubscription(); if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chave });
       const j = sub.toJSON(); this.ok(await this.tab('push_subs').upsert({ endpoint: j.endpoint, org: this.org(), uid: this.user.id, sub: j, atualizado: Date.now() })); this.pushOk = true; return true;
@@ -3645,7 +3824,7 @@ const Nuvem = {
   async iniciaAtv() {
     const sync = async inicial => { try { const l = await this.atvMinhas(); const ids = new Set(l.map(a => a.id)); for (const a of l) await recebeAtv(a, inicial); for (const a of [...S.atvs.values()]) if (a.origem !== 'tecnico' && !ids.has(a.id) && !(S.ronda && S.ronda.atividadeId === a.id) && !(await DB.get('fila', 'atv:atv:' + a.id))) { await esqueceAtv(a.id); } Alarme.revisa(); if (S.view === 'home') render(); } catch (e) { console.warn(e); } };
     await sync(true); this.ouvirAtv((tipo, a) => recebeAtv(a)); setInterval(() => sync(false), 60000);
-    this.assinarPush(); this.plantoesMeus(); this.matCatalogo().then(l => DB.putRaw('meta', { id: 'matCat', lista: l })).catch(() => {}); this.metasLer().then(m => { S.metas = m; DB.putRaw('meta', { id: 'metas', m }); }); this.canal('pla', 'plantoes', () => this.plantoesMeus(), null, 'uid=eq.' + this.user.id); setInterval(() => this.plantoesMeus(), 600000);
+    this.assinarPush(); this.plantoesMeus(); this.meuRecurso().then(r => { if (!r) return; S.recurso = r; DB.putRaw('meta', { id: 'recurso', r }); let mud = false; if (r.regiao && S.perfil.regiao !== r.regiao) { S.perfil.regiao = r.regiao; mud = true; } if (r.classe && S.perfil.classe !== r.classe) { S.perfil.classe = r.classe; mud = true; } if (mud) DB.put('meta', S.perfil); }).catch(() => {}); this.pedMeus().then(l => { l.forEach(p => { if (p.tipo === 'remanejar') { S.pedRem = S.pedRem || new Map(); S.pedRem.set(p.ref_id, p); } else Lib.guarda(p); }); if (S.view === 'home') render(); }).catch(() => {}); this.canal('ped', 'pedidos', (t, row) => aoPedidoTec(row), null, 'tecnico_uid=eq.' + this.user.id); this.msgsMeus().then(l => { l.forEach(guardaMsg); }).catch(() => {}); this.canal('pmsg', 'ped_msgs', (t, row) => { if (!row || !row.id) return; const novo = !(S.pedMsgs.get(row.pedido_id) || []).some(x => x.id === row.id); guardaMsg(row); if (novo && row.papel !== 'tecnico') { toast(`${PAPEL_LB[row.papel] || ''} ${row.autor_nome || ''}: ${row.texto}`, 8000); try { navigator.vibrate && navigator.vibrate(200); } catch (e) {} } if (S.view === 'home' || S.view === 'insp') { const y = window.scrollY; render(); window.scrollTo(0, y); } }, null, 'tecnico_uid=eq.' + this.user.id); this.matCatalogo().then(l => DB.putRaw('meta', { id: 'matCat', lista: l })).catch(() => {}); this.metasLer().then(m => { S.metas = m; DB.putRaw('meta', { id: 'metas', m }); }); this.canal('pla', 'plantoes', () => this.plantoesMeus(), null, 'uid=eq.' + this.user.id); setInterval(() => this.plantoesMeus(), 600000);
   },
   async vivoInicial() { return (this.ok(await this.tab('aovivo').select('uid, dados').eq('org', this.org())) || []).map(r => ({ ...r.dados, _uid: r.uid })); },
   ouvirAoVivo(cb, err) {
@@ -3659,7 +3838,7 @@ async function eventosHistorico() { const meus = await DB.all('inspecoes'); cons
 /* ============================ painel do supervisor ============================ */
 function viewAdmLogin() {
   if (!Nuvem.ativo()) return `<section class="card"><h2>Painel do supervisor</h2><div class="warnbox">O painel usa a nuvem (Supabase). Configure o arquivo <b>supabase-config.js</b> (veja o guia SUPABASE.md) e cadastre seu usuário como supervisor.</div></section>`;
-  return `<section class="card" style="max-width:420px;margin:0 auto;width:100%"><h2>${ACION ? 'Acionamentos Claro' : 'Painel do supervisor'}</h2><p class="muted small" style="margin:0">${ACION ? 'Cole o texto do acionamento da Claro e encaminhe ao técnico ou ao backlog.' : 'Acesso restrito. Desvios de rota, velocidade, odômetro e relatórios de vários dias.'}</p>
+  return `<section class="card" style="max-width:420px;margin:0 auto;width:100%"><h2>${ACION ? 'Acionamentos Claro' : NOC ? 'NOC · validação e liberação' : 'Painel do supervisor'}</h2><p class="muted small" style="margin:0">${ACION ? 'Cole o texto do acionamento da Claro e encaminhe ao técnico ou ao backlog.' : 'Acesso restrito. Desvios de rota, velocidade, odômetro e relatórios de vários dias.'}</p>
     <form id="fLogin" class="grid2"><div class="field full"><label class="lb" for="admEmail">E-mail</label><input type="text" id="admEmail" autocomplete="username" inputmode="email"></div>
     <div class="field full"><label class="lb" for="admSenha">Senha</label><input type="password" id="admSenha" autocomplete="current-password" style="min-height:48px;border:1.5px solid var(--line-strong);border-radius:var(--r);padding:10px 12px;font-size:16px;background:var(--surface)"></div>
     <button type="submit" class="btn pri block field full" id="bAdmEntrar">Entrar</button></form><div id="admErro"></div></section>`;
@@ -3667,7 +3846,7 @@ function viewAdmLogin() {
 function afterAdmLogin() {
   const f = $('#fLogin'); if (!f) return;
   f.addEventListener('submit', async e => { e.preventDefault(); const bt = $('#bAdmEntrar'); bt.disabled = true; bt.textContent = 'Entrando…'; $('#admErro').innerHTML = '';
-    try { await Nuvem.loginAdmin($('#admEmail').value.trim(), $('#admSenha').value); if (ACION) { await acionCarregar(); go('acion'); return; } admPeriodoPapel(); await admCarregar(); go(admInicio()); }
+    try { await Nuvem.loginAdmin($('#admEmail').value.trim(), $('#admSenha').value); if (NOC) { go('noc'); return; } if (ACION) { await acionCarregar(); go('acion'); return; } admPeriodoPapel(); await admCarregar(); go(admInicio()); }
     catch (err) { $('#admErro').innerHTML = `<div class="warnbox" style="border-color:var(--bad);background:var(--bad-soft)">${esc(err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' ? 'E-mail ou senha incorretos.' : err.message)}</div>`; bt.disabled = false; bt.textContent = 'Entrar'; } });
 }
 /* ---------- importar O.S. pendentes em lote (planilha) ---------- */
@@ -3740,7 +3919,7 @@ async function afterAdmLote() {
     const loteId = 'IMP-' + new Date().toISOString().slice(0, 16).replace(/\D/g, ''); const quem = (Nuvem.admin && Nuvem.admin.nome) || ''; let ok = 0, erro = 0; const erros = [];
     for (let k = 0; k < lista.length; k++) {
       const x = lista[k]; prog.innerHTML = `<p class="muted">Inserindo ${k + 1} de ${lista.length}…</p>`;
-      if (L.geo && x.endereco && x.lat == null) { try { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(x.endereco)}`, { headers: { 'Accept-Language': 'pt-BR' } }); const j = await r.json(); if (j.length) { x.lat = +j[0].lat; x.lon = +j[0].lon; } } catch (e) {} await new Promise(r => setTimeout(r, 1100)); }
+      if (L.geo && x.endereco && x.lat == null) { const g = await geocodifica(x.endereco); aplicaGeo(x, g); if (!g || g.fonte === 'osm') await new Promise(r => setTimeout(r, 1100)); }
       const a = { id: 'atv-' + uid(), criado: Date.now() + k, origem: 'supervisor', tipo: x.tipo, status: 'pendente', ticket: x.ticket || await proximoTicketOS(), ocorrencia: x.ocorrencia, descricao: [x.descricao, x.prazo && 'Prazo: ' + x.prazo, x.node && 'Node: ' + x.node, x.rede && 'Rede: ' + x.rede].filter(Boolean).join('\n'), endereco: x.endereco, rotaId: x.rotaId, refSentido: '', refKm: '', refLocal: '', lat: x.lat, lon: x.lon, mapsUrl: '',
         node: x.node, rede: x.rede, wfc: x.wfc, wf2: x.wf2, cliente: x.cliente, centro: x.centro, prazo: x.prazo, loteImport: loteId, criadoPorNome: quem, tecnicoUid: x.tec ? x.tec.uid : '', tecnicoNome: x.tec ? x.tec.nome : '', ...(x.tipo === 'implantacao' ? { designacao: x.designacao || x.ticket, servico: 'roteamento' } : {}) };
       try { const r = await Nuvem.atvCriar(a); if (r) S.atvsAdm.set(r.id, r); ok++; } catch (e) { erro++; erros.push(`${x.ticket || 'linha ' + (x.k + 2)}: ${e.message}`); }
@@ -4023,6 +4202,7 @@ function viewAcion() {
     <div class="field"><label class="lb" for="acCentro">Centro de custo / faturamento</label><select id="acCentro">${Object.entries(CENTROS).map(([k, l]) => `<option value="${k}" ${a.centro === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="list" style="gap:0">${kv('Cliente', a.cliente)}${kv('Chamado', a.tsk ? a.ticket + ' / ' + a.tsk : '')}${kv('Trecho', a.trecho)}${kv('Ponta A', a.pontaA)}${kv('Ponta B', a.pontaB)}${kv('Designação', a.designacao)}${kv('Equipamento', a.equipamento)}${kv('Node', a.node)}${kv('Rede', a.rede)}${kv('Atividade', a.atividadeClaro)}${kv('Solicitante', a.solicitante)}${kv('Contato', a.contato)}${kv(a.cliente === 'Claro' ? 'Data do acionamento' : 'Horário da falha', a.dataAcionamento)}</div>
     <p class="small" style="margin:0;color:${a.lat != null ? 'var(--ok)' : 'var(--bad)'}">${a.lat != null ? `📍 Endereço localizado no mapa (${a.lat.toFixed(5)}, ${a.lon.toFixed(5)}) · <a href="https://www.google.com/maps?q=${a.lat},${a.lon}" target="_blank" rel="noopener">conferir</a>` : 'Endereço não localizado: o técnico abre o endereço escrito no GPS.'} <button type="button" class="lnk" id="acGeo">Localizar de novo</button></p>
+    ${anexosEditHtml(a)}
     ${a._novo ? `<div class="row" style="margin-top:6px"><button type="button" class="btn" id="acBack" style="flex:1 1 220px">Inserir no backlog (sem técnico)</button><button type="button" class="btn go" id="acTec" style="flex:1 1 220px">${ICON.play}Enviar direto ao técnico</button></div>` : ''}
     ${S.acPick ? `${tecPickerHtml(a)}<button type="button" class="btn go block" id="acEnviar" ${a.tecnicoUid ? '' : 'disabled'}>${a.tecnicoUid ? `Enviar para ${esc(a.tecnicoNome)}` : 'Escolha o técnico acima'}</button>${a._novo ? '' : '<button type="button" class="btn block" id="acCanc">Cancelar</button>'}` : ''}</section>` : ''}
   <section class="card"><div class="row" style="justify-content:space-between"><h2>Acionamentos de hoje</h2><span class="muted small">${back.length} no backlog · ${L.filter(x => atvAberta(x) && x.tecnicoUid).length} com técnico</span></div>
@@ -4033,19 +4213,20 @@ function afterAcion() {
   const re = () => { const y = window.scrollY; render(); window.scrollTo(0, y); };
   const a = S.acA;
   $('#acTxt').addEventListener('input', e => { S.acTxt = e.target.value; });
-  const geo = async () => { if (!a || !a.endereco) return; try { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(a.endereco + ', SP')}`, { headers: { 'Accept-Language': 'pt-BR' } }); const j = await r.json(); if (j.length) { a.lat = +j[0].lat; a.lon = +j[0].lon; } else { a.lat = null; a.lon = null; } } catch (e) {} };
+  const geo = async () => { if (!a || !a.endereco) return; const g = await geocodifica(a.endereco); aplicaGeo(a, g); if (g && g.naoAchou) { a.lat = null; a.lon = null; } };
   $('#acLer').onclick = async () => {
     const txt = $('#acTxt').value; S.acTxt = txt; const p = lerAcionamento(txt);
     if (!p.ok || (p.tipoTexto === 'claro' && !(p.campos.evento || p.campos.endereco))) { toast('Não reconheci o texto. Acionamento Claro precisa de ENDEREÇO e ORIUNDO DO EVENTO; chamado de parceiro precisa do número do chamado e do trecho.', 7000); return; }
     const b = $('#acLer'); b.disabled = true; b.textContent = 'Lendo e localizando…';
     S.acA = { _novo: true, id: 'atv-' + uid(), status: 'pendente', refSentido: '', refKm: '', refLocal: '', rotaId: '', mapsUrl: '', lat: null, lon: null, tecnicoUid: '', tecnicoNome: '', ...p.atividade, _txt: txt, tipo: 'emergencial' }; S.acPick = false;
-    const aa = S.acA; if (aa.endereco) { try { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(aa.endereco + (aa.cliente === 'Claro' ? ', SP' : ''))}`, { headers: { 'Accept-Language': 'pt-BR' } }); const j = await r.json(); if (j.length) { aa.lat = +j[0].lat; aa.lon = +j[0].lon; } } catch (e) {} }
+    const aa = S.acA; if (aa.endereco) { b.textContent = 'Validando o endereço…'; aplicaGeo(aa, await geocodifica(aa.endereco)); }
     re(); setTimeout(() => { const r = $('#acRes'); r && r.scrollIntoView({ block: 'start' }); }, 80);
   };
   $('#acLimpar') && ($('#acLimpar').onclick = () => { S.acA = null; S.acTxt = ''; S.acPick = false; re(); });
   $('#lnkSairA').onclick = async e => { e.preventDefault(); await Nuvem.sairAdmin(); S.acA = null; go('admLogin'); };
   $$('[data-acenc]').forEach(b => b.onclick = () => { const x = S.atvsAdm.get(b.dataset.acenc); if (!x) return; S.acA = { ...x }; S.acPick = true; re(); setTimeout(() => { const r = $('#acRes'); r && r.scrollIntoView({ block: 'start' }); }, 80); });
   if (!a) return;
+  bindAnexos(a, re);
   ['acTicket', 'acOcorr', 'acEnd', 'acWfc', 'acWf2'].forEach(id => { const el = $('#' + id); el && el.addEventListener('input', () => { if (id === 'acTicket') a.ticket = el.value.trim().toUpperCase(); else if (id === 'acOcorr') a.ocorrencia = el.value; else if (id === 'acWfc') a.wfc = el.value.trim().toUpperCase(); else if (id === 'acWf2') a.wf2 = el.value.trim().toUpperCase(); else a.endereco = el.value; }); });
   $('#acEnd') && $('#acEnd').addEventListener('change', async () => { await geo(); re(); });
   $('#acCentro') && ($('#acCentro').onchange = e => { a.centro = e.target.value; });
@@ -4076,7 +4257,7 @@ function afterAcion() {
   if (!S.unVivo) { S.vivo = S.vivo || new Map(); S.unVivo = Nuvem.ouvirAoVivo((tipo, v) => { if (tipo === 'del') S.vivo.delete(v._uid); else if (tipo === 'set') S.vivo.set(v._uid, v); clearTimeout(S.acVivoT); S.acVivoT = setTimeout(() => { if (S.view === 'acion' && S.acPick && !document.activeElement.matches('input,textarea')) render(); }, 400); }, () => {}); }
 }
 /* ---------- medição (gestor): pipeline das O.S., validação, envio ao Telegram ---------- */
-const admInicio = () => ACION ? 'acion' : (Nuvem.admin && Nuvem.admin.papel === 'gestor') ? 'admMed' : 'adm';
+const admInicio = () => NOC ? 'noc' : ACION ? 'acion' : (Nuvem.admin && Nuvem.admin.papel === 'gestor') ? 'admMed' : 'adm';
 function admPeriodoPapel() { if (Nuvem.admin && Nuvem.admin.papel === 'gestor') { const [c0, c1] = cicloDe(); S.adm.de = c0; S.adm.ate = c1; } }
 const MED_ETAPAS = [['pendente', 'Pendentes', 'var(--muted)'], ['rota', 'Em rota', 'var(--st-trav, #0b5f99)'], ['finalizada', 'Finalizadas', 'var(--accent)'], ['validada', 'Validadas', '#d9a400'], ['enviada', 'Enviadas p/ medição', '#7a3fa0'], ['medida', 'Medidas', 'var(--ok)']];
 const MED_LB = Object.fromEntries(MED_ETAPAS.map(([k, l]) => [k, l]));
@@ -4291,7 +4472,13 @@ function pintaGantt() {
     out += `<div class="gr"><div class="gn">${esc(l.nome)}<span>${l.rs.length ? l.rs.length + ' atividade(s)' + (ativo ? ' · em campo' : '') : 'Sem atividade'}</span></div><div class="gl">${bars}${agora >= d0 && agora < d1 ? `<i class="gnow" style="left:${x(agora)}%"></i>` : ''}</div></div>`;
   });
   if (!linhas.size) out += '<p class="empty">Nenhum técnico cadastrado ainda.</p>';
-  box.innerHTML = out + '</div>';
+  const ag = [...(S.atvsAdm || new Map()).values()].filter(a => (a.status === 'pendente' || a.status === 'recebida') && agendaDe(a) === dia && (!A.tec || a.tecnicoUid === A.tec)).sort((p, q) => (p.tecnicoNome || '').localeCompare(q.tecnicoNome || ''));
+  out += '</div>' + (ag.length ? `<div class="gag"><b>O.S. agendadas para ${esc(fDiaCurto(dia))} (${ag.length})</b>${ag.map(a => `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding:6px 0"><span style="flex:1;min-width:200px"><b>${esc(a.ticket || atvTitulo(a))}</b> · ${esc(a.tecnicoNome || 'sem técnico')} · ${esc(stAtv(a))}${(a.remanejos || []).length ? ` · <span class="muted small">remanejada ${a.remanejos.length}x</span>` : ''}</span><input type="date" data-remdia="${a.id}" value="${isoDate(diaIni(dia) + 86400000 + 43200000)}" style="min-height:36px"><button type="button" class="btn" data-remaj="${a.id}" style="min-height:36px">Remanejar</button></div>`).join('')}</div>` : '');
+  box.innerHTML = out;
+  $$('[data-remaj]', box).forEach(b => b.onclick = async () => { const a = S.atvsAdm.get(b.dataset.remaj); const para = ($$('[data-remdia]', box).find(x => x.dataset.remdia === a.id) || {}).value; if (!para || para === agendaDe(a)) { toast('Escolha outro dia.'); return; }
+    if (!confirm(`Remanejar a O.S. ${a.ticket || ''} (${a.tecnicoNome || 'sem técnico'}) de ${fDiaCurto(agendaDe(a))} para ${fDiaCurto(para)}?`)) return;
+    if (!confirm(`Confirma de novo: a O.S. ${a.ticket || ''} passa para ${fDiaCurto(para)}. O técnico é avisado.`)) return;
+    try { await remanejaAtv(a, para, (Nuvem.admin || {}).nome || 'Supervisor'); toast('O.S. remanejada.'); pintaGantt(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); } });
   $$('[data-ronda]', box).forEach(b => b.onclick = async () => { const r = DB.mem.rondas.get(b.dataset.ronda); if (!r) { toast('Atividade em andamento. Os detalhes chegam quando o celular do técnico sincronizar; toque em Atualizar.', 5000); return; } S.rondaView = r; await cacheInspRonda(r); go('ronda'); });
 }
 function ouvirVivo() {
@@ -4923,11 +5110,94 @@ async function pdfGerencial(R, k) {
   return new File([doc.output('blob')], `Relatorio_gerencial_${isoDate(Date.now())}.pdf`, { type: 'application/pdf' });
 }
 
+/* ============================ calendário de recursos ============================ */
+// Ficha de cada técnico (região/mini cluster → cluster, classe, telefone, placa), escala de trabalho
+// (entrada e saída por dia da semana), plantões e folgas; exportação dos plantonistas do fim de semana.
+const DIAS_SEM = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const ESC_PADRAO = { 0: null, 1: { e: '08:00', s: '17:48' }, 2: { e: '08:00', s: '17:48' }, 3: { e: '08:00', s: '17:48' }, 4: { e: '08:00', s: '17:48' }, 5: { e: '08:00', s: '17:48' }, 6: null };
+// junta o que o gestor cadastrou (recursos) com o que o técnico informou no perfil
+function fichaTec(t) {
+  const r = (S.recursos || new Map()).get(t.uid) || {};
+  const reg = r.regiao || t.regiao || ''; return { ...t, regiao: reg, mini: (MINI[reg] || [])[0] || '', cluster: (MINI[reg] || [])[1] || '', classe: r.classe || t.classe || '', telefone: r.telefone || t.fone || '', placa: r.placa || t.placa || '', escala: r.escala || null, temFicha: !!S.recursos && S.recursos.has(t.uid) };
+}
+function turnoDia(f, dow) { const e = (f.escala || ESC_PADRAO)[dow]; return e && e.e && e.s ? e : null; }
+function viewAdmCal() {
+  const F = S.calF = S.calF || { cluster: '', regiao: '', classe: '' };
+  const chip = (k, v, l) => `<button type="button" role="radio" data-calf="${k}" data-v="${v}" aria-checked="${F[k] === v}">${l}</button>`;
+  return `<section class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2>Calendário de recursos</h2><span class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="bCalPla">${ICON.plus}Plantão / folga</button><button type="button" class="btn pri" id="bCalExp">Exportar plantonistas do fim de semana</button></span></div>
+    <div class="chips" role="group" aria-label="Cluster">${chip('cluster', '', 'Todos os clusters')}${Object.entries(CLUSTERS).map(([k, l]) => chip('cluster', k, l)).join('')}</div>
+    <div class="chips" role="group" aria-label="Mini cluster">${chip('regiao', '', 'Todos os mini clusters')}${Object.entries(MINI).filter(([, v]) => !F.cluster || v[1] === F.cluster).map(([k, v]) => chip('regiao', k, v[0])).join('')}</div>
+    <div class="chips" role="group" aria-label="Classe">${chip('classe', '', 'Todas as classes')}${Object.entries(CLASSES).map(([k, l]) => chip('classe', k, l)).join('')}</div>
+    <p class="muted small" style="margin:0">Toque no nome do técnico para editar a ficha e a escala de trabalho. Toque num plantão ou folga para editar.${new Date().getDay() === 5 ? ' <b style="color:var(--accent)">Hoje é sexta: exporte os plantonistas do fim de semana.</b>' : ''}</p></section>
+    <div id="calBox"><section class="card"><p class="empty">Carregando…</p></section></div><div id="calForm"></div>`;
+}
+async function afterAdmCal() {
+  const F = S.calF; const A = S.adm;
+  $$('[data-calf]').forEach(b => b.onclick = () => { F[b.dataset.calf] = b.dataset.v; if (b.dataset.calf === 'cluster') F.regiao = ''; render(); });
+  try { if (!S.recursos) S.recursos = new Map((await Nuvem.recursosLista()).map(r => [r.uid, r])); } catch (e) { S.recursos = new Map(); toast('Ficha dos técnicos indisponível: rode o supabase.sql novo.', 6000); }
+  const base = diaIni(A.calSem || isoDate(Date.now())); const seg = base - ((new Date(base).getDay() + 6) % 7) * 86400000; const dias = Array.from({ length: 7 }, (_, k) => seg + k * 86400000);
+  try { S.plantoesAdm = await Nuvem.plantoesAdmin(seg - 86400000, seg + 9 * 86400000); } catch (e) { S.plantoesAdm = S.plantoesAdm || []; }
+  const L = S.plantoesAdm || [];
+  const tecs = (A.tecnicos || []).map(fichaTec).filter(t => (!F.cluster || t.cluster === F.cluster) && (!F.regiao || t.regiao === F.regiao) && (!F.classe || t.classe === F.classe));
+  const cel = (t, d0) => { const dow = new Date(d0).getDay(); const pl = L.filter(p => p.uid === t.uid && p.inicio < d0 + 86400000 && p.fim > d0); const fol = pl.some(p => p.tipo === 'folga'); const tn = turnoDia(t, dow);
+    return `${tn && !fol ? `<span class="small">${tn.e}–${tn.s}</span>` : `<span class="small muted">${fol ? '' : 'folga'}</span>`}${pl.map(p => `<button type="button" class="pill ${p.tipo === 'folga' ? 'done' : 'ok'}" data-calpla="${p.id}" title="${esc(fPla(p) + (p.obs ? ' · ' + p.obs : ''))}" style="border:0;cursor:pointer;display:block;margin:2px 0">${p.tipo === 'folga' ? 'Folga' : `Plantão ${fHora(Math.max(p.inicio, d0))}–${p.fim >= d0 + 86400000 ? '24h' : fHora(p.fim)}`}</button>`).join('')}`; };
+  const grupos = {}; tecs.forEach(t => { const k = t.mini || 'Sem região'; (grupos[k] = grupos[k] || []).push(t); });
+  $('#calBox').innerHTML = `<section class="card"><div class="row" style="justify-content:space-between"><div class="dnav"><button type="button" id="calPrev" aria-label="Semana anterior">${ICON.prev}</button><span style="min-width:150px;text-align:center">${fData(seg).slice(0, 5)} a ${fData(seg + 6 * 86400000).slice(0, 5)}</span><button type="button" id="calNext" aria-label="Próxima semana">${ICON.next}</button></div><span class="muted small">${tecs.length} técnico(s)</span></div>
+    <div class="tw"><table class="t"><thead><tr><th>Técnico</th>${dias.map(x => `<th${[0, 6].includes(new Date(x).getDay()) ? ' style="background:var(--surface-2)"' : ''}>${DIAS_SEM[new Date(x).getDay()]} ${fData(x).slice(0, 5)}</th>`).join('')}</tr></thead><tbody>
+    ${Object.entries(grupos).sort().map(([g, l]) => `<tr><td colspan="8" style="background:var(--surface-2);font-weight:700">${esc(g)}${l[0].cluster ? ' · ' + esc(CLUSTERS[l[0].cluster]) : ''}</td></tr>${l.map(t => `<tr><td><button type="button" class="lnk" data-calrec="${t.uid}" style="text-align:left"><b>${esc(t.nome)}</b></button><br><span class="small muted">${esc(CLASSES[t.classe] || 'classe não definida')}${t.telefone ? ' · ' + esc(t.telefone) : ''}${t.placa ? ' · ' + esc(t.placa) : ''}</span>${plaAgora(L, t.uid, 'plantao') ? '<br><span class="pill ok">de plantão agora</span>' : ''}</td>${dias.map(x => `<td${[0, 6].includes(new Date(x).getDay()) ? ' style="background:var(--surface-2)"' : ''}>${cel(t, x)}</td>`).join('')}</tr>`).join('')}`).join('') || '<tr><td colspan="8" class="muted">Nenhum técnico no filtro.</td></tr>'}</tbody></table></div></section>`;
+  const mv = k => { A.calSem = isoDate(seg + k * 7 * 86400000 + 43200000); render(); };
+  $('#calPrev').onclick = () => mv(-1); $('#calNext').onclick = () => mv(1);
+  const form = $('#calForm');
+  const abrePla = p => {
+    form.innerHTML = plaFormHtml(p); form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#bPlaCanc').onclick = () => { form.innerHTML = ''; };
+    $('#bPlaSalva').onclick = async () => { const t = A.tecnicos.find(x => x.uid === $('#pl_tec').value); const ini = Date.parse($('#pl_ini').value), fim = Date.parse($('#pl_fim').value); if (!t) { toast('Escolha o técnico.'); return; } if (!(ini < fim)) { toast('O fim precisa ser depois do início.'); return; }
+      try { await Nuvem.plantaoSalvar({ id: p.id, uid: t.uid, tecnicoNome: t.nome, tipo: $('#pl_tipo').value, inicio: ini, fim, obs: $('#pl_obs').value.trim() }); toast('Escala salva.'); form.innerHTML = ''; render(); } catch (e) { toast('Erro: ' + e.message, 6000); } };
+    $('#bPlaDel') && ($('#bPlaDel').onclick = async () => { if (!confirm('Excluir este lançamento?')) return; try { await Nuvem.plantaoApagar(p.id); form.innerHTML = ''; render(); } catch (e) { toast('Erro: ' + e.message, 6000); } });
+  };
+  $('#bCalPla').onclick = () => { const [ini, fim] = janelaFimSemana(); abrePla({ _novo: true, id: 'pla-' + uid(), uid: (tecs[0] || A.tecnicos[0] || {}).uid, tipo: 'plantao', inicio: ini, fim, obs: '' }); };
+  $$('[data-calpla]').forEach(b => b.onclick = () => { const p = L.find(x => x.id === b.dataset.calpla); if (p) abrePla({ ...p }); });
+  $$('[data-calrec]').forEach(b => b.onclick = () => {
+    const t = fichaTec(A.tecnicos.find(x => x.uid === b.dataset.calrec)); const E = { ...ESC_PADRAO, ...(t.escala || {}) };
+    form.innerHTML = `<section class="card"><h2>Ficha e escala · ${esc(t.nome)}</h2><div class="grid2">
+      <div class="field"><label class="lb" for="rcReg">Região (mini cluster)</label><select id="rcReg"><option value="">Não definida</option>${Object.entries(MINI).map(([k, v]) => `<option value="${k}" ${t.regiao === k ? 'selected' : ''}>${v[0]} · ${CLUSTERS[v[1]]}</option>`).join('')}</select></div>
+      <div class="field"><label class="lb" for="rcCla">Classe</label><select id="rcCla"><option value="">Não definida</option>${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}" ${t.classe === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label class="lb" for="rcTel">Telefone</label><input type="tel" id="rcTel" value="${esc(t.telefone)}"></div><div class="field"><label class="lb" for="rcPla">Placa do veículo</label><input type="text" id="rcPla" value="${esc(t.placa)}" autocapitalize="characters"></div></div>
+      <h3>Escala de trabalho</h3><div class="tw"><table class="t"><thead><tr><th>Dia</th><th>Trabalha</th><th>Entrada</th><th>Saída</th></tr></thead><tbody>${[1, 2, 3, 4, 5, 6, 0].map(d => `<tr><td>${DIAS_SEM[d]}</td><td><input type="checkbox" data-rcon="${d}" ${E[d] ? 'checked' : ''}></td><td><input type="time" data-rce="${d}" value="${(E[d] || {}).e || '08:00'}"></td><td><input type="time" data-rcs="${d}" value="${(E[d] || {}).s || '17:48'}"></td></tr>`).join('')}</tbody></table></div>
+      <p class="muted small" style="margin:0">O alarme de "expediente não iniciado" do técnico segue esta escala.</p>
+      <div class="row" style="gap:8px"><button type="button" class="btn pri" id="bRcSalva">Salvar ficha</button><button type="button" class="btn" id="bRcCanc">Cancelar</button></div></section>`;
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#bRcCanc').onclick = () => { form.innerHTML = ''; };
+    $('#bRcSalva').onclick = async () => {
+      const esc2 = {}; [0, 1, 2, 3, 4, 5, 6].forEach(d => { const on = $(`[data-rcon="${d}"]`).checked; const e = $(`[data-rce="${d}"]`).value, s2 = $(`[data-rcs="${d}"]`).value; esc2[d] = on && e && s2 ? { e, s: s2 } : null; });
+      if (Object.values(esc2).some(x => x && x.s <= x.e)) { toast('A saída precisa ser depois da entrada.'); return; }
+      const r = { uid: t.uid, org: Nuvem.org(), nome: t.nome, regiao: $('#rcReg').value || null, classe: $('#rcCla').value || null, telefone: $('#rcTel').value.trim() || null, placa: $('#rcPla').value.trim().toUpperCase() || null, escala: esc2, atualizado: Date.now() };
+      try { await Nuvem.recursoSalvar(r); S.recursos.set(r.uid, r); toast('Ficha salva.'); form.innerHTML = ''; render(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); }
+    };
+  });
+  $('#bCalExp').onclick = () => exportaPlantonistas();
+}
+// fim de semana: de sexta 18h a segunda 8h (o próximo, ou o atual se já estiver nele)
+function janelaFimSemana(ref = Date.now()) { const d = new Date(ref); const dow = d.getDay(); const voltar = dow === 6 ? 1 : dow === 0 ? 2 : dow === 1 && d.getHours() < 8 ? 3 : -((5 - dow + 7) % 7); const sex = new Date(d.getFullYear(), d.getMonth(), d.getDate() - voltar, 18, 0); return [+sex, +sex + 62 * 3600000]; }
+async function exportaPlantonistas() {
+  const [a, z] = janelaFimSemana(); let L; try { L = await Nuvem.plantoesAdmin(a, z); } catch (e) { toast('Erro: ' + (e.message || e)); return; }
+  const P = L.filter(p => p.tipo === 'plantao' && p.inicio < z && p.fim > a).sort((p, q) => p.inicio - q.inicio);
+  if (!P.length) { toast('Nenhum plantão lançado para o fim de semana.', 5000); return; }
+  const linhas = P.map(p => { const t = fichaTec((S.adm.tecnicos || []).find(x => x.uid === p.uid) || { uid: p.uid, nome: p.tecnicoNome }); return { 'Técnico': t.nome || p.tecnicoNome, 'Matrícula': t.matricula || '', 'Telefone': t.telefone || '', 'Placa': t.placa || '', 'Região de atendimento': t.mini || '', 'Cluster': CLUSTERS[t.cluster] || '', 'Classe': CLASSES[t.classe] || '', 'Início': `${fData(p.inicio)} ${fHora(p.inicio)}`, 'Fim': `${fData(p.fim)} ${fHora(p.fim)}`, 'Observação': p.obs || '' }; });
+  const nome = `Plantonistas_${fData(a).replace(/\//g, '-')}_a_${fData(z).replace(/\//g, '-')}`;
+  try {
+    if (!window.XLSX) await carregaScript('xlsx.full.min.js'); const ws = XLSX.utils.json_to_sheet(linhas); ws['!cols'] = Object.keys(linhas[0]).map(k => ({ wch: Math.max(k.length, ...linhas.map(l => String(l[k]).length)) + 2 }));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Plantonistas'); const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    baixar(new File([buf], nome + '.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); toast(`${P.length} plantonista(s) exportado(s).`);
+  } catch (e) { const csv = '﻿' + [Object.keys(linhas[0]), ...linhas.map(Object.values)].map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n'); baixar(new File([csv], nome + '.csv', { type: 'text/csv' })); }
+}
+
 function menuAdmin() {
-  const nav = $('#drawer nav'); if (!nav || ACION) return;
+  const nav = $('#drawer nav'); if (!nav || RESTRITO) return;
   const it = (v, ic, lb) => `<button class="navi" data-nav="${v}">${SVG(ic)}${lb}</button>`;
   nav.innerHTML = it('adm', '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>', 'Painel e despacho')
     + it('admEquipe', '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5.5 6.5-5.5s5.5 2 6.5 5.5"/><path d="M17 8h5M19.5 5.5v5"/>', 'Equipe e cadastros')
+    + it('admCal', '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 13h3M8 17h6"/>', 'Calendário de recursos')
     + it('admLote', '<path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h10v4H4z"/><path d="M18 17v4M16 19h4"/>', 'Importar O.S. em lote')
     + it('admPrev', '<path d="M7 3h10l4 4v14H3V3h4"/><path d="M7 13l3 3 6-6"/>', 'Preventivas do mês')
     + it('admMat', '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>', 'Almoxarifado (materiais)')
@@ -4942,6 +5212,58 @@ function menuAdmin() {
   const df = $('#drawer .df'); if (df) df.textContent = 'Painel · Técnico Plus - Multivale';
 }
 const ATUALIZA_ADM_MIN = 60;
+async function remanejaAtv(a, para, quem, pedidoPor) {
+  if (!a) throw new Error('O.S. não encontrada (atualize o painel).');
+  const de = agendaDe(a); const nv = { ...a, agendaDia: para, remanejos: [...(a.remanejos || []), { de, para, por: quem, pedidoPor: pedidoPor || null, em: Date.now() }].slice(-20) };
+  const r = await Nuvem.atvSalvar(nv); if (r) S.atvsAdm.set(r.id, r); return r;
+}
+async function aplicaRemanejo(p) { const a = (S.atvsAdm || new Map()).get(p.ref_id); await remanejaAtv(a, p.dados.para, (Nuvem.admin || {}).nome || 'Gestor', p.tecnico_nome); }
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-upcobra2]'); if (b) cobrarAtualizacao(b.dataset.upcobra2); });
+async function cobrarAtualizacao(id) {
+  const a = (S.atvsAdm || new Map()).get(id); if (!a) return;
+  if (!confirm(`Cobrar do ${a.tecnicoNome || 'técnico'} a atualização da O.S. ${a.ticket || ''}? O celular dele toca o alarme até ele atualizar.`)) return;
+  try { const r = await Nuvem.atvSalvar({ ...a, cobrarAtualizEm: Date.now(), cobrarPor: (Nuvem.admin || {}).nome || 'Supervisor' }); if (r) S.atvsAdm.set(r.id, r); toast('Cobrança enviada ao técnico.'); pintaLimites(); if (S.view === 'admAtv') render(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); }
+}
+function viewNoc() {
+  return `<section class="card"><div class="row" style="justify-content:space-between"><h2>Validação e liberação de corretivas</h2><span class="muted small" id="nocHora"></span></div>
+    <p class="muted small" style="margin:0">O técnico só dá baixa na O.S. e sai do local depois da liberação do NOC ou do supervisor. Confira a rede, converse com o técnico e libere ou recuse.</p>
+    <div class="stats" id="nocStats"></div></section><div id="nocLista"><section class="card"><p class="empty">Carregando…</p></section></div>`;
+}
+async function afterNoc() {
+  const pinta = () => {
+    const P = [...S.nocPeds.values()].sort((a, b) => a.criado - b.criado); const ab = P.filter(p => p.status === 'pedido'), dec = P.filter(p => p.status !== 'pedido').sort((a, b) => (b.decidido_em || 0) - (a.decidido_em || 0));
+    const st = $('#nocStats'); if (!st) return;
+    st.innerHTML = `<div class="stat"><b style="color:${ab.length ? 'var(--bad)' : 'inherit'}">${ab.length}</b><span>Aguardando</span></div><div class="stat"><b>${dec.filter(p => p.status === 'aprovado').length}</b><span>Liberadas (36 h)</span></div><div class="stat"><b>${dec.filter(p => p.status === 'recusado').length}</b><span>Recusadas</span></div>`;
+    const card = p => { const d = p.dados || {}; const mapa = d.lat != null ? `https://maps.google.com/?q=${d.lat},${d.lon}` : '';
+      return `<section class="card" style="${p.status === 'pedido' ? 'border:2px solid var(--accent)' : ''}"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><h2 style="margin:0">${esc(d.ticket || 'Corretiva')}</h2><span class="muted small">${esc(p.tecnico_nome || '')} · pedido às ${fHora(p.criado)} (há ${fHm((Date.now() - p.criado) / 60000)})${d.ocorrencia ? ' · ' + esc(d.ocorrencia) : ''}${d.inicio ? ' · em campo desde ' + fHora(d.inicio) : ''}</span></div>${p.status === 'pedido' ? '<span class="pill bad">aguardando</span>' : `<span class="pill ${p.status === 'aprovado' ? 'ok' : 'bad'}">${p.status === 'aprovado' ? 'liberada' : 'recusada'} · ${esc(p.decidido_por || '')} ${p.decidido_em ? fHora(p.decidido_em) : ''}</span>`}</div>
+        ${mapa ? `<a class="lnk" href="${mapa}" target="_blank" rel="noopener">📍 Local do técnico no mapa</a>` : ''}
+        ${conversaHtml(p.id, 'noc') || '<p class="muted small" style="margin:0">Sem mensagem do técnico.</p>'}
+        ${p.status === 'pedido' ? `<div class="row" style="gap:6px;flex-wrap:nowrap"><input type="text" data-nocmsg="${esc(p.id)}" placeholder="Responder ao técnico" style="flex:1;min-width:0"><button type="button" class="btn" data-nocenv="${esc(p.id)}">Enviar</button></div>
+          <div class="row" style="gap:8px"><button type="button" class="btn go" data-nocok="${esc(p.id)}">Validar e liberar</button><button type="button" class="btn" data-nocno="${esc(p.id)}">Recusar</button></div>` : p.obs ? `<p class="small" style="margin:0">Motivo: ${esc(p.obs)}</p>` : ''}</section>`; };
+    $('#nocLista').innerHTML = (ab.length ? ab.map(card).join('') : '<section class="card"><p class="empty">Nenhum pedido aguardando. Os novos aparecem aqui na hora, com som.</p></section>') + (dec.length ? `<h3 style="margin:8px 4px">Decididos nas últimas 36 h</h3>${dec.slice(0, 30).map(card).join('')}` : '');
+    const h = $('#nocHora'); if (h) h.textContent = 'Atualizado ' + fHora(Date.now());
+    const msg = async (pid, texto) => { const m = { id: 'pm_' + uid(), org: Nuvem.org(), pedido_id: pid, tecnico_uid: (S.nocPeds.get(pid) || {}).tecnico_uid, autor_uid: Nuvem.user.id, autor_nome: (Nuvem.admin || {}).nome || 'NOC', papel: Nuvem.admin && Nuvem.admin.papel === 'noc' ? 'noc' : 'supervisor', texto, criado: Date.now() }; await Nuvem.msgCriar(m); guardaMsg(m); };
+    $$('[data-nocenv]').forEach(b => b.onclick = async () => { const i = $$('[data-nocmsg]').find(x => x.dataset.nocmsg === b.dataset.nocenv); const t = String(i && i.value || '').trim(); if (!t) return; try { await msg(b.dataset.nocenv, t); pinta(); } catch (e) { toast('Erro: ' + (e.message || e)); } });
+    $$('[data-nocok]').forEach(b => b.onclick = async () => { const p = S.nocPeds.get(b.dataset.nocok); if (!confirm(`Validar e liberar ${p.tecnico_nome} para dar baixa e sair do local (${(p.dados || {}).ticket || ''})?`)) return; try { await Nuvem.pedDecidir(p.id, 'aprovado', ''); await msg(p.id, 'Validado pelo NOC. Pode dar baixa e sair do local.'); p.status = 'aprovado'; p.decidido_em = Date.now(); p.decidido_por = 'NOC · ' + ((Nuvem.admin || {}).nome || ''); pinta(); toast('Liberado.'); } catch (e) { toast('Erro: ' + (e.message || e), 6000); } });
+    $$('[data-nocno]').forEach(b => b.onclick = async () => { const p = S.nocPeds.get(b.dataset.nocno); const ob = prompt('Motivo da recusa (o técnico vê):', ''); if (ob === null) return; try { await Nuvem.pedDecidir(p.id, 'recusado', ob); if (ob) await msg(p.id, 'Não liberado: ' + ob); p.status = 'recusado'; p.obs = ob; p.decidido_em = Date.now(); pinta(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); } });
+  };
+  if (!S.nocPeds) {
+    S.nocPeds = new Map();
+    try { (await Nuvem.pedNoc()).forEach(p => S.nocPeds.set(p.id, p)); (await Nuvem.msgsOrg()).forEach(guardaMsg); } catch (e) { $('#nocLista').innerHTML = `<section class="card"><div class="warnbox">Não foi possível carregar: ${esc(e.message || e)}</div></section>`; return; }
+    Nuvem.canal('nocped', 'pedidos', (t, row) => { if (!row || !row.id || row.tipo !== 'liberar_corretiva') return; const novo = !S.nocPeds.has(row.id) && row.status === 'pedido'; S.nocPeds.set(row.id, row); if (novo) { toast(`Novo pedido de validação: ${row.tecnico_nome || ''} · ${(row.dados || {}).ticket || ''}`, 8000); try { Alarme.destrava(); Alarme.bip(); if ('Notification' in window && Notification.permission === 'granted') new Notification('Pedido de validação', { body: `${row.tecnico_nome || ''} · ${(row.dados || {}).ticket || ''}`, tag: 'noc-' + row.id, requireInteraction: true }); } catch (e) {} } if (S.view === 'noc') pinta(); });
+    Nuvem.canal('nocmsg', 'ped_msgs', (t, m) => { if (!m || !m.id) return; guardaMsg(m); if (S.view === 'noc') pinta(); });
+    try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
+    setInterval(() => { if (S.view === 'noc') pinta(); }, 60000);
+  }
+  pinta();
+}
+async function decidePedido(id, ok) {
+  const p = (S.peds || new Map()).get(id); if (!p) return;
+  let obs = '';
+  if (ok) { if (!confirm(p.tipo === 'remanejar' ? `Aprovar o remanejamento pedido por ${p.tecnico_nome}?` : `Liberar ${p.tecnico_nome} para sair do local e fechar a corretiva ${(p.dados || {}).ticket || ''}?`)) return; }
+  else { obs = prompt('Motivo da recusa (o técnico vê):', '') ?? null; if (obs === null) return; }
+  try { if (ok && p.tipo === 'remanejar') await aplicaRemanejo(p); await Nuvem.pedDecidir(id, ok ? 'aprovado' : 'recusado', obs); if (p.tipo === 'liberar_corretiva') { try { await Nuvem.msgCriar({ id: 'pm_' + uid(), org: Nuvem.org(), pedido_id: p.id, tecnico_uid: p.tecnico_uid, autor_uid: Nuvem.user.id, autor_nome: (Nuvem.admin || {}).nome || 'Supervisor', papel: 'supervisor', texto: ok ? 'Liberado pelo supervisor. Pode dar baixa e sair do local.' : 'Não liberado' + (obs ? ': ' + obs : '.'), criado: Date.now() }); } catch (e) {} } S.peds.delete(id); toast(ok ? 'Liberado.' : 'Recusado.'); pintaLimites(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); }
+}
 function semAtualizacao() {
   const agora = Date.now(); const out = [];
   [...(S.atvsAdm || new Map()).values()].filter(a => a.status === 'em_deslocamento' || a.status === 'no_local').forEach(a => {
@@ -4965,14 +5287,19 @@ function limitesHoras() {
   return out.sort((a, b) => a.falta - b.falta);
 }
 function pintaLimites() {
-  if (!ADMIN || ACION || !['adm', 'admMed', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj'].includes(S.view)) return; const app = $('#app'); if (!app) return;
+  if (!ADMIN || RESTRITO || !['adm', 'admMed', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj', 'admCal'].includes(S.view)) return; const app = $('#app'); if (!app) return;
   if (!S.unVivo && Nuvem.on) { ouvirVivo(); ouvirAtvAdm(); }
   let box = $('#limAlerta'); const L = limitesHoras(); const { lim } = limiteDia();
+  if (!S.unPed && Nuvem.on) { S.pedMsgsAdm = S.pedMsgsAdm || new Map(); Nuvem.msgsOrg().then(l => { l.forEach(m => { const x = S.pedMsgsAdm.get(m.pedido_id) || []; x.push(m); S.pedMsgsAdm.set(m.pedido_id, x); }); pintaLimites(); }).catch(() => {}); S.unPedMsg = Nuvem.canal('pmadm', 'ped_msgs', (t, m) => { if (!m || !m.id) return; const x = S.pedMsgsAdm.get(m.pedido_id) || []; if (!x.some(y => y.id === m.id)) x.push(m); S.pedMsgsAdm.set(m.pedido_id, x); pintaLimites(); }); S.peds = S.peds || new Map(); Nuvem.pedAbertos().then(l => { l.forEach(p => S.peds.set(p.id, p)); pintaLimites(); }).catch(() => {}); S.unPed = Nuvem.canal('pedadm', 'pedidos', (t, row) => { if (!row || !row.id) return; const novo = !S.peds.has(row.id) && row.status === 'pedido'; if (row.status === 'pedido') S.peds.set(row.id, row); else S.peds.delete(row.id); if (novo) { toast(`${row.tecnico_nome || 'Técnico'} pede liberação: ${row.tipo === 'remanejar' ? 'remanejar atividade' : 'saída da corretiva ' + ((row.dados || {}).ticket || '')}`, 8000); try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Pedido de liberação', { body: `${row.tecnico_nome || ''} · ${row.tipo === 'remanejar' ? 'remanejar atividade' : 'saída da corretiva ' + ((row.dados || {}).ticket || '')}`, tag: 'ped-' + row.id, requireInteraction: true }); } catch (e) {} } pintaLimites(); }); }
+  const PD = [...(S.peds || new Map()).values()].filter(p => p.status === 'pedido').sort((a, b) => a.criado - b.criado);
   const U = semAtualizacao();
-  if (!L.length && !U.length) { if (box) box.remove(); return; }
+  if (!L.length && !U.length && !PD.length) { if (box) box.remove(); return; }
   if (!box) { box = document.createElement('div'); box.id = 'limAlerta'; box.style.cssText = 'display:flex;flex-direction:column;gap:6px'; app.prepend(box); }
-  box.innerHTML = U.map(x => `<div class="banner" style="background:#fbf1cf;color:#5c4400"><span>🕐 O.S. <b>${esc(x.a.ticket || '—')}</b> (${esc(x.a.tecnicoNome || 'sem técnico')}, ${esc(ATV_ST[x.a.status] || x.a.status)}) <b>sem atualização há ${fHm(x.min)}</b>${x.a.situacao ? ` · última situação: ${esc(SIT_OS[x.a.situacao] || x.a.situacao)}` : ''}.</span><button type="button" class="btn" data-upver="${x.a.id}" style="min-height:36px">Ver O.S.</button></div>`).join('') + L.map(x => `<div class="banner" style="${x.falta <= 0 ? 'background:var(--bad);color:#fff' : ''}"><span>⏱️ <b>${esc(x.nome)}</b> está com a O.S. ${esc(x.os || 'em andamento')} aberta e ${x.falta <= 0 ? `<b>passou do limite de ${fHm(lim)} há ${fHm(-x.falta)}</b>` : `<b>chega ao limite de ${fHm(lim)} em ${fHm(x.falta)}</b>`} (trabalhou ${fHm(x.trab)} hoje).</span></div>`).join('');
+  box.innerHTML = PD.map(p => `<div class="banner" style="background:#e3eef7;color:#0b3d63"><span>🔓 <b>${esc(p.tecnico_nome || 'Técnico')}</b> ${p.tipo === 'remanejar' ? `pede para remanejar <b>${esc((p.dados || {}).titulo || 'atividade')}</b> de ${esc((p.dados || {}).deTxt || '')} para <b>${esc((p.dados || {}).paraTxt || '')}</b>` : `pede liberação para <b>dar baixa e sair do local da corretiva ${esc((p.dados || {}).ticket || '')}</b>${(p.dados || {}).ocorrencia ? ' · ' + esc(p.dados.ocorrencia) : ''}${(() => { const l = (S.pedMsgsAdm || new Map()).get(p.id) || []; const u = l[l.length - 1]; return u ? ` · <i>“${esc(u.texto.slice(0, 120))}”</i>` : ''; })()}`} · há ${fHm((Date.now() - p.criado) / 60000)}.</span><span class="row" style="gap:6px"><button type="button" class="btn go" data-pedok="${esc(p.id)}" style="min-height:36px">${p.tipo === 'remanejar' ? 'Aprovar' : 'Liberar'}</button><button type="button" class="btn" data-pedno="${esc(p.id)}" style="min-height:36px">Recusar</button></span></div>`).join('') + U.map(x => `<div class="banner" style="background:#fbf1cf;color:#5c4400"><span>🕐 O.S. <b>${esc(x.a.ticket || '—')}</b> (${esc(x.a.tecnicoNome || 'sem técnico')}, ${esc(ATV_ST[x.a.status] || x.a.status)}) <b>sem atualização há ${fHm(x.min)}</b>${x.a.situacao ? ` · última situação: ${esc(SIT_OS[x.a.situacao] || x.a.situacao)}` : ''}.</span><span class="row" style="gap:6px">${x.a.cobrarAtualizEm && x.a.cobrarAtualizEm > (x.a.ultAtualiz || 0) ? `<span class="small">cobrada às ${fHora(x.a.cobrarAtualizEm)}</span>` : `<button type="button" class="btn go" data-upcobra="${x.a.id}" style="min-height:36px">Cobrar atualização</button>`}<button type="button" class="btn" data-upver="${x.a.id}" style="min-height:36px">Ver O.S.</button></span></div>`).join('') + L.map(x => `<div class="banner" style="${x.falta <= 0 ? 'background:var(--bad);color:#fff' : ''}"><span>⏱️ <b>${esc(x.nome)}</b> está com a O.S. ${esc(x.os || 'em andamento')} aberta e ${x.falta <= 0 ? `<b>passou do limite de ${fHm(lim)} há ${fHm(-x.falta)}</b>` : `<b>chega ao limite de ${fHm(lim)} em ${fHm(x.falta)}</b>`} (trabalhou ${fHm(x.trab)} hoje).</span></div>`).join('');
   $$('[data-upver]', box).forEach(b => b.onclick = () => abrirAtvAdm(b.dataset.upver));
+  $$('[data-upcobra]', box).forEach(b => b.onclick = () => cobrarAtualizacao(b.dataset.upcobra));
+  $$('[data-pedok]', box).forEach(b => b.onclick = () => decidePedido(b.dataset.pedok, true));
+  $$('[data-pedno]', box).forEach(b => b.onclick = () => decidePedido(b.dataset.pedno, false));
   U.forEach(x => { const k = `upd:${x.a.id}:${Math.floor(x.min / ATUALIZA_ADM_MIN)}`; S.limAvisados = S.limAvisados || new Set(); if (S.limAvisados.has(k)) return; S.limAvisados.add(k);
     try { if ('Notification' in window && Notification.permission === 'granted') new Notification(`O.S. ${x.a.ticket || ''} sem atualização há ${fHm(x.min)}`, { body: `${x.a.tecnicoNome || 'Sem técnico'} · ${ATV_ST[x.a.status] || x.a.status}`, tag: 'upd-' + x.a.id }); } catch (e) {} });
   const hoje = isoDate(Date.now()); S.limAvisados = S.limAvisados || new Set();
@@ -4982,12 +5309,12 @@ function pintaLimites() {
 setInterval(() => { try { pintaLimites(); } catch (e) {} }, 60000);
 async function bootAdmin() {
   menuAdmin();
-  if (!ACION && ultimoDiaMes()) setTimeout(() => toast('Último dia do mês: gere o relatório mensal das preventivas (menu > Preventivas do mês).', 9000), 2500);
+  if (!RESTRITO && ultimoDiaMes()) setTimeout(() => toast('Último dia do mês: gere o relatório mensal das preventivas (menu > Preventivas do mês).', 9000), 2500);
   if (!ACION && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-  document.body.classList.add('adm'); document.title = ACION ? 'Acionamentos Claro · Técnico Plus' : 'Painel do supervisor · Técnico Plus';
+  document.body.classList.add('adm'); document.title = ACION ? 'Acionamentos Claro · Técnico Plus' : NOC ? 'NOC · Técnico Plus' : 'Painel do supervisor · Técnico Plus';
   S.adm = { de: isoDate(Date.now() - 6 * 86400000), ate: isoDate(Date.now()), tec: '', lim: '80', tecnicos: [] };
   S.view = 'admLogin'; render();
-  try { if (await Nuvem.sessaoAdmin()) { if (ACION) { await acionCarregar(); go('acion'); return; } admPeriodoPapel(); await admCarregar(); go(admInicio()); } } catch (e) { console.error(e); }
+  try { if (await Nuvem.sessaoAdmin()) { if (NOC) { go('noc'); return; } if (ACION) { await acionCarregar(); go('acion'); return; } admPeriodoPapel(); await admCarregar(); go(admInicio()); } } catch (e) { console.error(e); }
 }
 
 /* ============================ início ============================ */
@@ -4996,6 +5323,7 @@ async function bootAdmin() {
   const cv = new URLSearchParams(location.search).get('convite'); if (cv) { try { localStorage.setItem('rb_convite', cv.trim().toUpperCase()); } catch (e) {} try { history.replaceState(null, '', location.pathname); } catch (e) {} }
   const ok = await DB.open(); if (!ok) toast('Armazenamento do aparelho indisponível: os dados não serão guardados se o app fechar.', 6000);
   const pf = await DB.get('meta', 'perfil'); if (pf) S.perfil = Object.assign({ prefixo: 'CE-BKB' }, pf);
+  const rc = await DB.get('meta', 'recurso'); if (rc && rc.r) S.recurso = rc.r;
   const sq = await DB.get('meta', 'seq'); S.seq = sq ? sq.n : 0;
   await carregaRotas();
   const at = await DB.get('meta', 'ativa');
