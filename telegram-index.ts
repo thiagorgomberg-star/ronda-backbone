@@ -1,4 +1,4 @@
-// Ronda Backbone Multivale — função "telegram" (Supabase Edge Function)
+// Técnico Plus - Multivale — função "telegram" (Supabase Edge Function)
 //  • acao "enviar": o painel manda um lote de O.S. para a medição. Para cada O.S. a função
 //    cria um tópico no grupo do Telegram, publica os dados e os itens da LPU com o botão
 //    "✅ O.S MEDIDA" e, no fim, envia a planilha do lote.
@@ -24,50 +24,75 @@ export type Db = {
   gravarMedicao(row: Record<string, unknown>): Promise<void>;
   telegramCfg(): Promise<any>;
   salvarTelegramCfg(cfg: any): Promise<void>;
+  arquivo?(path: string): Promise<Blob | null>;
 };
 
 // Corretiva da Claro: só o SERVIÇO entra no valor; material é só consumo de estoque.
 export const claroCorretiva = (d: any) => d.tipo === "corretiva" && (/claro/i.test(String((d.corr && d.corr.cliente) || "")) || (!!d.info && d.info.dono === "parceiro" && /claro/i.test(String(d.info.parceiro || ""))));
+export const ehLanc = (x: any) => /^LAN[ÇC]AMENTO CABOS/i.test(String(x.d || "")) && String(x.u || "").toUpperCase() === "M";
 export const ehMaterial = (x: any) => x.t ? x.t === "M" : String(x.c || "").split(".").length >= 3;
-export function resumoOS(e: any) {
-  const d = e.dados || e; const so = claroCorretiva(d);
-  const itens = (d.lpu || []).map((x: any) => { const est = so && ehMaterial(x); const q = +x.q || 0, v = +x.v || 0; return { c: x.c, d: x.d, u: x.u, q, v, t: est ? 0 : q * v, ...(est ? { est: true } : {}) }; });
+export function resumoOS(e: any, m: any = null) {
+  const d = e.dados || e; const so = claroCorretiva(d); const md = (m && m.dados) || {};
+  // manutenção backbone (preço fechado): só o lançamento de cabo acima de 500 m é cobrado; material é estoque
+  const bb = d.centro === "backbone"; let fr = 500;
+  const itens = (d.lpu || []).map((x: any) => { const est = (so || bb) && ehMaterial(x); const q = +x.q || 0, v = +x.v || 0;
+    if (est) return { c: x.c, d: x.d, u: x.u, q, v, t: 0, est: true };
+    if (!bb) return { c: x.c, d: x.d, u: x.u, q, v, t: q * v, qf: q };
+    if (!ehLanc(x)) return { c: x.c, d: x.d, u: x.u, q, v, t: 0, cont: true };
+    const usa = Math.min(fr, q); fr -= usa; return { c: x.c, d: x.d, u: x.u, q, v, t: (q - usa) * v, qf: q - usa, franq: usa }; });
   const valor = itens.reduce((a: number, x: any) => a + x.t, 0);
   const tipo = d.tipo === "corretiva" ? "Corretiva" : d.tipo === "implantacao" ? "Implantação" : d.tipo === "vistoria" ? "Vistoria" : "Preventiva";
   const os = (d.corr && d.corr.ticket) || (d.impl && d.impl.designacao) || (d.info && d.info.tag) || d.id;
   const info = d.info || {};
-  return { id: d.id, os, tipo, valor, itens, data: d.chegada || d.criado, tecnico: info.tecnico || d._tecnico || "", matricula: d._matricula || "", endereco: [info.endereco, info.bairro, info.cidade].filter(Boolean).join(", "), ocorrencia: (d.corr && d.corr.ocorrencia) || "", servico: (d.impl && d.impl.servico) || "", uid: d._uid, claro: so };
+  return { id: d.id, os, tipo, valor, itens, data: d.chegada || d.criado, tecnico: info.tecnico || d._tecnico || "", matricula: d._matricula || "", endereco: [info.endereco, info.bairro, info.cidade].filter(Boolean).join(", "), ocorrencia: (d.corr && d.corr.ocorrencia) || "", servico: (d.impl && d.impl.servico) || "", uid: d._uid, claro: so, centro: String(d.centro || ""), wfc: String(md.wfc || d.wfc || ""), wf2: String(md.wf2 || d.wf2 || "") };
 }
 export function textoOS(r: ReturnType<typeof resumoOS>) {
-  return [`<b>O.S ${h(r.os)}</b> · ${h(r.tipo)}${r.ocorrencia ? " · " + h(r.ocorrencia) : ""}`, `Data: ${dh(r.data)} · Técnico: ${h(r.tecnico)}${r.matricula ? " (" + h(r.matricula) + ")" : ""}`, r.endereco ? `Endereço: ${h(r.endereco)}` : "", "", r.claro ? "<i>Corretiva Claro: só serviço entra no valor; material é consumo de estoque.</i>" : "", "<b>Itens da LPU</b>",
-    ...r.itens.filter((x: any) => !x.est).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.q)} ${h(x.u)} × ${brl(x.v)} = <b>${brl(x.t)}</b>`),
+  return [`<b>O.S ${h(r.os)}</b> · ${h(r.tipo)}${r.ocorrencia ? " · " + h(r.ocorrencia) : ""}`, `Data: ${dh(r.data)} · Técnico: ${h(r.tecnico)}${r.matricula ? " (" + h(r.matricula) + ")" : ""}`, r.wfc || r.wf2 ? `WFC: <b>${h(r.wfc || "—")}</b> · WF2: <b>${h(r.wf2 || "—")}</b>` : "", r.endereco ? `Endereço: ${h(r.endereco)}` : "", "", r.claro ? "<i>Corretiva Claro: só serviço entra no valor; material é consumo de estoque.</i>" : "", r.centro === "backbone" ? "<i>Manutenção backbone (preço fechado): só o lançamento de cabo acima de 500 m é cobrado pela LPU.</i>" : "", "<b>Itens da LPU</b>",
+    ...r.itens.filter((x: any) => !x.est && !x.cont && x.t > 0).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.qf ?? x.q)} ${h(x.u)} × ${brl(x.v)} = <b>${brl(x.t)}</b>${x.franq ? ` <i>(${qtd(x.franq)} m na franquia)</i>` : ""}`),
+    ...(r.itens.some((x: any) => x.cont) ? ["", "<b>Coberto pelo contrato (sem valor)</b>", ...r.itens.filter((x: any) => x.cont).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.q)} ${h(x.u)}`)] : []),
     ...(r.itens.some((x: any) => x.est) ? ["", "<b>Material (consumo de estoque, sem valor)</b>", ...r.itens.filter((x: any) => x.est).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.q)} ${h(x.u)}`)] : []), "", `<b>Valor da O.S: ${brl(r.valor)}</b>`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n").slice(0, 4000);
 }
 export function planilhaLote(rs: ReturnType<typeof resumoOS>[]) {
   const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`; const n = (v: number) => (+v || 0).toFixed(2).replace(".", ",");
-  const linhas = [["Data", "O.S", "Tipo", "Técnico", "Matrícula", "Endereço", "Ocorrência / serviço", "Valor da O.S", "Itens LPU (código x quantidade)", "Material de estoque (código x quantidade)"].join(";"),
-    ...rs.map((r) => [dh(r.data), q(r.os), r.tipo, q(r.tecnico), q(r.matricula), q(r.endereco), q(r.ocorrencia || r.servico), n(r.valor), q(r.itens.filter((x: any) => !x.est).map((x: any) => `${x.c} x ${qtd(x.q)}`).join("; ")), q(r.itens.filter((x: any) => x.est).map((x: any) => `${x.c} x ${qtd(x.q)}`).join("; "))].join(";")),
-    ["", "", "", "", "", "", "TOTAL", n(rs.reduce((a, r) => a + r.valor, 0)), "", ""].join(";")];
+  const linhas = [["Data", "O.S", "WFC", "WF2", "Tipo", "Técnico", "Matrícula", "Endereço", "Ocorrência / serviço", "Valor da O.S", "Itens LPU (código x quantidade)", "Material de estoque (código x quantidade)"].join(";"),
+    ...rs.map((r) => [dh(r.data), q(r.os), q(r.wfc), q(r.wf2), r.tipo, q(r.tecnico), q(r.matricula), q(r.endereco), q(r.ocorrencia || r.servico), n(r.valor), q(r.itens.filter((x: any) => !x.est && !x.cont && x.t > 0).map((x: any) => `${x.c} x ${qtd(x.qf ?? x.q)}`).join("; ")), q(r.itens.filter((x: any) => x.est).map((x: any) => `${x.c} x ${qtd(x.q)}`).join("; "))].join(";")),
+    ["", "", "", "", "", "", "", "", "TOTAL", n(rs.reduce((a, r) => a + r.valor, 0)), "", ""].join(";")];
   return "﻿" + linhas.join("\r\n");
 }
 
-export async function enviarLote(db: Db, tg: Tg, ids: string[], por: string, agora = Date.now()) {
+// fotos soltas (álbuns de até 10) e o PDF do relatório de serviço, dentro do tópico da O.S.
+async function anexos(db: Db, tg: Tg, chat: number | string, thread: number | null, r: any, d: any, pdf: string | undefined, avisos: string[]) {
+  if (!db.arquivo) return;
+  const fotos = ((d && d.fotos) || []).filter((f: any) => f && f.path);
+  for (let k = 0; k < fotos.length; k += 10) {
+    const grupo = fotos.slice(k, k + 10); const fd = new FormData(); fd.append("chat_id", String(chat)); if (thread) fd.append("message_thread_id", String(thread));
+    const media: any[] = [];
+    for (const f of grupo) { const b = await db.arquivo(f.path); if (!b) continue; const nm = "f" + media.length; fd.append(nm, new File([b], nm + ".jpg", { type: "image/jpeg" })); media.push({ type: "photo", media: "attach://" + nm, ...(k === 0 && !media.length ? { caption: `📷 Fotos · O.S ${r.os}` } : {}) }); }
+    try {
+      if (media.length === 1) { const f1 = new FormData(); f1.append("chat_id", String(chat)); if (thread) f1.append("message_thread_id", String(thread)); f1.append("photo", fd.get("f0") as File); if (media[0].caption) f1.append("caption", media[0].caption); await tg("sendPhoto", f1); }
+      else if (media.length) { fd.append("media", JSON.stringify(media)); await tg("sendMediaGroup", fd); }
+    } catch (x: any) { avisos.push(`fotos da O.S ${r.os}: ${x && x.message || x}`); }
+  }
+  if (pdf) { try { const b = await db.arquivo(pdf); if (b) { const fd = new FormData(); fd.append("chat_id", String(chat)); if (thread) fd.append("message_thread_id", String(thread)); fd.append("caption", `📄 Relatório de serviço · O.S ${r.os}`); fd.append("document", new File([b], `Relatorio_OS_${String(r.os).replace(/[^\w.-]+/g, "_")}.pdf`, { type: "application/pdf" })); await tg("sendDocument", fd); } } catch (x: any) { avisos.push(`PDF da O.S ${r.os}: ${x && x.message || x}`); } }
+}
+export async function enviarLote(db: Db, tg: Tg, ids: string[], por: string, agora = Date.now(), pdfs: Record<string, string> = {}) {
   const cfg = await db.telegramCfg(); if (!cfg || !cfg.chatId) throw new Error("Grupo do Telegram não vinculado. No grupo, envie /vincular.");
   const evs = await db.eventos(ids); const meds = await db.medicoes(ids); const lote = "L" + new Date(agora).toISOString().slice(0, 16).replace(/\D/g, "");
   const ok: any[] = [], erros: any[] = [];
   for (const e of evs) {
-    const r = resumoOS(e); const m = meds.get(r.id) || {};
+    const m = meds.get(e.id) || {}; const r = resumoOS(e, m);
     if (m.status === "medida") { erros.push({ id: r.id, erro: "já medida" }); continue; }
     try {
       let thread: number | null = m.tg_thread || null;
       if (!thread && cfg.forum) { const t = await tg("createForumTopic", { chat_id: cfg.chatId, name: `O.S ${r.os} · ${r.tecnico} · ${brl(r.valor)}`.slice(0, 128), icon_color: 0x6FB9F0 }); thread = t && t.message_thread_id; }
       const msg = await tg("sendMessage", { chat_id: cfg.chatId, ...(thread ? { message_thread_id: thread } : {}), text: textoOS(r), parse_mode: "HTML", reply_markup: { inline_keyboard: [[{ text: "✅ O.S MEDIDA", callback_data: "medida:" + r.id }]] } });
-      await db.gravarMedicao({ id: r.id, org: ORG, uid: r.uid || null, status: "enviada", valor: +r.valor.toFixed(2), itens: r.itens, dados: { os: r.os, tipo: r.tipo, tecnico: r.tecnico, endereco: r.endereco, claro: r.claro }, enviado_em: agora, enviado_por: por, lote, tg_chat: String(cfg.chatId), tg_thread: thread, tg_msg: msg && msg.message_id, atualizado: agora });
+      const avisos: string[] = []; await anexos(db, tg, cfg.chatId, thread, r, e.dados || e, pdfs[r.id], avisos); avisos.forEach((a) => erros.push({ id: "anexo", erro: a }));
+      await db.gravarMedicao({ id: r.id, org: ORG, uid: r.uid || null, status: "enviada", valor: +r.valor.toFixed(2), itens: r.itens, dados: { ...(m.dados || {}), os: r.os, tipo: r.tipo, tecnico: r.tecnico, endereco: r.endereco, claro: r.claro, wfc: r.wfc, wf2: r.wf2 }, enviado_em: agora, enviado_por: por, lote, tg_chat: String(cfg.chatId), tg_thread: thread, tg_msg: msg && msg.message_id, atualizado: agora });
       ok.push({ id: r.id, os: r.os, valor: r.valor });
     } catch (x: any) { erros.push({ id: r.id, erro: String(x && x.message || x) }); }
   }
   if (ok.length) {
-    const rs = evs.map(resumoOS).filter((r) => ok.some((o) => o.id === r.id)); const total = rs.reduce((a, r) => a + r.valor, 0);
+    const rs = evs.map((e) => resumoOS(e, meds.get(e.id))).filter((r) => ok.some((o) => o.id === r.id)); const total = rs.reduce((a, r) => a + r.valor, 0);
     const fd = new FormData(); fd.append("chat_id", String(cfg.chatId)); if (cfg.threadLotes) fd.append("message_thread_id", String(cfg.threadLotes));
     fd.append("caption", `📦 Lote ${lote} · ${rs.length} O.S · ${brl(total)} · enviado por ${por}`.slice(0, 1000));
     fd.append("document", new Blob([planilhaLote(rs)], { type: "text/csv" }), `medicao_${lote}.csv`);
@@ -81,7 +106,7 @@ export async function tratarUpdate(db: Db, tg: Tg, upd: any, agora = Date.now())
   if (upd.message && typeof upd.message.text === "string" && /^\/vincular/.test(upd.message.text)) {
     const c = upd.message.chat; const cfg = { chatId: c.id, titulo: c.title || "", forum: !!c.is_forum, vinculadoEm: agora, threadLotes: upd.message.message_thread_id || null };
     await db.salvarTelegramCfg(cfg);
-    await tg("sendMessage", { chat_id: c.id, ...(upd.message.message_thread_id ? { message_thread_id: upd.message.message_thread_id } : {}), text: `✅ Grupo vinculado ao Ronda Backbone.${cfg.forum ? " Cada O.S. enviada para medição vai abrir um tópico aqui." : " Ative os Tópicos do grupo para cada O.S. ter o seu tópico."}` });
+    await tg("sendMessage", { chat_id: c.id, ...(upd.message.message_thread_id ? { message_thread_id: upd.message.message_thread_id } : {}), text: `✅ Grupo vinculado ao Técnico Plus.${cfg.forum ? " Cada O.S. enviada para medição vai abrir um tópico aqui." : " Ative os Tópicos do grupo para cada O.S. ter o seu tópico."}` });
     return "vinculado";
   }
   const cb = upd.callback_query; if (!cb || !/^medida:/.test(cb.data || "")) return "ignorado";
@@ -107,6 +132,7 @@ function dbSupabase(sb: any): Db {
     },
     async gravarMedicao(row) { const { error } = await sb.from("medicoes").upsert(row); if (error) throw error; },
     async telegramCfg() { const { data } = await sb.from("config").select("dados").eq("org", ORG).maybeSingle(); return data && data.dados && data.dados.telegram; },
+    async arquivo(path) { const { data, error } = await sb.storage.from("fotos").download(path); return error ? null : data; },
     async salvarTelegramCfg(cfg) { const { data } = await sb.from("config").select("dados").eq("org", ORG).maybeSingle(); const d = (data && data.dados) || {}; d.telegram = cfg; await sb.from("config").upsert({ org: ORG, dados: d }); },
   };
 }
@@ -139,7 +165,7 @@ async function handler(req: Request) {
       const me = await tg("getMe", {}); const cfg = await db.telegramCfg();
       return json({ ok: true, bot: me.username, grupo: cfg ? cfg.titulo : null, forum: cfg ? cfg.forum : null });
     }
-    if (body.acao === "enviar") { const ids = (body.ids || []).map(String).slice(0, 200); if (!ids.length) return json({ erro: "nenhuma O.S" }, 400); return json(await enviarLote(db, tg, ids, admin.nome || "supervisor")); }
+    if (body.acao === "enviar") { const ids = (body.ids || []).map(String).slice(0, 200); if (!ids.length) return json({ erro: "nenhuma O.S" }, 400); return json(await enviarLote(db, tg, ids, admin.nome || "supervisor", Date.now(), body.pdfs || {})); }
     return json({ erro: "ação desconhecida" }, 400);
   } catch (e: any) { console.error(e); return json({ erro: String(e && e.message || e) }, 500); }
 }

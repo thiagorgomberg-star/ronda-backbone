@@ -1,4 +1,4 @@
-# Ronda Backbone Multivale
+# Técnico Plus - Multivale
 
 App web (PWA) para ronda preventiva de backbone: ficha de inspeção completa, fotos com carimbo de GPS, percurso da ronda (deslocamento e rota do cabo), relatórios em PDF e envio pelo WhatsApp.
 

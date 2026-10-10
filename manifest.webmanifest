@@ -1,7 +1,7 @@
 {
-  "name": "Ronda Backbone Multivale",
-  "short_name": "Ronda Backbone",
-  "description": "Inspeção preventiva de caixas de emenda backbone com GPS, fotos e relatório em PDF.",
+  "name": "Técnico Plus - Multivale",
+  "short_name": "Técnico Plus",
+  "description": "Técnico Plus - Multivale: O.S., deslocamento, fotos com GPS e relatórios dos técnicos de campo.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

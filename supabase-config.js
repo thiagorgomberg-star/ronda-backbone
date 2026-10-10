@@ -1,5 +1,5 @@
 /*
-  CONFIGURAÇÃO DA NUVEM (Supabase) — Ronda Backbone Multivale
+  CONFIGURAÇÃO DA NUVEM (Supabase) — Técnico Plus - Multivale
 
   Enquanto SUPABASE_URL estiver vazio, o app funciona só no celular (sem nuvem).
 

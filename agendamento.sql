@@ -1,5 +1,5 @@
 -- =====================================================================
--- Ronda Backbone Multivale — agendamento dos alertas (rode UMA vez)
+-- Técnico Plus - Multivale — agendamento dos alertas (rode UMA vez)
 -- Antes de rodar, troque:
 --   SEU-PROJETO  pelo código do seu projeto (o que vem antes de .supabase.co na Project URL)
 --   SEU-SEGREDO  pelo mesmo texto que você colocou no segredo CRON_SECRET da função

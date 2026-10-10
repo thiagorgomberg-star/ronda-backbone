@@ -1,4 +1,4 @@
-// Ronda Backbone Multivale — função "alertas" (Supabase Edge Function)
+// Técnico Plus - Multivale — função "alertas" (Supabase Edge Function)
 // Envia notificações (Web Push) para o celular do técnico mesmo com o app fechado:
 //  • atividade nova ou aguardando início do deslocamento (repete a cada 2 min)
 //  • expediente não iniciado dentro da jornada (repete a cada 10 min)
@@ -19,6 +19,11 @@ const INTERVALO = { atv: 2 * MIN - 10000, exp: 10 * MIN - 10000, ref: 5 * MIN - 
 type Envia = (uid: string, msg: Record<string, unknown>) => Promise<number>;
 type Db = {
   atividadesPendentes(): Promise<any[]>;
+  apoiosAbertos?(): Promise<any[]>;
+  gestores?(): Promise<string[]>;
+  emCurso?(): Promise<any[]>;
+  aoVivo?(): Promise<any[]>;
+  limiteCfg?(): Promise<{ lim: number; aviso: number }>;
   tecnicos(): Promise<any[]>;
   expedientesDesde(ts: number): Promise<any[]>;
   comAssinatura(): Promise<Set<string>>;
@@ -42,8 +47,12 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
   const out: string[] = [];
   const subs = await db.comAssinatura();
   const chaves: string[] = [];
-  const pend = (await db.atividadesPendentes()).filter((a) => a.tecnico_uid && subs.has(a.tecnico_uid));
+  const pend = (await db.atividadesPendentes()).filter((a) => a.tecnico_uid && subs.has(a.tecnico_uid) && !(a.dados || {}).vistaEm); // o alarme para quando o técnico confirma "O.S. recebida"
   pend.forEach((a) => chaves.push("atv:" + a.id));
+  // equipe de apoio: cada técnico de apoio que ainda não iniciou o deslocamento
+  const apo: { a: any; uid: string }[] = [];
+  for (const a of (db.apoiosAbertos ? await db.apoiosAbertos() : [])) for (const u of (a.apoio_uids || [])) { const st = (a.apoio_st || {})[u]; if (subs.has(u) && !["vista", "em_deslocamento", "no_local", "concluida"].includes(st)) apo.push({ a, uid: u }); }
+  apo.forEach((x) => chaves.push(`apo:${x.a.id}:${x.uid}`));
   const R = relogio(agora);
   const tecs = (await db.tecnicos()).filter((t) => subs.has(t.uid));
   const exps = await db.expedientesDesde(R.inicioDia - 18 * 3600000);
@@ -59,9 +68,15 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
     const k = "atv:" + a.id; if (!pode(k, INTERVALO.atv)) continue;
     const d = a.dados || {}; const em = a.tipo === "emergencial"; const impl = a.tipo === "implantacao";
     const titulo = `${em ? "🚨 EMERGENCIAL" : impl ? "Nova implantação" : "Nova preventiva"} · ${a.ticket || ""}${a.log >= 2 ? ` · LOG ${a.log}` : ""}`;
-    const corpo = [d.ocorrencia, d.designacao, a.endereco || d.refLocal, "Toque para abrir e iniciar o deslocamento."].filter(Boolean).join(" · ");
+    const corpo = [d.ocorrencia, d.designacao, a.endereco || d.refLocal, "Toque para abrir e confirmar o recebimento."].filter(Boolean).join(" · ");
     const n = await envia(a.tecnico_uid, { titulo, corpo, tag: "atv-" + a.id, url: "./" });
     await marca(k); out.push(`atv ${a.id} → ${n}`);
+  }
+  for (const { a, uid } of apo) {
+    const k = `apo:${a.id}:${uid}`; if (!pode(k, INTERVALO.atv)) continue; const d = a.dados || {};
+    const titulo = `🤝 APOIO · ${a.tipo === "emergencial" ? "emergencial" : a.tipo === "implantacao" ? "implantação" : "preventiva"} · ${a.ticket || ""}`;
+    const corpo = [d.ocorrencia, a.endereco || d.refLocal, a.tecnico_nome ? "Principal: " + a.tecnico_nome : "", "Toque para abrir e confirmar o recebimento."].filter(Boolean).join(" · ");
+    const n = await envia(uid, { titulo, corpo, tag: "apo-" + a.id, url: "./" }); await marca(k); out.push(`apo ${a.id} ${uid} → ${n}`);
   }
   // 2) jornada: expediente não iniciado, refeição estourada, fim do dia
   const diaUtil = JOR.dias.includes(String(R.dow));
@@ -85,6 +100,38 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
       if (!log.has(k)) { const n = await envia(t.uid, { titulo: "Fim da jornada", corpo: `São ${JOR.fim}. Lembre de encerrar o expediente no app.`, tag: "fim", url: "./" }); await marca(k); out.push(`fim ${t.uid} → ${n}`); }
     }
   }
+  // 4) gestor: técnico com O.S. aberta perto de passar (ou passando) do limite de horas do dia (CLT: 2 h extras → 10 h)
+  if (db.gestores && db.emCurso && db.aoVivo) {
+    const gest = (await db.gestores()).filter((u) => subs.has(u));
+    if (gest.length) {
+      const L = db.limiteCfg ? await db.limiteCfg() : { lim: 600, aviso: 30 }; const vivo = new Map((await db.aoVivo()).map((v: any) => [v.uid, v.dados || {}])); const curso = await db.emCurso();
+      const nomes = new Map((await db.tecnicos()).map((t: any) => [t.uid, (t.dados || {}).nome || "Técnico"]));
+      const abertos = exps.filter((e) => !e.fim && e.inicio >= R.inicioDia - 6 * 3600000);
+      const ks: string[] = []; abertos.forEach((e) => ks.push(`lim:${e.uid}:${R.ymd}:a`, `lim:${e.uid}:${R.ymd}:p`)); const lg = await db.logLer(ks);
+      for (const e of abertos) {
+        const v: any = vivo.get(e.uid) || {}; const atv = curso.find((a) => a.tecnico_uid === e.uid); if (!v.ativo && !atv) continue;
+        let ref = 0; for (const r of ((e.dados || {}).refeicoes || [])) if (r && r.ini) ref += Math.min(r.fim || agora, agora) - r.ini;
+        const trab = Math.round((agora - +e.inicio - ref) / MIN); const falta = L.lim - trab; if (falta > L.aviso) continue;
+        const k = `lim:${e.uid}:${R.ymd}:${falta <= 0 ? "p" : "a"}`; if (lg.has(k)) continue;
+        const nome = nomes.get(e.uid) || "Técnico"; const os = v.ticket || (atv && atv.ticket) || "em andamento"; const fh = (m: number) => `${Math.floor(Math.abs(m) / 60)}h${String(Math.abs(m) % 60).padStart(2, "0")}`;
+        const msg = { titulo: falta <= 0 ? `⏱️ ${nome} passou do limite de horas` : `⏱️ ${nome} perto do limite de horas`, corpo: `O.S. ${os} aberta · trabalhou ${fh(trab)} hoje · limite ${fh(L.lim)}${falta > 0 ? ` (faltam ${fh(falta)})` : ""}.`, tag: "lim-" + e.uid, url: "./index.html?modo=admin" };
+        let n = 0; for (const g of gest) n += await envia(g, msg); await db.logGravar(k, agora); out.push(`lim ${e.uid} → ${n}`);
+      }
+    }
+  }
+  // 5) O.S. em andamento sem atualização há 60 min: avisa o técnico e os gestores, a cada hora
+  if (db.emCurso) {
+    const curso = await db.emCurso(); const gest = db.gestores ? (await db.gestores()).filter((u) => subs.has(u)) : [];
+    const ks: string[] = []; const venc: any[] = [];
+    for (const a of curso) { const d = a.dados || {}; const ult = +(d.ultAtualiz || d.iniciadaEm || a.atualizado || a.criado) || agora; const min = Math.floor((agora - ult) / MIN); if (min < 60) continue; const k = `upd:${a.id}:${Math.floor(min / 60)}`; ks.push(k); venc.push({ a, min, k }); }
+    const lg = ks.length ? await db.logLer(ks) : new Map();
+    for (const { a, min, k } of venc) {
+      if (lg.has(k)) continue; const h = `${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}`; let n = 0;
+      if (a.tecnico_uid && subs.has(a.tecnico_uid)) n += await envia(a.tecnico_uid, { titulo: `📝 Atualize a O.S. ${a.ticket || ""}`, corpo: `Sem atualização há ${h}. Abra o app e informe a situação.`, tag: "upd-" + a.id, url: "./" });
+      for (const g of gest) n += await envia(g, { titulo: `🕐 O.S. ${a.ticket || ""} sem atualização há ${h}`, corpo: `${a.tecnico_nome || "Sem técnico"} · ${a.status === "no_local" ? "no local" : "em deslocamento"}`, tag: "upd-" + a.id, url: "./index.html?modo=admin" });
+      await db.logGravar(k, agora); out.push(`upd ${a.id} → ${n}`);
+    }
+  }
   // 3) aviso 30 min antes do início do plantão
   for (const p of pls) {
     if (p.tipo !== 'plantao' || !subs.has(p.uid) || p.inicio <= agora || p.inicio - agora > 30 * MIN || log.has('pla:' + p.id)) continue;
@@ -96,6 +143,11 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
 
 function dbSupabase(sb: any): Db {
   return {
+    async apoiosAbertos() { const { data, error } = await sb.from("atividades").select("id,tipo,ticket,tecnico_nome,status,endereco,dados,apoio_uids,apoio_st").eq("org", ORG).not("status", "in", "(concluida,cancelada)").neq("apoio_uids", "{}"); if (error) throw error; return data || []; },
+    async gestores() { const { data } = await sb.from("admins").select("uid").eq("org", ORG); return (data || []).map((r: any) => r.uid); },
+    async emCurso() { const { data } = await sb.from("atividades").select("id,ticket,tipo,tecnico_uid,tecnico_nome,status,atualizado,criado,dados").eq("org", ORG).in("status", ["em_deslocamento", "no_local"]); return data || []; },
+    async aoVivo() { const { data } = await sb.from("aovivo").select("uid,dados").eq("org", ORG); return data || []; },
+    async limiteCfg() { const { data } = await sb.from("config").select("dados").eq("org", ORG).maybeSingle(); const d = (data && data.dados) || {}; return { lim: +d.limiteDiaMin || 600, aviso: +d.avisoMin || 30 }; },
     async atividadesPendentes() { const { data, error } = await sb.from("atividades").select("id,tipo,ticket,tecnico_uid,status,endereco,log,dados").eq("org", ORG).in("status", ["pendente", "recebida"]).not("tecnico_uid", "is", null); if (error) throw error; return data || []; },
     async tecnicos() { const { data, error } = await sb.from("tecnicos").select("uid,dados").eq("org", ORG); if (error) throw error; return data || []; },
     async expedientesDesde(ts: number) { const { data, error } = await sb.from("expedientes").select("id,uid,inicio,fim,dados").eq("org", ORG).gte("inicio", ts); if (error) throw error; return data || []; },
@@ -123,7 +175,7 @@ async function handler(req: Request) {
   let ok = !!env("CRON_SECRET") && req.headers.get("x-cron-secret") === env("CRON_SECRET");
   if (!ok) {
     const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-    if (tok) { const { data } = await sb.auth.getUser(tok); if (data && data.user) { const { data: ad } = await sb.from("admins").select("uid").eq("uid", data.user.id).maybeSingle(); ok = !!ad; } }
+    if (tok) { const { data } = await sb.auth.getUser(tok); if (data && data.user) { const { data: ad } = await sb.from("admins").select("uid").eq("uid", data.user.id).maybeSingle(); ok = !!ad; if (!ok) { const { data: dp } = await sb.from("despachantes").select("uid").eq("uid", data.user.id).maybeSingle(); ok = !!dp; } } }
   }
   if (!ok) return new Response(JSON.stringify({ erro: "não autorizado" }), { status: 401, headers: { ...CORS, "Content-Type": "application/json" } });
   if (!env("VAPID_PUBLIC") || !env("VAPID_PRIVATE")) return new Response(JSON.stringify({ erro: "Configure os segredos VAPID_PUBLIC e VAPID_PRIVATE" }), { status: 500, headers: { ...CORS, "Content-Type": "application/json" } });

@@ -1,4 +1,4 @@
-# Ligar o app Ronda Backbone à nuvem (Supabase)
+# Ligar o app Técnico Plus à nuvem (Supabase)
 
 O Supabase tem plano gratuito **sem cartão de crédito**. Ele guarda:
 - rondas, inspeções, corretivas, rotas e perfis;
@@ -140,6 +140,91 @@ As chaves vêm num arquivo separado, `CHAVES-ALERTAS-NAO-ENVIAR-AO-GITHUB.txt`. 
 
 **Som:** com o app fechado, o celular usa o som de notificação do sistema, repetido. O alarme forte e contínuo toca quando o app está aberto.
 
+## Centro de custo, chamados de parceiro, veículo e horas extras
+
+- **Centro de custo / faturamento** de cada O.S.:
+  - **Contrato Claro SP (LPU)** e **Contrato Claro interior (LPU)**: pagos pela LPU. Nas corretivas da Claro só o serviço conta; o material é consumo de estoque.
+  - **Manutenção backbone (preço fechado)**: o atendimento já está pago pelo contrato. Só o **lançamento de cabo acima de 500 m** na O.S. é cobrado pela LPU. Os demais itens aparecem como "coberto pelo contrato" e o material como estoque.
+  - O supervisor escolhe na atividade; o técnico confere na etapa Produção. Acionamento Claro de São Paulo capital vem como Claro SP; de outras cidades, Claro interior. Chamado de parceiro vem como manutenção backbone.
+- **Chamado de parceiro** (ex.: TIM): cole o texto no "Colar acionamento" do painel ou no link de acionamentos. O app reconhece o chamado (EVE/TSK), a falha, o trecho, as pontas A e B, a designação, o equipamento, o horário da falha e o contato. Localiza a ponta A no mapa e manda ao técnico.
+- **Meu veículo** (☰ no celular): o técnico lança cada abastecimento (data, hodômetro, litros, preço do litro, total, combustível, posto e se encheu o tanque). O app calcula o consumo em km/l e o custo por km entre tanques cheios. No painel, a Produção do período mostra o card **Combustível** por técnico.
+- **Horas extras e vale-refeição:**
+  - No painel, em **Equipe e cadastros** > **Horas e salário**, informe o salário base, o vale-refeição por dia e a jornada por dia útil (padrão 8h48, 44 h por semana).
+  - O extrato usa os horários de expediente e de refeição registrados no app. Hora = salário ÷ 220. Acima da jornada em dia útil e sábado: 50%. Domingo: 100%. O PDF sai para o técnico assinar.
+  - Só o painel vê salário, VR e horas extras: esses dados ficam na tabela `rh_dados`, que o técnico não acessa nem pelo app nem pela API. Feriados, adicional noturno e DSR devem ser conferidos pelo RH.
+- **Ganho líquido estimado:** em Produção do período, o card mostra produção menos o custo da equipe, por dupla e por O.S.
+  - Custo: salário (com o % de encargos definido em Configurar metas), vale-refeição, horas extras, combustível e locação do veículo (informada em Horas e salário).
+  - O custo de cada dupla é rateado entre as O.S. dela pelo tempo de deslocamento e de atendimento. Sem salário cadastrado, usa a meta de custo da dupla (marcado como "estimado").
+  - Sai também no extrato total do fechamento (relatório gerencial) e exporta para Excel.
+- **Limite de horas por dia:** pela CLT, no máximo 2 horas extras por dia (10 h). No painel, em Escalonamento, defina o limite e a antecedência do aviso.
+  - Quem estiver com O.S. aberta perto do limite (ou passando) aparece no topo do painel.
+  - Com **Ativar alertas neste computador**, o supervisor ou gestor recebe a notificação mesmo com o painel fechado (pela função `alertas`).
+  - No extrato de horas, dias acima de 10 h ficam destacados.
+- **Mapa de calor:** além do calor, pinos por local na cor da rede (fibra azul, coaxial laranja; contorno vermelho quando há atividade aberta). Ao tocar no pino, abre a lista das O.S. do local, e cada uma abre com os dados, os itens da LPU, as fotos e o PDF.
+- **Para ativar:** rode de novo o `supabase.sql` e publique de novo as funções `telegram` e `alertas` com os novos `telegram-index.ts` e `alertas-index.ts`.
+
+## Atualização da O.S. de hora em hora
+
+- **Técnico:** com uma O.S. em andamento, a cada 60 minutos sem atualização o celular toca o alarme e abre a janela **Atualize a O.S.** com:
+  - a situação agora (em deslocamento, em execução, aguardando material, acesso, outra equipe, clima, finalizando);
+  - o que foi feito ou o que falta;
+  - a previsão de término.
+  O alarme só para depois do envio. O botão **Atualizar O.S.**, na barra de baixo, permite atualizar antes. Com o app fechado, chega a notificação.
+- **Supervisor e gestor:** O.S. em andamento há mais de 60 minutos sem atualização aparecem em amarelo no topo do painel, com o botão Ver O.S. A fila mostra "atualizada há…". Com os alertas ativados no computador, chega uma notificação a cada hora sem atualização.
+- No cadastro da atividade fica o histórico de todas as atualizações do técnico.
+- **Para ativar:** publique de novo a função `alertas` com o novo `alertas-index.ts`.
+
+## Fotos com carimbo e envio ao Telegram
+
+- Toda foto tirada pelo app sai com o carimbo padrão Multivale: hora em destaque, data e dia da semana, endereço do local (pelo GPS), latitude e longitude com a precisão, a categoria e a O.S. no alto e, na faixa branca de baixo, o nome e a função do técnico com o logo da Multivale.
+- Ao enviar para medição, cada O.S. vai para o tópico dela no Telegram com a mensagem e o botão O.S MEDIDA, **as fotos soltas** (em álbuns de até 10) e **o PDF do relatório de serviço**, que também traz as fotos. O painel gera os PDFs e deixa na pasta `relatorios` do Storage.
+- **Para ativar:** publique de novo a função `telegram` com o novo `telegram-index.ts`.
+
+## Menu do painel
+
+No painel, o botão ☰ abre o menu do supervisor:
+- **Painel e despacho:** equipe ao vivo, fila de atividades e escala.
+- **Equipe e cadastros:** cadastre técnico, técnico de fibra ou fiscal de campo e envie o convite pelo WhatsApp.
+  - Quando a pessoa abre o link no celular, o app já entra com nome, matrícula e função. A função fica travada e só o supervisor troca.
+  - Na tabela também dá para trocar a função de quem já usava o app e desativar um cadastro.
+- **Importar O.S. em lote:** cole as linhas do Excel (com cabeçalho) ou escolha o arquivo .xlsx/.csv.
+  - Colunas reconhecidas: OS, Tipo, Ocorrência, Endereço, Bairro, Cidade, Rota, Node, WFC, WF2, Técnico, Cliente, Coordenadas, Prazo e Observação. Há um botão para baixar o modelo.
+  - O app confere duplicadas, técnico e local antes de inserir. As linhas com técnico tocam no celular dele; as demais vão para o backlog.
+- **Produção do período**, **Mapa de calor** e **Medição · Telegram**.
+  - O mapa de calor mostra as executadas do período (7, 30, 90 dias ou 6 meses) e as atuais e pendentes, com a lista dos pontos com mais ocorrências.
+- **WFC e WF2:** campos da O.S. no cadastro da atividade, no link de acionamentos, na ficha do técnico (etapa final) e na tela de medição, onde dá para editar antes de enviar. Saem no PDF, na mensagem e na planilha do Telegram e no arquivo das O.S. medidas.
+
+## Link só de acionamentos Claro
+
+Endereço: **https://thiagorgomberg-star.github.io/ronda-backbone/acionamento.html**
+
+Nesse link a pessoa só faz uma coisa: colar o texto do acionamento da Claro.
+1. O app reconhece os campos: evento, motivo, node, rede, endereço, solicitante e data. Em seguida localiza o endereço no mapa.
+2. Ela escolhe entre **Inserir no backlog** (sem técnico) e **Enviar direto ao técnico**.
+   - Ao enviar direto, abre a lista de técnicos com destaque para quem está sem atividade, quem está perto do local e quem está há muito tempo na mesma atividade.
+3. A lista do dia mostra os acionamentos Claro. Os do backlog têm o botão **Enviar ao técnico**.
+4. Se o mesmo evento já estiver aberto, o app avisa antes de duplicar.
+
+**Quem pode usar:**
+- Supervisores e gestores entram nesse link com o mesmo login.
+- Para dar acesso só aos acionamentos (sem painel, produção nem medição):
+  1. Crie o usuário em **Authentication** > **Users** > **Add user** e copie o **UID**.
+  2. No **SQL Editor**, rode:
+     ```sql
+     insert into public.despachantes (uid, org, nome) values ('UID-AQUI', 'multivale', 'Nome da pessoa');
+     ```
+- Esse usuário enxerga só técnicos, posição, escala e atividades. Ele cria e encaminha atividades. Não vê rondas, fichas, produção, medição nem configurações, e não apaga nada.
+
+## Equipe de apoio e mapa da equipe
+
+- **Apoio na mesma O.S.:** ao criar ou editar uma atividade, escolha o técnico principal e toque nos nomes em **Equipe de apoio**.
+  - Os técnicos de apoio recebem a atividade com o alarme (e o alerta com o app fechado), marcada como **🤝 Apoio**.
+  - Cada um registra o próprio deslocamento, chegada, km e horas.
+  - A produção da LPU fica só na O.S. do técnico principal. Na ficha do apoio, a etapa Produção fica bloqueada.
+  - No painel, a atividade mostra "+ N apoio" e a situação de cada apoio (recebida, em deslocamento, no local, concluída).
+- **Mapa ao vivo:** mostra também quem está de expediente sem atividade (verde, "Disponível") ou em refeição (amarelo). Durante o expediente o celular manda a posição a cada minuto.
+- **Para ativar:** rode de novo o `supabase.sql` e publique de novo a função `alertas` com o novo `alertas-index.ts`.
+
 ## Produção (LPU), BI e fechamento
 
 - **Tabela de preços:** a LPU Claro SP Capital DDD 11 (vigência 01/06/2026 a 31/05/2027) está no arquivo `lpu.js`, com 285 itens entre serviços e materiais. Para uma LPU nova, mande a planilha que eu gero o arquivo de novo.
@@ -221,6 +306,97 @@ O botão **Planilha (Excel)** baixa as O.S. da etapa (ou só as selecionadas), c
   - Depois disso, os concluídos e cancelados são compactados por mês na tabela `acionamentos_historico`. Os abertos não são mexidos.
   - Em **Medição** > **Arquivo** aparece cada mês compactado com o botão **Exportar (.zip)**, com CSV e JSON.
   - O painel marca quem exportou e quando. Meses ainda não exportados aparecem em vermelho.
+
+## Centro de custo por projeto (v28)
+
+Fica no menu do painel: **Centro de custo (projetos)**.
+
+**Criar os projetos.** Na primeira vez, toque em "Criar os projetos Claro, Backbone Multivale e Backbone Master". Em "Editar projeto" ajuste:
+- **O.S. que entram no projeto:** Claro, Backbone Multivale, Backbone Master, ou nenhuma (só lançamentos).
+- **Como recebemos:**
+  - Claro: por acionamento, ou seja, a produção LPU das corretivas.
+  - Master: valor fixo mensal.
+  - Multivale: venda de fibras. Lance cada contrato como receita **recorrente**, que repete em todo ciclo.
+- **Dia do fechamento:** cada projeto tem o seu ciclo. A Claro fecha no dia 15; use 31 para o último dia do mês.
+- **Funcionários alocados (%):** a porcentagem do custo de cada um que vai para o projeto. Quem fica em branco é rateado pelo tempo gasto nas O.S. de cada projeto.
+
+**Custo de cada funcionário** = mão de obra (salário + encargos + VR + horas extras, do RH) + deslocamento (combustível dos abastecimentos) + veículo (locação).
+
+**O que a tela mostra:**
+- **Total do mês vigente:** receita, custo, resultado, margem e o custo que não caiu em nenhum projeto.
+- **Por projeto:** receita, custo, resultado, projeção e a tabela **por equipe** (dupla ou técnico).
+- **Lançamentos:** receitas e custos extras (ferramentas, terceiros, pedágio…).
+- **Relatório gerencial (PDF):** todo o custo da operação, por projeto e por equipe.
+
+**Linha do tempo:** "Em caixa agora / Caixa concluída" agora se chama "Em atividade agora / Atividade concluída".
+
+**No Supabase:** rode de novo o **supabase.sql**. Ele cria as tabelas `projetos` e `proj_lanc`, que só o gestor e o supervisor acessam.
+
+## Recebimento da O.S., odômetro e distância (v25)
+
+- **Alerta de nova O.S.:** o técnico toca em **O.S. recebida**. Isso avisa o supervisor (aparece "Vista pelo técnico" na fila, no histórico de atualizações e um aviso no painel) e **para o alarme**. Os alertas no celular (push) também param depois do ciente.
+- **Odômetro:** só é pedido depois do ciente, quando ele vai iniciar o deslocamento até a O.S. O botão **Iniciar deslocamento** fica travado até o odômetro ser preenchido. Rota preventiva sem O.S. não pede odômetro (inicial nem final).
+- **Distância:** no alerta e na tela inicial o técnico vê a distância em linha reta do GPS dele até a O.S. No painel, ao marcar o local da O.S., a lista de técnicos mostra a distância de cada um (pela posição ao vivo) e fica ordenada do mais perto para o mais longe. A distância no momento do ciente fica registrada na O.S.
+
+**No Supabase (uma vez):**
+1. SQL Editor → rode de novo o **supabase.sql** inteiro (é seguro repetir). Ele atualiza a função `apoio_status`, que passa a aceitar o ciente da equipe de apoio.
+2. Edge Functions → **alertas** → cole o novo **alertas-index.ts** e faça o deploy (os push de O.S. param depois do ciente).
+
+## Almoxarifado (WMS) e serviços do técnico (v27)
+
+**Almoxarifado** fica no menu lateral do painel: Almoxarifado (materiais).
+- **Catálogo:** cadastre os materiais um a um, cole uma lista (código; descrição; unidade; mínimo) ou traga prontos os materiais da LPU e a lista de materiais do app.
+- **Movimentar:**
+  - **Entrada** soma no almoxarifado (NF / fornecedor).
+  - **Saída para técnico** tira do almoxarifado e põe no saldo do técnico.
+  - **Devolução** faz o caminho contrário.
+  - **Ajustes** servem para o inventário (quantidade negativa tira).
+  - Um mesmo lançamento aceita várias linhas.
+- **Baixa automática:** quando o técnico conclui a O.S., os materiais lançados (lista de materiais, outros materiais e itens de material da LPU) saem do saldo dele. Se ele corrigir a O.S. e concluir de novo, a baixa é atualizada, sem duplicar. Material digitado com nome fora do catálogo aparece em Saldos como "sem cadastro": vincule-o a um item e as próximas baixas já entram certo.
+- **Saldos:** o gestor vê o almoxarifado, o total com os técnicos e o saldo de cada técnico. O técnico vê só o próprio saldo em Menu > Meus materiais, onde também pode registrar uma baixa avulsa.
+- **Movimentos:** histórico com filtros e exportação para Excel (CSV).
+
+**Serviços do técnico:** no perfil, o técnico marca o que executa:
+- Corretiva Claro interior
+- Corretiva backbone próprio
+- Corretiva backbone de parceiros
+- Vistoria de rede
+- Preventiva
+- Implantação
+
+A tela inicial mostra só esses. As O.S. enviadas pelo supervisor chegam sempre.
+
+**Contas de estoque:** cada material tem saldo separado em três contas:
+- **Manutenção Claro**
+- **Backbone Multivale**
+- **Backbone Master**
+
+Entrada, saída, devolução e ajuste pedem a conta. A baixa automática pega a conta da O.S.: corretiva Claro vai para Claro, backbone de parceiro Master vai para Master, e o resto vai para Multivale. O gestor filtra os saldos por conta. O técnico vê o saldo dele separado por conta.
+
+**Requisição do dia 20:** todo dia 20, às 08:00, o banco gera uma requisição para a Claro e outra para a Master. Cada uma traz o material usado no mês anterior naquela conta, com o saldo atual ao lado. Para conferir e enviar, vá em Almoxarifado > Requisições:
+1. Ajuste as quantidades.
+2. Baixe o PDF ou o Excel.
+3. Marque como enviada.
+4. Quando o material chegar, marque como recebida.
+
+Há também o botão "Gerar agora". O agendamento usa o pg_cron (o mesmo do arquivamento).
+
+**Preventiva/vistoria conjunta:** ao ativar a preventiva ou a vistoria, toque em **Conjunta: Multivale + Master**. Em cada caixa e em cada foto da rede, o técnico marca se é da Multivale ou da Master.
+
+**Relatório mensal das preventivas** fica no menu do painel: Preventivas do mês. É um relatório por dono do backbone e reúne:
+- rotas percorridas e km
+- rede no trecho: estrutura no poste, poda de árvore, troca de poste, travessia, reserva técnica, irregularidades
+- caixas de emenda: o que foi verificado, as irregularidades e os serviços
+- vistorias e acompanhamentos
+- registro fotográfico
+
+No último dia do mês, o painel avisa para gerar o relatório.
+
+**Tela de abertura:** ao abrir, o app mostra o logo da Multivale com uma animação leve.
+
+**Alarme falado:** o alarme de nova O.S. fala "Nova O.S. recebida. Iniciar deslocamento." O APK usa a voz do Android, no volume de alarme.
+
+**No Supabase:** rode de novo o **supabase.sql**. Ele cria as tabelas `materiais` e `mat_mov` com as regras de acesso: o técnico só lê os próprios movimentos e só lança as próprias baixas.
 
 ## O que vai para a nuvem
 

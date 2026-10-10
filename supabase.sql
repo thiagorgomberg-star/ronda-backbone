@@ -1,5 +1,5 @@
 -- =====================================================================
--- Ronda Backbone Multivale — banco de dados no Supabase
+-- Técnico Plus - Multivale — banco de dados no Supabase
 -- Cole TUDO no Supabase: SQL Editor > New query > Run.
 -- Pode rodar de novo sem problema (não apaga dados).
 -- =====================================================================
@@ -399,6 +399,8 @@ create table if not exists public.os_medidas (
   tg_thread    bigint,
   arquivado_em timestamptz not null default now()
 );
+alter table public.os_medidas add column if not exists wfc text;
+alter table public.os_medidas add column if not exists wf2 text;
 create index if not exists os_medidas_org_ciclo on public.os_medidas (org, ciclo);
 create index if not exists os_medidas_uid_ciclo on public.os_medidas (uid, ciclo);
 alter table public.os_medidas enable row level security;
@@ -438,14 +440,14 @@ begin
   with mv as (
     delete from public.medicoes m where m.status = 'medida' returning m.*
   )
-  insert into public.os_medidas (id, org, uid, tecnico, os, tipo, cliente, data_os, ciclo, valor, itens, lote, validado_em, validado_por, enviado_em, enviado_por, medido_em, medido_por, tg_chat, tg_thread)
-  select mv.id, mv.org, mv.uid, mv.dados->>'tecnico', mv.dados->>'os', mv.dados->>'tipo',
+  insert into public.os_medidas (id, org, uid, tecnico, os, wfc, wf2, tipo, cliente, data_os, ciclo, valor, itens, lote, validado_em, validado_por, enviado_em, enviado_por, medido_em, medido_por, tg_chat, tg_thread)
+  select mv.id, mv.org, mv.uid, mv.dados->>'tecnico', mv.dados->>'os', nullif(coalesce(mv.dados->>'wfc', e.dados->>'wfc'), ''), nullif(coalesce(mv.dados->>'wf2', e.dados->>'wf2'), ''), mv.dados->>'tipo',
          case when coalesce(mv.dados->>'claro', '') = 'true' then 'Claro' end,
          to_timestamp(coalesce(e.chegada, mv.enviado_em, mv.medido_em) / 1000.0),
          public.ciclo_de(to_timestamp(coalesce(e.chegada, mv.enviado_em, mv.medido_em) / 1000.0)),
          mv.valor, mv.itens, mv.lote, mv.validado_em, mv.validado_por, mv.enviado_em, mv.enviado_por, mv.medido_em, mv.medido_por, mv.tg_chat, mv.tg_thread
   from mv left join public.eventos e on e.id = mv.id
-  on conflict (id) do update set medido_em = excluded.medido_em, medido_por = excluded.medido_por, valor = excluded.valor, itens = excluded.itens, arquivado_em = now();
+  on conflict (id) do update set medido_em = excluded.medido_em, medido_por = excluded.medido_por, valor = excluded.valor, itens = excluded.itens, wfc = coalesce(excluded.wfc, public.os_medidas.wfc), wf2 = coalesce(excluded.wf2, public.os_medidas.wf2), arquivado_em = now();
   get diagnostics n = row_count; return n;
 end $$;
 
@@ -485,3 +487,329 @@ do $$ begin
     perform cron.schedule('arquivo-ronda-backbone', '10 6 * * *', 'select public.arquivar_rotina()');
   end if;
 end $$;
+
+-- =====================================================================
+-- EQUIPE DE APOIO NA MESMA O.S.
+--  O supervisor inclui técnicos de apoio na atividade. Eles recebem a
+--  atividade (com alarme), registram o próprio deslocamento e chegada,
+--  mas a produção (LPU) fica na O.S. do técnico principal.
+-- =====================================================================
+alter table public.atividades add column if not exists apoio_uids uuid[] not null default '{}';
+alter table public.atividades add column if not exists apoio_st jsonb not null default '{}'::jsonb;  -- {uid: status do apoio}
+create index if not exists atividades_apoio on public.atividades using gin (apoio_uids);
+drop policy if exists atv_ler_apoio on public.atividades;
+create policy atv_ler_apoio on public.atividades for select to authenticated using (auth.uid() = any (apoio_uids));
+
+-- o técnico de apoio só altera a própria situação (não mexe no resto da atividade)
+create or replace function public.apoio_status(p_id text, p_status text) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_status not in ('recebida', 'vista', 'em_deslocamento', 'no_local', 'concluida') then return; end if;
+  update public.atividades
+     set apoio_st = coalesce(apoio_st, '{}'::jsonb) || jsonb_build_object(auth.uid()::text, p_status),
+         atualizado = (extract(epoch from now()) * 1000)::bigint
+   where id = p_id and auth.uid() = any (apoio_uids);
+end $$;
+revoke all on function public.apoio_status(text, text) from public;
+grant execute on function public.apoio_status(text, text) to authenticated;
+
+-- =====================================================================
+-- LINK DE ACIONAMENTOS CLARO (acionamento.html)
+--  Quem está em "despachantes" só lê o texto do acionamento e cria/encaminha
+--  a atividade: vê técnicos, posição ao vivo, escala e atividades. Não vê
+--  rondas, fichas, produção, medição nem configurações.
+--  Cadastro: insert into public.despachantes (uid, org, nome) values ('UID', 'multivale', 'Nome');
+-- =====================================================================
+create table if not exists public.despachantes (
+  uid  uuid primary key references auth.users (id) on delete cascade,
+  org  text not null default 'multivale',
+  nome text
+);
+alter table public.despachantes enable row level security;
+drop policy if exists desp_proprio on public.despachantes;
+create policy desp_proprio on public.despachantes for select to authenticated using (uid = auth.uid() or public.eh_admin(org));
+
+create or replace function public.eh_despacho(p_org text) returns boolean language sql stable security definer set search_path = public as $$
+  select public.eh_admin(p_org) or exists (select 1 from public.despachantes d where d.uid = auth.uid() and d.org = p_org)
+$$;
+
+drop policy if exists desp_atv_ler on public.atividades;
+drop policy if exists desp_atv_inserir on public.atividades;
+drop policy if exists desp_atv_editar on public.atividades;
+drop policy if exists desp_tec_ler on public.tecnicos;
+drop policy if exists desp_vivo_ler on public.aovivo;
+drop policy if exists desp_pla_ler on public.plantoes;
+create policy desp_atv_ler     on public.atividades for select to authenticated using (public.eh_despacho(org));
+create policy desp_atv_inserir on public.atividades for insert to authenticated with check (public.eh_despacho(org));
+create policy desp_atv_editar  on public.atividades for update to authenticated using (public.eh_despacho(org)) with check (public.eh_despacho(org));
+create policy desp_tec_ler     on public.tecnicos   for select to authenticated using (public.eh_despacho(org));
+create policy desp_vivo_ler    on public.aovivo     for select to authenticated using (public.eh_despacho(org));
+create policy desp_pla_ler     on public.plantoes   for select to authenticated using (public.eh_despacho(org));
+
+-- =====================================================================
+-- CADASTRO DA EQUIPE PELO PAINEL (técnico, técnico de fibra, fiscal de campo)
+--  O supervisor cria o cadastro e manda o link de convite. Ao abrir o link,
+--  o celular resgata o cadastro (nome, matrícula, função) e fica vinculado.
+--  A função definida aqui vale no celular (o técnico não troca sozinho).
+-- =====================================================================
+create table if not exists public.cadastros (
+  id           text primary key,          -- código do convite
+  org          text not null,
+  uid          uuid,                      -- celular que resgatou
+  nome         text not null,
+  matricula    text,
+  funcao       text not null default 'tecnico',   -- tecnico | fibra | fiscal
+  equipe       text,
+  veiculo      text,
+  telefone     text,
+  ativo        boolean not null default true,
+  criado       timestamptz not null default now(),
+  criado_por   text,
+  resgatado_em timestamptz
+);
+create unique index if not exists cadastros_uid on public.cadastros (uid) where uid is not null;
+alter table public.cadastros enable row level security;
+drop policy if exists cad_ler on public.cadastros;
+drop policy if exists cad_inserir on public.cadastros;
+drop policy if exists cad_editar on public.cadastros;
+drop policy if exists cad_apagar on public.cadastros;
+create policy cad_ler     on public.cadastros for select to authenticated using (public.eh_admin(org) or uid = auth.uid());
+create policy cad_inserir on public.cadastros for insert to authenticated with check (public.eh_admin(org));
+create policy cad_editar  on public.cadastros for update to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+create policy cad_apagar  on public.cadastros for delete to authenticated using (public.eh_admin(org));
+
+create or replace function public.resgatar_cadastro(p_codigo text) returns jsonb language plpgsql security definer set search_path = public as $$
+declare c public.cadastros;
+begin
+  if auth.uid() is null then raise exception 'sem login'; end if;
+  select * into c from public.cadastros where id = upper(trim(p_codigo)) and ativo;
+  if not found then raise exception 'Convite não encontrado ou desativado.'; end if;
+  if c.uid is not null and c.uid <> auth.uid() then raise exception 'Este convite já foi usado em outro celular. Peça um novo ao supervisor.'; end if;
+  update public.cadastros set uid = null where uid = auth.uid() and id <> c.id;   -- um cadastro por celular
+  update public.cadastros set uid = auth.uid(), resgatado_em = coalesce(resgatado_em, now()) where id = c.id returning * into c;
+  return to_jsonb(c);
+end $$;
+revoke all on function public.resgatar_cadastro(text) from public;
+grant execute on function public.resgatar_cadastro(text) to authenticated;
+
+-- =====================================================================
+-- ABASTECIMENTOS DO VEÍCULO (lançados pelo técnico) e dados de RH no cadastro
+-- =====================================================================
+create table if not exists public.abastecimentos (
+  id    text primary key,
+  org   text not null,
+  uid   uuid not null default auth.uid(),
+  ts    bigint not null,
+  dados jsonb not null,
+  sync  timestamptz not null default now()
+);
+create index if not exists abastecimentos_org_ts on public.abastecimentos (org, ts);
+alter table public.abastecimentos enable row level security;
+drop policy if exists abs_ler on public.abastecimentos;
+drop policy if exists abs_inserir on public.abastecimentos;
+drop policy if exists abs_editar on public.abastecimentos;
+drop policy if exists abs_apagar on public.abastecimentos;
+create policy abs_ler     on public.abastecimentos for select to authenticated using (uid = auth.uid() or public.eh_admin(org));
+create policy abs_inserir on public.abastecimentos for insert to authenticated with check (uid = auth.uid());
+create policy abs_editar  on public.abastecimentos for update to authenticated using (uid = auth.uid()) with check (uid = auth.uid());
+create policy abs_apagar  on public.abastecimentos for delete to authenticated using (uid = auth.uid() or public.eh_admin(org));
+
+-- salário, vale-refeição e jornada (para o extrato de horas extras). Só o supervisor grava;
+-- o técnico enxerga apenas o próprio cadastro.
+alter table public.cadastros add column if not exists salario numeric(12,2);
+alter table public.cadastros add column if not exists vr_dia numeric(10,2);
+alter table public.cadastros add column if not exists jornada_min int;        -- minutos por dia útil (padrão 528 = 8h48, 44 h/semana)
+alter table public.cadastros add column if not exists locacao_mes numeric(10,2);   -- locação do veículo por mês (rateio do ganho líquido)
+
+-- Dados de RH (salário, VR, jornada, locação) ficam numa tabela só do painel:
+-- o técnico não enxerga nem pelo app nem pela API.
+create table if not exists public.rh_dados (
+  cad_id      text primary key references public.cadastros (id) on delete cascade,
+  org         text not null,
+  salario     numeric(12,2),
+  vr_dia      numeric(10,2),
+  jornada_min int,
+  locacao_mes numeric(10,2),
+  atualizado  timestamptz not null default now()
+);
+alter table public.rh_dados enable row level security;
+drop policy if exists rh_tudo on public.rh_dados;
+create policy rh_tudo on public.rh_dados for all to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+insert into public.rh_dados (cad_id, org, salario, vr_dia, jornada_min, locacao_mes)
+  select id, org, salario, vr_dia, jornada_min, locacao_mes from public.cadastros
+   where coalesce(salario::text, vr_dia::text, jornada_min::text, locacao_mes::text) is not null
+  on conflict (cad_id) do nothing;
+update public.cadastros set salario = null, vr_dia = null, jornada_min = null, locacao_mes = null
+ where coalesce(salario::text, vr_dia::text, jornada_min::text, locacao_mes::text) is not null;
+
+-- =====================================================================
+-- ALMOXARIFADO (WMS): catálogo de materiais e movimentos
+--  entrada (→ almox) · saida (almox → técnico) · devolucao (técnico → almox)
+--  baixa (consumo do técnico; automática ao concluir a O.S.) · ajuste_almox / ajuste_tec (inventário ±)
+--  Gestor/supervisor vê e lança tudo. O técnico só vê os próprios movimentos e só lança/edita as próprias baixas.
+-- =====================================================================
+create table if not exists public.materiais (
+  id         text primary key,
+  org        text not null default 'multivale',
+  codigo     text,
+  descricao  text not null,
+  unidade    text not null default 'un',
+  minimo     numeric,
+  refs       text[] not null default '{}',
+  ativo      boolean not null default true,
+  atualizado bigint
+);
+create index if not exists materiais_org on public.materiais (org);
+alter table public.materiais enable row level security;
+drop policy if exists mat_ler on public.materiais;
+drop policy if exists mat_admin on public.materiais;
+create policy mat_ler   on public.materiais for select to authenticated using (true);
+create policy mat_admin on public.materiais for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+create table if not exists public.mat_mov (
+  id           text primary key,
+  org          text not null default 'multivale',
+  ts           bigint not null,
+  tipo         text not null check (tipo in ('entrada', 'saida', 'devolucao', 'baixa', 'ajuste_almox', 'ajuste_tec')),
+  material_id  text not null,
+  descricao    text,
+  unidade      text,
+  qtd          numeric not null,
+  tecnico_uid  uuid,
+  tecnico_nome text,
+  atividade_id text,
+  ticket       text,
+  insp_id      text,
+  doc          text,
+  obs          text,
+  por          uuid,
+  por_nome     text,
+  criado       bigint
+);
+create index if not exists mat_mov_org_ts on public.mat_mov (org, ts);
+create index if not exists mat_mov_tec on public.mat_mov (tecnico_uid);
+create index if not exists mat_mov_mat on public.mat_mov (material_id);
+alter table public.mat_mov enable row level security;
+drop policy if exists mov_ler on public.mat_mov;
+drop policy if exists mov_admin on public.mat_mov;
+drop policy if exists mov_tec_inserir on public.mat_mov;
+drop policy if exists mov_tec_editar on public.mat_mov;
+drop policy if exists mov_tec_apagar on public.mat_mov;
+create policy mov_ler         on public.mat_mov for select to authenticated using (tecnico_uid = auth.uid() or public.eh_admin(org));
+create policy mov_admin       on public.mat_mov for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+create policy mov_tec_inserir on public.mat_mov for insert to authenticated with check (tecnico_uid = auth.uid() and tipo = 'baixa');
+create policy mov_tec_editar  on public.mat_mov for update to authenticated using (tecnico_uid = auth.uid() and tipo = 'baixa') with check (tecnico_uid = auth.uid() and tipo = 'baixa');
+create policy mov_tec_apagar  on public.mat_mov for delete to authenticated using (tecnico_uid = auth.uid() and tipo = 'baixa');
+
+-- contas de estoque: manutenção Claro, backbone Multivale e backbone Master (saldos separados)
+alter table public.mat_mov add column if not exists conta text not null default 'multivale';
+do $$ begin
+  alter table public.mat_mov add constraint mat_mov_conta check (conta in ('claro', 'multivale', 'master'));
+exception when duplicate_object then null; end $$;
+create index if not exists mat_mov_conta on public.mat_mov (org, conta, tipo, ts);
+
+-- =====================================================================
+-- REQUISIÇÃO MENSAL DE MATERIAIS (todo dia 20): consumo do mês anterior
+-- vira uma requisição para a Claro e outra para a Master.
+-- =====================================================================
+create table if not exists public.mat_requisicoes (
+  id         text primary key,            -- conta-AAAA-MM (mês de consumo)
+  org        text not null default 'multivale',
+  conta      text not null,
+  mes_ref    text not null,               -- AAAA-MM do consumo usado como base
+  gerada_em  bigint not null,
+  itens      jsonb not null default '[]', -- [{material_id, codigo, descricao, unidade, consumo, saldo_almox, saldo_tecnicos, solicitado}]
+  status     text not null default 'aberta' check (status in ('aberta', 'enviada', 'recebida')),
+  obs        text,
+  atualizado bigint
+);
+alter table public.mat_requisicoes enable row level security;
+drop policy if exists req_admin on public.mat_requisicoes;
+create policy req_admin on public.mat_requisicoes for all to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+create or replace function public.gerar_requisicoes(p_ref date default (now() at time zone 'America/Sao_Paulo')::date, p_org text default 'multivale', p_refazer boolean default false)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_ini date := (date_trunc('month', p_ref) - interval '1 month')::date;
+  v_fim date := date_trunc('month', p_ref)::date;
+  a bigint := (extract(epoch from (v_ini::timestamp at time zone 'America/Sao_Paulo')) * 1000)::bigint;
+  z bigint := (extract(epoch from (v_fim::timestamp at time zone 'America/Sao_Paulo')) * 1000)::bigint;
+  c text; v_itens jsonb; n int := 0; v_id text;
+begin
+  if auth.uid() is not null and not public.eh_admin(p_org) then raise exception 'sem permissão'; end if;
+  foreach c in array array['claro', 'master'] loop
+    v_id := c || '-' || to_char(v_ini, 'YYYY-MM');
+    -- já existe: só refaz quando pedido e se ainda estiver aberta (enviada/recebida não muda)
+    if exists (select 1 from public.mat_requisicoes where id = v_id and (not p_refazer or status <> 'aberta')) then continue; end if;
+    select coalesce(jsonb_agg(jsonb_build_object(
+             'material_id', u.material_id, 'codigo', m.codigo, 'descricao', coalesce(m.descricao, u.descricao), 'unidade', coalesce(m.unidade, u.unidade),
+             'consumo', u.consumo, 'saldo_almox', coalesce(s.almox, 0), 'saldo_tecnicos', coalesce(s.tec, 0), 'solicitado', u.consumo)
+             order by coalesce(m.descricao, u.descricao)), '[]'::jsonb)
+      into v_itens
+      from (select material_id, max(descricao) descricao, max(unidade) unidade, sum(qtd) consumo
+              from public.mat_mov where org = p_org and conta = c and tipo = 'baixa' and ts >= a and ts < z
+             group by material_id having sum(qtd) > 0) u
+      left join public.materiais m on m.id = u.material_id
+      left join (select material_id,
+                        sum(case when tipo in ('entrada', 'devolucao', 'ajuste_almox') then qtd when tipo = 'saida' then -qtd else 0 end) almox,
+                        sum(case when tipo in ('saida', 'ajuste_tec') then qtd when tipo in ('devolucao', 'baixa') then -qtd else 0 end) tec
+                   from public.mat_mov where org = p_org and conta = c group by material_id) s on s.material_id = u.material_id;
+    insert into public.mat_requisicoes (id, org, conta, mes_ref, gerada_em, itens, status, atualizado)
+    values (v_id, p_org, c, to_char(v_ini, 'YYYY-MM'), (extract(epoch from now()) * 1000)::bigint, v_itens, 'aberta', (extract(epoch from now()) * 1000)::bigint)
+    on conflict (id) do update set itens = excluded.itens, gerada_em = excluded.gerada_em, atualizado = excluded.atualizado, status = 'aberta';
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+do $$ begin
+  revoke all on function public.gerar_requisicoes(date, text, boolean) from public;
+  begin revoke all on function public.gerar_requisicoes(date, text, boolean) from anon; exception when undefined_object then null; end;
+end $$;
+grant execute on function public.gerar_requisicoes(date, text, boolean) to authenticated;
+
+-- todo dia 20 às 08:00 (11:00 UTC), se o pg_cron estiver ativo
+do $$ begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule('requisicao-materiais', '0 11 20 * *', 'select public.gerar_requisicoes()');
+  end if;
+end $$;
+
+-- =====================================================================
+-- CENTRO DE CUSTO POR PROJETO
+--  projetos: vínculo com as O.S. (claro / multivale / master / outro), modelo de receita,
+--  receita fixa mensal, dia do fechamento e alocação dos funcionários (% por uid).
+--  proj_lanc: receitas (ex.: venda de fibras, recorrente) e custos lançados à mão.
+-- =====================================================================
+create table if not exists public.projetos (
+  id             text primary key,
+  org            text not null default 'multivale',
+  nome           text not null,
+  vinculo        text not null default 'outro' check (vinculo in ('claro', 'multivale', 'master', 'outro')),
+  modelo         text not null default 'outro' check (modelo in ('acionamento', 'fixo', 'venda_fibra', 'outro')),
+  receita_fixa   numeric,
+  dia_fechamento int not null default 31 check (dia_fechamento between 1 and 31),
+  alocacao       jsonb not null default '[]',
+  ativo          boolean not null default true,
+  obs            text,
+  atualizado     bigint
+);
+create table if not exists public.proj_lanc (
+  id          text primary key,
+  org         text not null default 'multivale',
+  projeto_id  text not null references public.projetos (id) on delete cascade,
+  data        text not null,               -- AAAA-MM-DD
+  tipo        text not null check (tipo in ('receita', 'custo')),
+  categoria   text,
+  descricao   text,
+  valor       numeric not null,
+  recorrente  boolean not null default false,  -- repete em todo ciclo a partir da data
+  ate         text,                            -- fim da recorrência (opcional)
+  por_nome    text,
+  criado      bigint
+);
+create index if not exists proj_lanc_proj on public.proj_lanc (projeto_id, data);
+alter table public.projetos enable row level security;
+alter table public.proj_lanc enable row level security;
+drop policy if exists proj_admin on public.projetos;
+drop policy if exists plan_admin on public.proj_lanc;
+create policy proj_admin on public.projetos  for all to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+create policy plan_admin on public.proj_lanc for all to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
