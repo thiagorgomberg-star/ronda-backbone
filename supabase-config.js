@@ -12,8 +12,8 @@
   window.SUPABASE_URL = 'https://abcdefghijk.supabase.co';
   window.SUPABASE_KEY = 'eyJhbGciOi...';
 */
-window.SUPABASE_URL = '';
-window.SUPABASE_KEY = '';
+window.SUPABASE_URL = 'https://hwxwoejikghquenzmwes.supabase.co';
+window.SUPABASE_KEY = 'sb_publishable_emQONp3_AnLJUs79Cbhd2g_QBfHQ30M';
 
 /* Alertas com o app fechado (Web Push): cole aqui a chave PÚBLICA VAPID (veja SUPABASE.md, parte "Alertas"). */
 window.VAPID_PUBLIC = 'BGo2iAnkzXJWE6K0ZMu3_zfFps99n-IkdQu5ZOILP5Bt1gYxRBBNwNXyOXA3MYRire5aEWI-6UNdQ6Fhw0PlUVQ';
