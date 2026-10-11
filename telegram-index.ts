@@ -35,11 +35,13 @@ export function resumoOS(e: any, m: any = null) {
   const d = e.dados || e; const so = claroCorretiva(d); const md = (m && m.dados) || {};
   // manutenção backbone (preço fechado): só o lançamento de cabo acima de 500 m é cobrado; material é estoque
   const bb = d.centro === "backbone"; let fr = 500;
-  const itens = (d.lpu || []).map((x: any) => { const est = (so || bb) && ehMaterial(x); const q = +x.q || 0, v = +x.v || 0;
+  const itens = (d.lpu || []).map((x: any) => {
+    const est = (so || bb) && ehMaterial(x); const q = +x.q || 0, v = +x.v || 0;
     if (est) return { c: x.c, d: x.d, u: x.u, q, v, t: 0, est: true };
     if (!bb) return { c: x.c, d: x.d, u: x.u, q, v, t: q * v, qf: q };
     if (!ehLanc(x)) return { c: x.c, d: x.d, u: x.u, q, v, t: 0, cont: true };
-    const usa = Math.min(fr, q); fr -= usa; return { c: x.c, d: x.d, u: x.u, q, v, t: (q - usa) * v, qf: q - usa, franq: usa }; });
+    const usa = Math.min(fr, q); fr -= usa; return { c: x.c, d: x.d, u: x.u, q, v, t: (q - usa) * v, qf: q - usa, franq: usa };
+  });
   const valor = itens.reduce((a: number, x: any) => a + x.t, 0);
   const tipo = d.tipo === "corretiva" ? "Corretiva" : d.tipo === "implantacao" ? "Implantação" : d.tipo === "vistoria" ? "Vistoria" : "Preventiva";
   const os = (d.corr && d.corr.ticket) || (d.impl && d.impl.designacao) || (d.info && d.info.tag) || d.id;
@@ -48,15 +50,15 @@ export function resumoOS(e: any, m: any = null) {
 }
 export function textoOS(r: ReturnType<typeof resumoOS>) {
   return [`<b>O.S ${h(r.os)}</b> · ${h(r.tipo)}${r.ocorrencia ? " · " + h(r.ocorrencia) : ""}`, `Data: ${dh(r.data)} · Técnico: ${h(r.tecnico)}${r.matricula ? " (" + h(r.matricula) + ")" : ""}`, r.wfc || r.wf2 ? `WFC: <b>${h(r.wfc || "—")}</b> · WF2: <b>${h(r.wf2 || "—")}</b>` : "", r.endereco ? `Endereço: ${h(r.endereco)}` : "", "", r.claro ? "<i>Corretiva Claro: só serviço entra no valor; material é consumo de estoque.</i>" : "", r.centro === "backbone" ? "<i>Manutenção backbone (preço fechado): só o lançamento de cabo acima de 500 m é cobrado pela LPU.</i>" : "", "<b>Itens da LPU</b>",
-    ...r.itens.filter((x: any) => !x.est && !x.cont && x.t > 0).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.qf ?? x.q)} ${h(x.u)} × ${brl(x.v)} = <b>${brl(x.t)}</b>${x.franq ? ` <i>(${qtd(x.franq)} m na franquia)</i>` : ""}`),
-    ...(r.itens.some((x: any) => x.cont) ? ["", "<b>Coberto pelo contrato (sem valor)</b>", ...r.itens.filter((x: any) => x.cont).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.q)} ${h(x.u)}`)] : []),
-    ...(r.itens.some((x: any) => x.est) ? ["", "<b>Material (consumo de estoque, sem valor)</b>", ...r.itens.filter((x: any) => x.est).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.q)} ${h(x.u)}`)] : []), "", `<b>Valor da O.S: ${brl(r.valor)}</b>`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n").slice(0, 4000);
+  ...r.itens.filter((x: any) => !x.est && !x.cont && x.t > 0).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.qf ?? x.q)} ${h(x.u)} × ${brl(x.v)} = <b>${brl(x.t)}</b>${x.franq ? ` <i>(${qtd(x.franq)} m na franquia)</i>` : ""}`),
+  ...(r.itens.some((x: any) => x.cont) ? ["", "<b>Coberto pelo contrato (sem valor)</b>", ...r.itens.filter((x: any) => x.cont).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.q)} ${h(x.u)}`)] : []),
+  ...(r.itens.some((x: any) => x.est) ? ["", "<b>Material (consumo de estoque, sem valor)</b>", ...r.itens.filter((x: any) => x.est).map((x: any) => `${h(x.c)} ${h(x.d)} — ${qtd(x.q)} ${h(x.u)}`)] : []), "", `<b>Valor da O.S: ${brl(r.valor)}</b>`].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n").slice(0, 4000);
 }
 export function planilhaLote(rs: ReturnType<typeof resumoOS>[]) {
   const q = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`; const n = (v: number) => (+v || 0).toFixed(2).replace(".", ",");
   const linhas = [["Data", "O.S", "WFC", "WF2", "Tipo", "Técnico", "Matrícula", "Endereço", "Ocorrência / serviço", "Valor da O.S", "Itens LPU (código x quantidade)", "Material de estoque (código x quantidade)"].join(";"),
-    ...rs.map((r) => [dh(r.data), q(r.os), q(r.wfc), q(r.wf2), r.tipo, q(r.tecnico), q(r.matricula), q(r.endereco), q(r.ocorrencia || r.servico), n(r.valor), q(r.itens.filter((x: any) => !x.est && !x.cont && x.t > 0).map((x: any) => `${x.c} x ${qtd(x.qf ?? x.q)}`).join("; ")), q(r.itens.filter((x: any) => x.est).map((x: any) => `${x.c} x ${qtd(x.q)}`).join("; "))].join(";")),
-    ["", "", "", "", "", "", "", "", "TOTAL", n(rs.reduce((a, r) => a + r.valor, 0)), "", ""].join(";")];
+  ...rs.map((r) => [dh(r.data), q(r.os), q(r.wfc), q(r.wf2), r.tipo, q(r.tecnico), q(r.matricula), q(r.endereco), q(r.ocorrencia || r.servico), n(r.valor), q(r.itens.filter((x: any) => !x.est && !x.cont && x.t > 0).map((x: any) => `${x.c} x ${qtd(x.qf ?? x.q)}`).join("; ")), q(r.itens.filter((x: any) => x.est).map((x: any) => `${x.c} x ${qtd(x.q)}`).join("; "))].join(";")),
+  ["", "", "", "", "", "", "", "", "TOTAL", n(rs.reduce((a, r) => a + r.valor, 0)), "", ""].join(";")];
   return "﻿" + linhas.join("\r\n");
 }
 

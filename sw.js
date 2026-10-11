@@ -1,5 +1,5 @@
-const V = 'ronda-backbone-v45';
-const SHELL = ['./', 'index.html', 'admin.html', 'acionamento.html', 'noc.html', 'manifest.webmanifest', 'supabase-config.js', 'supabase.min.js', 'lpu.js', 'logo.png', 'logo-pdf.jpg', 'icon-192.png', 'icon-512.png',
+const V = 'ronda-backbone-v60';
+const SHELL = ['./', 'index.html', 'admin.html', 'acionamento.html', 'noc.html', 'parceiro.html', 'manifest.webmanifest', 'supabase-config.js', 'supabase.min.js', 'lpu.js', 'jsqr.min.js', 'qrcode.min.js', 'logo.png', 'logo-pdf.jpg', 'icon-192.png', 'icon-512.png',
   'leaflet.js', 'leaflet-heat.js', 'leaflet.css', 'jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js'];
 const SEM_CACHE = ['nominatim.openstreetmap.org', 'firestore.googleapis.com', 'firebasestorage.googleapis.com', 'identitytoolkit.googleapis.com', 'securetoken.googleapis.com', 'www.googleapis.com', 'firebaseinstallations.googleapis.com'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });

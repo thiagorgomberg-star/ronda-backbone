@@ -917,3 +917,304 @@ drop policy if exists rec_ler on public.recursos;
 drop policy if exists rec_admin on public.recursos;
 create policy rec_ler   on public.recursos for select to authenticated using (uid = auth.uid() or public.eh_admin(org) or public.eh_despacho(org));
 create policy rec_admin on public.recursos for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+-- =====================================================================
+-- SEGURANÇA DO TRABALHO
+--  treinamentos: NR-10, NR-35, NR-33, ASO… com validade (o gestor cadastra; o técnico lê os dele)
+--  sos: botão de emergência do técnico (gestor/supervisor e NOC veem na hora)
+-- =====================================================================
+create table if not exists public.treinamentos (
+  id        text primary key,
+  org       text not null default 'multivale',
+  uid       uuid not null,
+  tipo      text not null,
+  emitido   text,            -- AAAA-MM-DD
+  validade  text,            -- AAAA-MM-DD
+  arquivo   text,            -- caminho no Storage (foto ou PDF do certificado)
+  obs       text,
+  atualizado bigint
+);
+create index if not exists treinamentos_uid on public.treinamentos (uid);
+alter table public.treinamentos enable row level security;
+drop policy if exists tr_ler on public.treinamentos;
+drop policy if exists tr_admin on public.treinamentos;
+create policy tr_ler   on public.treinamentos for select to authenticated using (uid = auth.uid() or public.eh_admin(org));
+create policy tr_admin on public.treinamentos for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+create table if not exists public.sos (
+  id          text primary key,
+  org         text not null default 'multivale',
+  uid         uuid not null,
+  nome        text,
+  ts          bigint not null,
+  lat         double precision,
+  lon         double precision,
+  texto       text,
+  status      text not null default 'aberto' check (status in ('aberto', 'atendido', 'cancelado')),
+  atendido_por text,
+  atendido_em bigint
+);
+alter table public.sos enable row level security;
+drop policy if exists sos_ler on public.sos;
+drop policy if exists sos_criar on public.sos;
+drop policy if exists sos_tec_cancelar on public.sos;
+drop policy if exists sos_equipe on public.sos;
+create policy sos_ler          on public.sos for select to authenticated using (uid = auth.uid() or public.eh_admin(org) or public.eh_noc(org));
+create policy sos_criar        on public.sos for insert to authenticated with check (uid = auth.uid());
+create policy sos_tec_cancelar on public.sos for update to authenticated using (uid = auth.uid()) with check (uid = auth.uid() and status in ('aberto', 'cancelado'));
+create policy sos_equipe       on public.sos for update to authenticated using (public.eh_admin(org) or public.eh_noc(org)) with check (public.eh_admin(org) or public.eh_noc(org));
+do $$ begin
+  begin alter publication supabase_realtime add table public.sos; exception when others then null; end;
+end $$;
+
+-- =====================================================================
+-- MODO ESCADA (trabalho em altura)
+--  O técnico ativa no app; a cada 1 hora o app pergunta "Você está bem?".
+--  Sem resposta ao 2º alarme, o app abre um alerta na tabela sos (tipo 'escada').
+--  Reserva no servidor: se o celular desligar ou ficar sem sinal, o pg_cron
+--  (a cada 5 min) abre o mesmo alerta com a última localização conhecida.
+-- =====================================================================
+alter table public.sos add column if not exists tipo text not null default 'sos';
+
+create table if not exists public.escada (
+  uid           uuid primary key default auth.uid(),
+  org           text not null default 'multivale',
+  nome          text,
+  ativo         boolean not null default false,
+  inicio        bigint,
+  ultimo_ok     bigint,
+  intervalo_min int not null default 60,
+  lat           double precision,
+  lon           double precision,
+  alertado      bigint,
+  atualizado    bigint
+);
+alter table public.escada enable row level security;
+drop policy if exists esc_proprio on public.escada;
+drop policy if exists esc_equipe on public.escada;
+create policy esc_proprio on public.escada for all    to authenticated using (uid = auth.uid()) with check (uid = auth.uid());
+create policy esc_equipe  on public.escada for select to authenticated using (public.eh_admin(org) or public.eh_noc(org));
+
+create or replace function public.verificar_escada()
+returns int language plpgsql security definer set search_path = public as $$
+declare agora bigint := (extract(epoch from now()) * 1000)::bigint; n int := 0; e record; la double precision; lo double precision;
+begin
+  for e in select * from public.escada
+           where ativo and alertado is null and ultimo_ok is not null
+             and ultimo_ok + (intervalo_min + 12) * 60000::bigint < agora loop
+    select coalesce((v.dados->>'lat')::double precision, e.lat), coalesce((v.dados->>'lon')::double precision, e.lon)
+      into la, lo from (select 1) x left join public.aovivo v on v.uid = e.uid;
+    insert into public.sos (id, org, uid, nome, ts, lat, lon, tipo, texto, status)
+    values ('esc_' || e.uid || '_' || e.ultimo_ok, e.org, e.uid, e.nome, agora, la, lo, 'escada',
+            'Sem resposta ao 2º alarme do modo escada (alerta do servidor: celular sem sinal ou desligado?)', 'aberto')
+    on conflict (id) do nothing;
+    update public.escada set alertado = agora where uid = e.uid;
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+do $$ begin
+  begin revoke all on function public.verificar_escada() from public, anon, authenticated; exception when undefined_object then null; end;
+end $$;
+do $$ begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule('modo-escada', '*/5 * * * *', 'select public.verificar_escada()');
+  end if;
+end $$;
+
+
+-- =====================================================================
+-- REGIÕES: cluster + mini cluster do colaborador e clusters do supervisor
+--  Clusters: ddd11 (Implantação), ddd12 (São José dos Campos, Taubaté, Litoral),
+--  ddd13 = Santos, mg (Sul de Minas). Mini cluster 'todas' = todas as áreas do cluster.
+-- =====================================================================
+alter table public.recursos add column if not exists cluster text;
+alter table public.admins   add column if not exists clusters text[] not null default '{}';
+drop policy if exists admins_equipe on public.admins;
+create policy admins_equipe on public.admins for select to authenticated using (public.eh_admin(org));
+
+create or replace function public.admin_clusters(p_uid uuid, p_clusters text[])
+returns void language plpgsql security definer set search_path = public as $$
+declare v_org text;
+begin
+  select org into v_org from public.admins where uid = p_uid;
+  if v_org is null then raise exception 'Supervisor não encontrado.'; end if;
+  if not (auth.uid() = p_uid or exists (select 1 from public.admins a where a.uid = auth.uid() and a.org = v_org and a.papel = 'gestor')) then
+    raise exception 'Só o gestor muda os clusters de outro supervisor.';
+  end if;
+  update public.admins set clusters = coalesce(p_clusters, '{}') where uid = p_uid;
+end $$;
+revoke all on function public.admin_clusters(uuid, text[]) from public;
+grant execute on function public.admin_clusters(uuid, text[]) to authenticated;
+
+-- recarrega o cache do PostgREST para as tabelas e colunas novas aparecerem na hora
+notify pgrst, 'reload schema';
+
+-- =====================================================================
+-- FUNÇÃO (CARGO), FOTO DE PERFIL DO SUPERVISOR E ADICIONAIS DO RH
+-- =====================================================================
+-- cargo do colaborador (aux_rede, oficial1..5, fibra1..5, encarregado, fiscal, supervisor..4, coordenador, gerentes, aux_escritorio)
+alter table public.cadastros add column if not exists cargo text;
+
+-- foto de perfil do supervisor/gestor (a do técnico vai no perfil dele, tabela tecnicos)
+alter table public.admins add column if not exists foto text;
+create or replace function public.admin_foto(p_foto text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_foto is not null and length(p_foto) > 200000 then raise exception 'Foto muito grande.'; end if;
+  update public.admins set foto = nullif(p_foto, '') where uid = auth.uid();
+end $$;
+revoke all on function public.admin_foto(text) from public;
+grant execute on function public.admin_foto(text) to authenticated;
+
+-- adicionais para o cálculo do salário (só o painel enxerga)
+alter table public.rh_dados add column if not exists peric_pct   numeric(5,2);   -- periculosidade (% do salário base, ex.: 30)
+alter table public.rh_dados add column if not exists insal_pct   numeric(5,2);   -- insalubridade (10, 20 ou 40%)
+alter table public.rh_dados add column if not exists insal_base  numeric(12,2);  -- base da insalubridade (vazio = salário mínimo)
+alter table public.rh_dados add column if not exists noturno_pct numeric(5,2);   -- adicional noturno (padrão 20%)
+alter table public.rh_dados add column if not exists outros_mes  numeric(12,2);  -- outros adicionais fixos por mês
+alter table public.rh_dados add column if not exists dsr         boolean;        -- calcula DSR sobre extras e noturno (vazio = sim)
+
+notify pgrst, 'reload schema';
+
+-- =====================================================================
+-- BÔNUS DE PRODUÇÃO E CENTRO DE CUSTO (CLUSTER) DO COLABORADOR
+--  Bônus sugerido = (produção da equipe − impostos da NF) × % do bônus.
+--  O gestor define o valor final, o rateio entre os integrantes e o pagamento.
+--  O valor aprovado entra no centro de custo (cluster) de cada colaborador.
+-- =====================================================================
+alter table public.cadastros add column if not exists centro_custo text;   -- ddd11 | ddd12 | ddd13 | mg (vazio = cluster da ficha)
+
+create or replace function public.eh_gestor(p_org text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.admins where uid = auth.uid() and org = p_org and papel = 'gestor');
+$$;
+
+create table if not exists public.bonus (
+  id           text primary key,          -- ciclo + equipe
+  org          text not null default 'multivale',
+  ciclo_de     text not null,             -- AAAA-MM-DD
+  ciclo_ate    text not null,
+  equipe       text not null,             -- MEC 1 … FO 5
+  uids         uuid[] not null default '{}',
+  producao     numeric(14,2),
+  imposto_pct  numeric(5,2),
+  bonus_pct    numeric(5,2),
+  valor_calc   numeric(14,2),
+  valor_final  numeric(14,2),
+  rateio       jsonb not null default '{}'::jsonb,   -- {uid: valor}
+  status       text not null default 'rascunho' check (status in ('rascunho', 'aprovado', 'pago')),
+  aprovado_por text,
+  aprovado_em  bigint,
+  pago_em      bigint,
+  atualizado   bigint
+);
+create index if not exists bonus_ciclo on public.bonus (org, ciclo_ate);
+alter table public.bonus enable row level security;
+drop policy if exists bonus_ler on public.bonus;
+drop policy if exists bonus_gestor on public.bonus;
+create policy bonus_ler    on public.bonus for select to authenticated using (public.eh_admin(org));
+create policy bonus_gestor on public.bonus for all    to authenticated using (public.eh_gestor(org)) with check (public.eh_gestor(org));
+
+
+-- =====================================================================
+-- ACESSO SÓ COM LOGIN (sem login anônimo) E BANCO FECHADO
+--  Técnico: conta criada pela função "acesso" a partir do convite (matrícula + senha).
+--  Parceiro: conta criada pelo painel; só enxerga o portal (pela função "acesso").
+--  No Supabase: Authentication > Sign In / Providers > desligue "Allow anonymous sign-ins"
+--  e "Allow new users to sign up" (as contas nascem só pela função).
+-- =====================================================================
+alter table public.cadastros add column if not exists login_email text;
+
+create table if not exists public.parceiros (
+  uid             uuid primary key,
+  org             text not null default 'multivale',
+  nome            text not null,
+  email           text,
+  cliente         text not null,             -- Claro, Master ou o nome do parceiro nas O.S.
+  ativo           boolean not null default true,
+  mostrar_tecnico boolean not null default false,
+  criado_por      text,
+  criado          timestamptz not null default now()
+);
+alter table public.parceiros enable row level security;
+drop policy if exists par_ler on public.parceiros;
+drop policy if exists par_admin on public.parceiros;
+create policy par_ler   on public.parceiros for select to authenticated using (uid = auth.uid() or public.eh_admin(org));
+create policy par_admin on public.parceiros for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+-- membro da equipe: login de verdade (não anônimo) e supervisor, despachante, NOC ou colaborador com cadastro ativo
+create or replace function public.eh_membro(p_org text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null
+     and not coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false)
+     and (public.eh_admin(p_org) or public.eh_despacho(p_org) or public.eh_noc(p_org)
+          or exists (select 1 from public.cadastros c where c.uid = auth.uid() and c.org = p_org and c.ativo));
+$$;
+revoke all on function public.eh_membro(text) from public;
+grant execute on function public.eh_membro(text) to authenticated;
+
+-- leitura: só a equipe (o parceiro não lê as tabelas; usa o portal)
+drop policy if exists ev_ler on public.eventos;        create policy ev_ler     on public.eventos   for select to authenticated using (public.eh_membro(org));
+drop policy if exists rotas_ler on public.rotas;       create policy rotas_ler  on public.rotas     for select to authenticated using (public.eh_membro(org));
+drop policy if exists metas_ler on public.metas;       create policy metas_ler  on public.metas     for select to authenticated using (public.eh_membro(org));
+drop policy if exists mat_ler on public.materiais;     create policy mat_ler    on public.materiais for select to authenticated using (public.eh_membro(org));
+
+-- gravação: o próprio colaborador, e só se ele é da equipe
+drop policy if exists tec_inserir on public.tecnicos;          create policy tec_inserir    on public.tecnicos       for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists ev_inserir on public.eventos;            create policy ev_inserir     on public.eventos        for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists rondas_inserir on public.rondas;         create policy rondas_inserir on public.rondas         for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists fr_inserir on public.fotos_rede;         create policy fr_inserir     on public.fotos_rede     for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists vivo_inserir on public.aovivo;           create policy vivo_inserir   on public.aovivo         for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists exp_inserir on public.expedientes;       create policy exp_inserir    on public.expedientes    for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists abs_inserir on public.abastecimentos;    create policy abs_inserir    on public.abastecimentos for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists sos_criar on public.sos;                 create policy sos_criar      on public.sos            for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+
+-- rotas: o arquivo original não é alterado pelo técnico; ele cria uma sobreposição (registro próprio).
+--  O técnico edita só as rotas que ele mesmo criou; a rota do supervisor só o supervisor troca.
+drop policy if exists rotas_inserir on public.rotas; create policy rotas_inserir on public.rotas for insert to authenticated with check (uid = auth.uid() and public.eh_membro(org));
+drop policy if exists rotas_editar  on public.rotas; create policy rotas_editar  on public.rotas for update to authenticated using (uid = auth.uid() or public.eh_admin(org)) with check (uid = auth.uid() or public.eh_admin(org));
+drop policy if exists rotas_apagar_sob on public.rotas; create policy rotas_apagar_sob on public.rotas for delete to authenticated using (uid = auth.uid() and (dados ->> 'sobreposicao') = 'true');
+
+-- fotos: a primeira pasta do caminho é a equipe (org); só a equipe lê e envia; o supervisor apaga (liberar espaço)
+drop policy if exists fotos_ler    on storage.objects;
+drop policy if exists fotos_enviar on storage.objects;
+drop policy if exists fotos_trocar on storage.objects;
+drop policy if exists fotos_apagar on storage.objects;
+create policy fotos_ler    on storage.objects for select to authenticated using (bucket_id = 'fotos' and public.eh_membro((storage.foldername(name))[1]));
+create policy fotos_enviar on storage.objects for insert to authenticated with check (bucket_id = 'fotos' and public.eh_membro((storage.foldername(name))[1]));
+create policy fotos_trocar on storage.objects for update to authenticated using (bucket_id = 'fotos' and owner = auth.uid() and public.eh_membro((storage.foldername(name))[1]));
+create policy fotos_apagar on storage.objects for delete to authenticated using (bucket_id = 'fotos' and public.eh_admin((storage.foldername(name))[1]));
+
+-- corretiva: o técnico só conclui a O.S. com a liberação aprovada (NOC ou supervisor), conferido no banco
+create or replace function public.trava_corretiva()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'concluida' and old.status is distinct from 'concluida' and new.tipo = 'emergencial'
+     and auth.uid() is not null
+     and not (public.eh_admin(new.org) or public.eh_despacho(new.org) or public.eh_noc(new.org))
+     and not exists (select 1 from public.pedidos p where p.ref_id = new.id and p.tipo = 'liberar_corretiva' and p.status = 'aprovado') then
+    raise exception 'Corretiva sem liberação: peça a validação ao NOC ou ao supervisor.';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trava_corretiva on public.atividades;
+create trigger trava_corretiva before update on public.atividades for each row execute function public.trava_corretiva();
+
+-- ============================ v44: book de dados da rota (fiber descritivo) ============================
+-- Arquivo separado do mapa de fusões: DGO, posição de cada fibra, cliente/ponta atendida, comprimento,
+-- sinal esperado e medições. Uma linha por rota (id = id da rota). Lê: supervisor, despacho e NOC. Grava: supervisor.
+create table if not exists public.fiber_book (
+  id         text primary key,
+  org        text not null default 'multivale',
+  uid        uuid,
+  atualizado timestamptz not null default now(),
+  dados      jsonb not null default '{}'::jsonb
+);
+alter table public.fiber_book enable row level security;
+drop policy if exists fbook_ler on public.fiber_book;
+drop policy if exists fbook_gravar on public.fiber_book;
+create policy fbook_ler    on public.fiber_book for select to authenticated using (public.eh_admin(org) or public.eh_despacho(org) or public.eh_noc(org));
+create policy fbook_gravar on public.fiber_book for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+notify pgrst, 'reload schema';

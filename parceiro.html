@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portal do Parceiro · Técnico Plus</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="leaflet.css">
+<style>
+:root{--bg:#f1efed;--surface:#fff;--surface-2:#f7f6f4;--line:#e3dfdb;--ink:#161513;--muted:#655e58;--accent:#0b5f99;--accent-soft:#e3eef7;--ok:#3d7a1f;--ok-soft:#e5f0dd;--bad:#c2311d;--bad-soft:#fbe8e4;--warn:#b85300;--warn-soft:#fdf1de;--hdr:#312d2a;--cta:#312d2a;--cta-ink:#fff;--shadow:0 1px 3px rgba(22,21,19,.14);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a1816;--surface:#262320;--surface-2:#2f2b28;--line:#3d3834;--ink:#f2efec;--muted:#b3aba3;--accent:#5aa9e6;--accent-soft:#1b3449;--ok:#7bc35a;--ok-soft:#1f3318;--bad:#ff8a72;--bad-soft:#40201a;--warn:#ff9a52;--warn-soft:#3b2c16;--hdr:#0f0e0d;--cta:#f2efec;--cta-ink:#1a1816;--shadow:0 1px 3px rgba(0,0,0,.5);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1a1816;--surface:#262320;--surface-2:#2f2b28;--line:#3d3834;--ink:#f2efec;--muted:#b3aba3;--accent:#5aa9e6;--accent-soft:#1b3449;--ok:#7bc35a;--ok-soft:#1f3318;--bad:#ff8a72;--bad-soft:#40201a;--warn:#ff9a52;--warn-soft:#3b2c16;--hdr:#0f0e0d;--cta:#f2efec;--cta-ink:#1a1816;color-scheme:dark}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+[hidden]{display:none!important}
+header{background:var(--hdr);color:#fff;display:flex;align-items:center;gap:12px;padding:10px 16px;position:sticky;top:0;z-index:500}
+header img{height:34px;background:#fff;border-radius:6px;padding:3px 6px}header b{display:block;font-size:17px}header span{font-size:13px;opacity:.8}
+header .sp{flex:1}header button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:8px;min-height:40px;padding:0 14px;font:inherit;cursor:pointer}
+main{max-width:1200px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border-radius:10px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:12px}
+h1,h2{margin:0}h2{font-size:18px}.muted{color:var(--muted)}.small{font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;min-height:44px;padding:0 12px;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{font:inherit;font-weight:600;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.pri{background:var(--cta);color:var(--cta-ink);border-color:var(--cta)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}.chips button{font:inherit;font-size:14px;min-height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--cta);color:var(--cta-ink);border-color:var(--cta)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--surface-2);border-radius:8px;padding:12px}.kpi b{display:block;font-size:24px;font-variant-numeric:tabular-nums}.kpi span{font-size:13px;color:var(--muted)}
+.bars{display:flex;flex-direction:column;gap:6px}.bar{display:grid;grid-template-columns:150px 1fr 48px;gap:8px;align-items:center;font-size:14px}
+.bar i{display:block;height:14px;border-radius:4px;background:var(--accent);min-width:2px}.bar em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media (max-width:820px){.duo{grid-template-columns:1fr}.bar{grid-template-columns:110px 1fr 40px}}
+#mapa{height:340px;border-radius:8px}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}tbody tr{cursor:pointer}tbody tr:hover{background:var(--surface-2)}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--surface-2);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.and{background:var(--warn-soft);color:var(--warn)}.pill.ab{background:var(--bad-soft);color:var(--bad)}
+.det{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;display:flex;justify-content:flex-end}
+.det>div{background:var(--surface);width:min(560px,100%);height:100%;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 10px;font-size:14px}.kv dt{color:var(--muted)}.kv dd{margin:0}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}.fotos a{display:block}.fotos img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--surface-2)}.fotos span{font-size:12px;color:var(--muted)}
+.login{max-width:420px;margin:40px auto}.erro{color:var(--bad);font-size:14px;min-height:20px}
+.vazio{text-align:center;color:var(--muted);padding:24px}
+</style>
+</head>
+<body>
+<header><img src="logo.png" alt="Multivale"><div><b>Portal do parceiro</b><span id="hSub">Técnico Plus - Multivale</span></div><div class="sp"></div><button type="button" id="bSair" hidden>Sair</button></header>
+<main id="app"><section class="card login"><p class="muted">Carregando…</p></section></main>
+<script src="supabase-config.js"></script>
+<script src="leaflet.js"></script>
+<script>
+'use strict';
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0'); const fDH = ts => { if (!ts) return '—'; const d = new Date(ts); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const fMin = m => m == null ? '—' : m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${pad(m % 60)}`;
+const iso = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const S = { per: '30', de: '', ate: '', st: 'todas', f: { ticket: '', node: '', end: '', cidade: '', cluster: '' }, rows: [], par: null, mapa: null };
+let sb = null;
+const sdk = () => window.supabase ? Promise.resolve() : new Promise((ok, erro) => { const t = document.createElement('script'); t.src = 'supabase.min.js'; t.onload = ok; t.onerror = () => erro(new Error('Não foi possível carregar o sistema.')); document.head.appendChild(t); });
+function cliente() { if (sb) return sb; if (!window.supabase || !window.SUPABASE_URL) throw new Error('Configuração da nuvem ausente.'); sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY, { auth: { storageKey: 'rb-parceiro', persistSession: true } }); return sb; }
+async function chama(acao, body) { const r = await cliente().functions.invoke('acesso', { body: { acao, ...body } }); let d = r.data; if (r.error) { try { d = await r.error.context.json(); } catch (e) {} } if (!d || !d.ok) throw new Error((d && d.motivo) || 'Não foi possível carregar.'); return d; }
+function periodo() { const agora = Date.now(), d0 = new Date(); d0.setHours(0, 0, 0, 0); const h = d0.getTime();
+  if (S.per === 'hoje') return [h, agora]; if (S.per === '7') return [h - 6 * 864e5, agora]; if (S.per === '30') return [h - 29 * 864e5, agora];
+  if (S.per === 'mes') { const m = new Date(d0); m.setDate(1); return [m.getTime(), agora]; } if (S.per === 'ant') { const a = new Date(d0); a.setDate(1); const z = a.getTime() - 1; a.setMonth(a.getMonth() - 1); return [a.getTime(), z]; }
+  const de = S.de ? new Date(S.de + 'T00:00').getTime() : h - 29 * 864e5, ate = S.ate ? new Date(S.ate + 'T23:59:59').getTime() : agora; return [de, ate]; }
+// ---------- login ----------
+function telaLogin(msg) {
+  $('#bSair').hidden = true; $('#hSub').textContent = 'Técnico Plus - Multivale';
+  $('#app').innerHTML = `<section class="card login"><h1 style="font-size:22px">Entrar</h1><p class="muted small" style="margin:0">Acesso para parceiros cadastrados pela Multivale. Use o e-mail e a senha que você recebeu.</p>
+    <label>E-mail<input type="email" id="lEmail" autocomplete="username"></label><label>Senha<input type="password" id="lSenha" autocomplete="current-password"></label>
+    <div class="erro" id="lErro" role="alert">${esc(msg || '')}</div><button type="button" class="btn pri" id="lEntrar">Entrar</button></section>`;
+  const vai = async () => { const e = $('#lEmail').value.trim(), s = $('#lSenha').value; if (!e || !s) { $('#lErro').textContent = 'Informe e-mail e senha.'; return; } $('#lEntrar').disabled = true;
+    try { const r = await cliente().auth.signInWithPassword({ email: e, password: s }); if (r.error) throw new Error(/invalid|credentials/i.test(r.error.message) ? 'E-mail ou senha incorretos.' : r.error.message); await carrega(); }
+    catch (x) { $('#lErro').textContent = x.message; $('#lEntrar').disabled = false; } };
+  $('#lEntrar').onclick = vai; $('#lSenha').addEventListener('keydown', e => { if (e.key === 'Enter') vai(); });
+}
+// ---------- dados ----------
+async function carrega() {
+  const [de, ate] = periodo(); $('#app').innerHTML = `<section class="card"><p class="muted">Carregando as O.S.…</p></section>`;
+  try { const d = await chama('parceiro_dados', { de, ate }); S.rows = d.rows || []; S.par = d.parceiro; $('#hSub').textContent = `${d.parceiro.nome} · ${d.parceiro.cliente}`; $('#bSair').hidden = false; tela(); }
+  catch (e) { if (/login|exclusivo|401|403/i.test(e.message)) { try { await cliente().auth.signOut(); } catch (x) {} telaLogin(e.message); } else $('#app').innerHTML = `<section class="card"><p class="erro">${esc(e.message)}</p><button type="button" class="btn" onclick="carrega()">Tentar de novo</button></section>`; }
+}
+const grupoSt = r => r.status === 'Concluída' ? 'concluidas' : r.status === 'Aberta' ? 'abertas' : 'andamento';
+function filtradas() { const F = S.f; return S.rows.filter(r => (S.st === 'todas' || grupoSt(r) === S.st) && (!F.ticket || norm(r.ticket).includes(norm(F.ticket))) && (!F.node || norm(r.node).includes(norm(F.node))) && (!F.end || norm(r.endereco + ' ' + r.bairro).includes(norm(F.end))) && (!F.cidade || norm(r.cidade).includes(norm(F.cidade))) && (!F.cluster || r.cluster === F.cluster)); }
+function tela() {
+  const clusters = [...new Map(S.rows.filter(r => r.cluster).map(r => [r.cluster, r.clusterNome || r.cluster])).entries()].sort();
+  $('#app').innerHTML = `<section class="card"><div class="chips" role="group" aria-label="Período">${[['hoje', 'Hoje'], ['7', '7 dias'], ['30', '30 dias'], ['mes', 'Este mês'], ['ant', 'Mês anterior'], ['custom', 'Escolher datas']].map(([k, l]) => `<button type="button" data-per="${k}" aria-pressed="${S.per === k}">${l}</button>`).join('')}</div>
+      ${S.per === 'custom' ? `<div class="grid"><label>De<input type="date" id="pDe" value="${S.de}"></label><label>Até<input type="date" id="pAte" value="${S.ate}"></label><div style="display:flex;align-items:flex-end"><button type="button" class="btn pri" id="pOk">Aplicar</button></div></div>` : ''}
+      <div class="grid"><label>Ticket<input type="search" data-f="ticket" value="${esc(S.f.ticket)}" placeholder="INC…"></label><label>Node<input type="search" data-f="node" value="${esc(S.f.node)}"></label><label>Endereço<input type="search" data-f="end" value="${esc(S.f.end)}" placeholder="Rua, bairro"></label><label>Cidade<input type="search" data-f="cidade" value="${esc(S.f.cidade)}"></label>
+      <label>Cluster<select data-f="cluster"><option value="">Todos</option>${clusters.map(([k, n]) => `<option value="${esc(k)}" ${S.f.cluster === k ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label></div>
+      <div class="chips" role="group" aria-label="Situação">${[['todas', 'Todas'], ['abertas', 'Abertas'], ['andamento', 'Em atendimento'], ['concluidas', 'Concluídas']].map(([k, l]) => `<button type="button" data-st="${k}" aria-pressed="${S.st === k}">${l}</button>`).join('')}</div></section>
+    <div id="res"></div>`;
+  $$('[data-per]').forEach(b => b.onclick = () => { S.per = b.dataset.per; if (S.per === 'custom') { tela(); return; } carrega(); });
+  $('#pOk') && ($('#pOk').onclick = () => { S.de = $('#pDe').value; S.ate = $('#pAte').value; carrega(); });
+  $$('[data-st]').forEach(b => b.onclick = () => { S.st = b.dataset.st; $$('[data-st]').forEach(x => x.setAttribute('aria-pressed', x === b)); resultado(); });
+  let t; $$('[data-f]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { S.f[el.dataset.f] = el.value; clearTimeout(t); t = setTimeout(resultado, 200); }));
+  resultado();
+}
+function resultado() {
+  const L = filtradas(); const conc = L.filter(r => r.status === 'Concluída'), ab = L.filter(r => r.status === 'Aberta'), and = L.length - conc.length - ab.length;
+  const media = a => { const v = a.filter(x => x != null); return v.length ? Math.round(v.reduce((s, x) => s + x, 0) / v.length) : null; };
+  const porCl = {}; L.forEach(r => { const k = r.clusterNome || 'Sem cluster'; porCl[k] = (porCl[k] || 0) + 1; }); const clMax = Math.max(1, ...Object.values(porCl));
+  const porCid = {}; L.forEach(r => { const k = r.cidade || 'Sem cidade'; porCid[k] = (porCid[k] || 0) + 1; }); const cid = Object.entries(porCid).sort((a, b) => b[1] - a[1]).slice(0, 8); const cidMax = Math.max(1, ...cid.map(x => x[1]));
+  const pill = r => `<span class="pill ${r.status === 'Concluída' ? 'ok' : r.status === 'Aberta' ? 'ab' : 'and'}">${esc(r.status)}</span>`;
+  $('#res').innerHTML = `<section class="card"><div class="kpis"><div class="kpi"><b>${L.length}</b><span>O.S. no período</span></div><div class="kpi"><b>${ab.length}</b><span>Abertas</span></div><div class="kpi"><b>${and}</b><span>Em atendimento</span></div><div class="kpi"><b>${conc.length}</b><span>Concluídas</span></div><div class="kpi"><b>${fMin(media(L.map(r => r.tempoChegadaMin)))}</b><span>Tempo médio até a chegada</span></div><div class="kpi"><b>${fMin(media(conc.map(r => r.tempoTotalMin)))}</b><span>Tempo médio até concluir</span></div></div></section>
+    <div class="duo"><section class="card"><h2>Por cluster</h2><div class="bars">${Object.entries(porCl).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="bar"><span>${esc(k)}</span><i style="width:${v / clMax * 100}%"></i><em>${v}</em></div>`).join('') || '<p class="vazio">Sem O.S.</p>'}</div>
+      <h2>Cidades com mais O.S.</h2><div class="bars">${cid.map(([k, v]) => `<div class="bar"><span>${esc(k)}</span><i style="width:${v / cidMax * 100}%;background:var(--warn)"></i><em>${v}</em></div>`).join('') || '<p class="vazio">Sem O.S.</p>'}</div></section>
+      <section class="card"><h2>Mapa</h2><div id="mapa" role="img" aria-label="Mapa das O.S. filtradas"></div></section></div>
+    <section class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2>O.S. (${L.length})</h2><button type="button" class="btn" id="bCsv">Exportar planilha (CSV)</button></div>
+      <div class="tw"><table><thead><tr><th>Abertura</th><th>Ticket</th><th>Tipo</th><th>Situação</th><th>Endereço</th><th>Cidade</th><th>Node</th><th>Cluster</th><th class="r">Até chegar</th><th class="r">Total</th>${S.par && L.some(r => r.tecnico) ? '<th>Técnico</th>' : ''}</tr></thead>
+      <tbody>${L.map((r, k) => `<tr data-k="${k}" tabindex="0"><td>${fDH(r.criado || r.chegada)}</td><td><b>${esc(r.ticket || '—')}</b></td><td>${esc(r.tipo)}</td><td>${pill(r)}</td><td>${esc(r.endereco || '—')}</td><td>${esc(r.cidade || '—')}</td><td>${esc(r.node || '—')}</td><td>${esc(r.clusterNome || '—')}</td><td class="r">${fMin(r.tempoChegadaMin)}</td><td class="r">${fMin(r.tempoTotalMin)}</td>${L.some(x => x.tecnico) ? `<td>${esc(r.tecnico || '')}</td>` : ''}</tr>`).join('') || '<tr><td colspan="10" class="vazio">Nenhuma O.S. com esses filtros.</td></tr>'}</tbody></table></div></section>`;
+  $$('tbody tr[data-k]').forEach(tr => { const abre = () => detalhe(L[+tr.dataset.k]); tr.onclick = abre; tr.onkeydown = e => { if (e.key === 'Enter') abre(); }; });
+  $('#bCsv').onclick = () => { const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`; const csv = '﻿' + [['Abertura', 'Chegada', 'Conclusão', 'Ticket', 'Tipo', 'Situação', 'Endereço', 'Bairro', 'Cidade', 'Node', 'Cluster', 'Min até chegar', 'Min total', 'Ocorrência', 'Problema', 'Serviço'].join(';'), ...L.map(r => [fDH(r.criado), fDH(r.chegada), fDH(r.fim), r.ticket, r.tipo, r.status, r.endereco, r.bairro, r.cidade, r.node, r.clusterNome, r.tempoChegadaMin, r.tempoTotalMin, r.ocorrencia, r.problema, r.servico].map(q).join(';'))].join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `OS_${(S.par && S.par.cliente) || 'parceiro'}_${iso(Date.now())}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
+  if (window.L && $('#mapa')) { if (S.mapa) { try { S.mapa.remove(); } catch (e) {} } S.mapa = window.L.map('mapa'); window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(S.mapa);
+    const pts = []; L.filter(r => r.lat != null && r.lon != null).forEach(r => { pts.push([r.lat, r.lon]); const c = r.status === 'Concluída' ? '#3d7a1f' : r.status === 'Aberta' ? '#c2311d' : '#b85300'; window.L.circleMarker([r.lat, r.lon], { radius: 8, color: '#fff', weight: 2, fillColor: c, fillOpacity: .95 }).bindPopup(`<b>${esc(r.ticket)}</b><br>${esc(r.status)}<br>${esc(r.endereco)}`).addTo(S.mapa); });
+    if (pts.length > 1) S.mapa.fitBounds(pts, { padding: [24, 24], maxZoom: 15 }); else if (pts.length) S.mapa.setView(pts[0], 15); else S.mapa.setView([-23.0, -45.6], 8); }
+}
+async function detalhe(r) {
+  const el = document.createElement('div'); el.className = 'det'; el.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="dT"><div style="display:flex;justify-content:space-between;align-items:center"><h2 id="dT">${esc(r.tipo)} · ${esc(r.ticket || '—')}</h2><button type="button" class="btn" id="dX">Fechar</button></div>
+    <dl class="kv"><dt>Situação</dt><dd>${esc(r.status)}</dd><dt>Endereço</dt><dd>${esc([r.endereco, r.bairro, r.cidade].filter(Boolean).join(', ') || '—')}</dd><dt>Node</dt><dd>${esc(r.node || '—')}</dd><dt>Cluster</dt><dd>${esc(r.clusterNome || '—')}</dd><dt>Abertura</dt><dd>${fDH(r.criado)}</dd><dt>Chegada</dt><dd>${fDH(r.chegada)}</dd><dt>Conclusão</dt><dd>${fDH(r.fim)}</dd><dt>Até chegar</dt><dd>${fMin(r.tempoChegadaMin)}</dd><dt>Tempo total</dt><dd>${fMin(r.tempoTotalMin)}</dd>${r.ocorrencia ? `<dt>Ocorrência</dt><dd>${esc(r.ocorrencia)}</dd>` : ''}${r.problema ? `<dt>Problema</dt><dd>${esc(r.problema)}</dd>` : ''}${r.causa ? `<dt>Causa</dt><dd>${esc(r.causa)}</dd>` : ''}${r.servico ? `<dt>Serviço executado</dt><dd>${esc(r.servico)}</dd>` : ''}${r.tecnico ? `<dt>Técnico</dt><dd>${esc(r.tecnico)}</dd>` : ''}</dl>
+    <h2>Fotos</h2><div class="fotos" id="dF">${r.fotos ? '<p class="muted small">Carregando fotos…</p>' : '<p class="muted small">Sem fotos.</p>'}</div></div>`;
+  document.body.appendChild(el); const fecha = () => el.remove(); $('#dX', el).onclick = fecha; el.onclick = e => { if (e.target === el) fecha(); }; document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { fecha(); document.removeEventListener('keydown', k); } }); $('#dX', el).focus();
+  if (r.fotos && r.origem === 'os') { try { const d = await chama('parceiro_fotos', { id: r.id }); $('#dF', el).innerHTML = d.fotos.map(f => `<a href="${esc(f.url)}" target="_blank" rel="noopener"><img src="${esc(f.url)}" alt="${esc(f.cat || 'Foto')}" loading="lazy"><span>${esc(f.cat || '')}</span></a>`).join('') || '<p class="muted small">Fotos arquivadas.</p>'; } catch (e) { $('#dF', el).innerHTML = `<p class="erro">${esc(e.message)}</p>`; } }
+}
+$('#bSair').onclick = async () => { try { await cliente().auth.signOut(); } catch (e) {} S.rows = []; telaLogin(); };
+(async () => { try { await sdk(); const { data } = await cliente().auth.getSession(); if (data && data.session && !data.session.user.is_anonymous) await carrega(); else telaLogin(); } catch (e) { $('#app').innerHTML = `<section class="card login"><p class="erro">${esc(e.message)}</p></section>`; } })();
+</script>
+</body>
+</html>

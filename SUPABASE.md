@@ -307,6 +307,349 @@ O botão **Planilha (Excel)** baixa as O.S. da etapa (ou só as selecionadas), c
   - Em **Medição** > **Arquivo** aparece cada mês compactado com o botão **Exportar (.zip)**, com CSV e JSON.
   - O painel marca quem exportou e quando. Meses ainda não exportados aparecem em vermelho.
 
+## Cluster da O.S. pela cidade do endereço (v40)
+
+Cada O.S. passa a ter o seu cluster, tirado da cidade do endereço (DDD local), sem depender do técnico:
+- **DDD12:** Vale do Paraíba, Serra da Mantiqueira e Litoral Norte (39 cidades). Mini clusters:
+  - **São José dos Campos:** São José dos Campos, Jacareí, Caçapava, Igaratá, Santa Branca, Jambeiro, Paraibuna e Monteiro Lobato.
+  - **Litoral:** Caraguatatuba, Ubatuba, São Sebastião e Ilhabela.
+  - **Taubaté:** as demais cidades do DDD12.
+- **DDD13 (Santos):** Baixada Santista e Vale do Ribeira.
+- **DDD11:** as demais cidades de SP.
+- **MG (Sul de Minas):** endereços em Minas Gerais.
+
+**Onde aparece:**
+- **Formulário da O.S.:** o campo **Cluster da O.S.** mostra o cluster automático. Dá para escolher outro à mão.
+- **Fila de atividades:** cada O.S. leva a etiqueta do cluster, com filtro por cluster, "Meus clusters" e "Sem cluster".
+- **Indicadores e SLA:** o agrupamento por cluster e por mini cluster passa a usar o cluster da O.S.
+- **Portal do parceiro:** o cluster vem da O.S. Se a cidade não for reconhecida, usa o do técnico.
+- **Backup de fotos:** as pastas do .zip são separadas pelo cluster da O.S.
+
+**Ajustes:** em **Calendário de recursos** > **Cidades por cluster**, mande uma cidade para outro cluster ou mini cluster. A lista padrão completa também está lá.
+
+**Para atualizar:** suba os arquivos e atualize a função **acesso** colando o `acesso-index.ts` novo. Não precisa rodar SQL.
+
+
+## Mapa de fusão da caixa de emenda (v42)
+
+O app desenha sozinho o **mapa de fusão** de cada caixa a partir das etapas **Cabos** e **Fusões**:
+- **Entrada** à esquerda, por tubo e fibra, nas cores do padrão do cabo (Nacional ou Americano). **Saída 1** e **Saída 2** à direita.
+- Cada linha liga a fibra de entrada à fibra de saída, na cor da fibra. **B1, B2…** é a bandeja.
+- **Manobra ou inversão** sai tracejada, com um **M** laranja. Fibras sem fusão aparecem em cinza como **livre**.
+- Em caixas grandes (acima de 48 fibras), mostra só os tubos com fusão. Dá para ligar e desligar.
+
+**Vistoria de rota > Mapeamento de caixa de emenda:** novo tipo de registro para o fiscal mapear as caixas do backbone. Etapas: **Caixa** (TAG ou QR da plaqueta, fabricante, modelo, poste e o histórico da caixa) > **Cabos** > **Fusões e mapa** > **Evidências** > **Finalizar**.
+
+**Na etapa Fusões (preventiva, corretiva, implantação e mapeamento):**
+- **Copiar da última visita:** puxa cabos e fusões da última visita com a mesma TAG. O técnico só confere e ajusta o que mudou.
+- **Anexar mapa existente:** foto do mapa de papel ou da plaqueta, salva nas evidências como "Mapa de fusão (existente)".
+- **Baixar imagem:** salva o mapa em PNG.
+
+**Onde aparece depois:**
+- **Relatório em PDF:** seção "Mapa de fusão", logo depois da tabela de fusões.
+- **Histórico de ativos:** botão **Mapa de fusão** em cada visita da caixa.
+
+A corretiva Claro continua sem cabos, fusões e mapa.
+
+**Para atualizar:** só subir os arquivos. Não precisa rodar SQL nem mexer nas funções.
+
+
+## Diagrama de fusões interativo e diagrama linear da rota (v43)
+
+**Editar no diagrama (etapa Fusões):**
+- **Para ligar uma fusão:** toque numa fibra de **entrada** (esquerda) e depois numa fibra de **saída** (direita).
+  - Depois de cada ligação, o app já seleciona a próxima entrada livre. Mapear a caixa vira uma sequência de toques.
+  - Também dá para começar pela saída e depois tocar na entrada.
+- **Para mudar uma fusão:** toque numa fibra ligada. Aparecem a bandeja, o motivo da manobra e o botão **Desfazer esta fusão**.
+  - Ligar numa saída que já estava ocupada troca a ligação, e o app avisa qual entrada perdeu a saída.
+- **Cor com cor:** liga tudo 1 com 1 na Saída 1. Depois é só tocar nas fibras que forem diferentes.
+- **Botões Desfazer e Limpar:** Desfazer volta o último passo. Limpar apaga todas as fusões da caixa.
+- **Bandeja das próximas fusões:** a bandeja escolhida vai para cada fusão nova.
+- **No celular:** o diagrama cabe na tela e mostra só os números. A cor de cada fibra aparece no quadradinho.
+- **Modo do plano:** a opção "Detalhar fibra a fibra" passou a se chamar **Detalhar no diagrama**. Se a caixa estava em "cor com cor" e o técnico mexe no diagrama, o plano passa para esse modo sozinho. A lista fibra a fibra continua disponível, recolhida, logo abaixo do diagrama.
+
+**Diagrama linear (painel, Histórico de ativos > Diagrama linear de fusões):**
+- **Montar a sequência:** escolha a **rota**. O app junta a última visita de cada caixa daquela rota e ordena pela posição no traçado do KMZ (km). Se preferir, cole as **TAGs na ordem**.
+- **Ajustar a lista:** as setas mudam a ordem. Desmarque as caixas que não devem entrar.
+- **Como o diagrama é desenhado:** é um unifilar. Cada linha é uma posição de fibra do cabo e cada coluna é uma caixa.
+  - A fibra é seguida caixa a caixa. Fica colorida enquanto tem continuidade desde a 1ª caixa e vira cinza tracejada quando perde.
+  - Manobras e inversões aparecem em laranja. Fibra sem fusão leva um ✕ vermelho, e a derivação para a Saída 2 aparece em azul.
+- **Rastreio das fibras:** uma tabela diz, para cada fibra que muda de posição ou é interrompida, onde isso acontece e em que posição ela chega no fim.
+- **Exportar:** um arquivo só, em **PDF** (diagrama numa página grande e o rastreio na seguinte), **PNG** ou **SVG** (vetorial, abre no navegador e imprime em qualquer tamanho).
+
+**Para atualizar:** só subir os arquivos. Não precisa rodar SQL nem mexer nas funções.
+
+
+## Rota que se divide, DGO, book de dados e caixa nova em corretiva (v44)
+
+**Rota que se divide (derivação):** no Diagrama linear, cada caixa tem o campo **Recebe da…**.
+- O padrão é receber da caixa anterior pela Saída 1. Onde o cabo se divide, escolha a caixa e a saída de origem (por exemplo, "Recebe da CE-0001 · Saída 2").
+- O ramo aparece numa faixa própria, embaixo, ligado à caixa de origem. As fibras são seguidas pelo ramo também.
+- No rastreio, cada fibra mostra em qual ponta chega, inclusive nos ramos.
+
+**DGO no início da rota:** a primeira coluna do diagrama é o DGO, com a posição de cada fibra.
+- A posição padrão é B(tubo)-(fibra), por exemplo B1-01. Dá para trocar pela posição real.
+- Tocando na posição do DGO ou no número da fibra, abre a **ficha da fibra**:
+  - posição no DGO, cliente ou ponta atendida, designação, ponta B e status;
+  - caminho: quantas caixas e fusões a fibra atravessa e onde chega;
+  - comprimento: o informado ou o estimado pelo traçado;
+  - perda esperada e sinal esperado na ponta;
+  - última medição, perda por km atual e diferença para o esperado.
+- **Perda esperada (quando não informada)** = km × atenuação + 0,1 dB por fusão + 0,5 dB por conector (padrão 2).
+  - Atenuação: 1310 nm 0,35 · 1550 nm 0,25 · 1625 nm 0,30 dB/km.
+  - O número de fusões vem do caminho real da fibra no diagrama.
+- **Situação:** Normal até 1 dB acima do esperado, Atenção de 1 a 3 dB e Crítica acima de 3 dB. A posição no DGO fica com contorno laranja ou vermelho.
+- Na própria ficha dá para editar os dados da fibra e **registrar uma medição**.
+
+**Book de dados da rota (fiber descritivo):** é um arquivo separado do mapa de fusões, com uma linha por rota na tabela `fiber_book`.
+- Fica no cartão "Book de dados da rota", que aparece quando a rota é escolhida.
+- **Dados do DGO:** nome, site e bastidor.
+- **Importar planilha:** .xlsx ou .csv. O app reconhece colunas como Fibra, Posição DGO, Cliente, Comprimento (km), Comprimento de onda, Potência TX, Data, Perda medida, Sinal medido e Observação.
+- **Baixar book (.xlsx):** abas Fibras, Medições e DGO, com os cálculos já feitos.
+- **Baixar modelo:** planilha para preencher e importar.
+- **Quem vê e quem altera:** supervisor, despacho e NOC leem. Só o supervisor grava. Técnicos não veem os dados de cliente.
+
+**Caixa de emenda nova em corretiva:** no passo Ocorrência da corretiva, o botão **Registrar caixa de emenda nova** serve para o rompimento entre duas caixas já existentes.
+- Abre o mapeamento da caixa nova: TAG automática, cabos e diagrama de fusões.
+- O técnico informa **entre quais caixas** ela ficou (lado A e lado B).
+- Ela entra sozinha no diagrama linear da rota, com contorno laranja e a etiqueta "caixa nova". A posição vem do GPS pelo traçado ou, sem GPS, do lado A/B informado. O mapa da rota fica sempre atualizado.
+- Instale uma caixa de cada vez; podem ser várias na mesma corretiva.
+
+**Para atualizar:**
+1. Rode o `supabase.sql`, que cria a tabela `fiber_book`.
+2. Suba os arquivos.
+
+
+## Logo nos diagramas, DGO de destino, site e bastidor, TAG pelo trecho (v45)
+
+**Logo da Multivale:** o diagrama linear exportado (PDF, PNG e SVG) e a imagem do mapa de fusão de cada caixa saem com o logo e um cabeçalho com a rota, o trecho (ex.: PDA x CPJ) e a data.
+
+**DGO de origem e DGO de destino:** a primeira coluna do diagrama linear é o DGO da ponta A, e a última é o DGO da ponta B.
+- **No DGO de destino:** cada posição mostra a fibra que chega ali no fim da rota principal.
+- **Nome padrão:** vem do site, pela sigla da rota (ex.: DGO PDA, DGO CPJ).
+- **Campos de cada DGO** (no cartão do book de dados): nome, site, sala, fila, **bastidor**, **posição no bastidor** (ex.: U12 a U15) e fibras por bandeja.
+- **Posição de cada fibra:** fica como Bandeja-Porta (B1-02). Ela pode ser trocada na ficha da fibra ou vir da planilha, nas colunas "Posição DGO origem" e "Posição DGO destino".
+- **Na ficha da fibra:** aparece o endereço completo nas duas pontas: site · sala · fila · bastidor · DGO (posição no bastidor) · bandeja e porta.
+
+**TAG automática pelo trecho (sem as iniciais do técnico):**
+- **Siglas na rota:** cadastre em cada rota a **sigla do site A** e a **sigla do site B** (ex.: PDA e CPJ). Sem sigla, o app usa as 3 primeiras letras do nome da ponta.
+- **Formato:** a TAG sai como prefixo-SITEA-SITEB-número, por exemplo CE-PDA-CPJ-0001. A caixa também guarda o trecho "PDA x CPJ".
+- **Numeração:** o número seguinte é o maior já usado naquele trecho, olhando a nuvem e o aparelho, para duas equipes não repetirem a mesma TAG. Sem internet, sai pela numeração do aparelho e o app avisa para conferir.
+- **Mapeamento de caixa (vistoria):** agora tem o botão **Gerar TAG**, para caixa sem plaqueta.
+- O prefixo continua no perfil do técnico (padrão CE-BKB).
+
+**Para atualizar:** só subir os arquivos. Não precisa rodar SQL de novo.
+
+
+## Plano de fusão interativo com fotos, cabos de 12 a 288 FO, KMZ da rota (v46)
+
+**Plano de fusão interativo (só no app, online; o PDF continua igual):** abre a tela do plano com as **fotos de campo** de um lado e o **plano** do outro.
+- **Onde abre:**
+  - **Histórico de ativos:** botão "Mapa de fusão" de cada visita.
+  - **Diagrama linear:** tocando no nome de uma caixa.
+  - **Rota:** em "Caixas da rota" ou no marcador da caixa no mapa.
+  - **No celular:** no histórico da caixa, ao digitar a TAG.
+- **Fotos:** aparecem por visita, com bandeja, acomodação e caixa aberta primeiro. Toque para ampliar.
+- **Supervisor:** ajusta o plano conforme as fotos.
+  - Ligações: toque na entrada e depois na saída.
+  - Ferramentas: cor com cor, desfazer, limpar e bandeja.
+  - Tamanho dos cabos: entrada, Saída 1 e Saída 2.
+- **Salvar revisão do plano:** cria uma nova versão, que aparece como "Revisão do plano" no histórico. Ela passa a valer no mapa da rota e no diagrama linear, e a visita original continua guardada.
+- **Técnico:** só vê o plano. Para ajustar em campo, usa a etapa Fusões (com "Copiar da última visita").
+- **Tocando no DGO** (diagrama linear), a ficha da fibra mostra as **fotos do DGO** daquele lado. São as tiradas em campo no tipo "DGO / bastidor" e as enviadas pelo supervisor no book de dados (botão "Enviar fotos do DGO").
+
+**Cabos de tamanhos diferentes no mesmo trecho:** no diagrama de fusões de cada caixa há três campos: **cabo de entrada**, **Saída 1** e **Saída 2**.
+- Cada um vai de 12 a 288 FO: 12, 24, 36, 48, 72, 96, 144, 192, 216 e 288.
+- **Trocar por um cabo menor não desfaz nenhuma fusão.** As fibras que não existem no cabo novo ficam marcadas como **"para aqui" (⊣ laranja)**: elas param naquela caixa e não seguem.
+  - No diagrama linear e no rastreio também aparecem como "para nesta caixa".
+  - Na tabela de fusões do PDF aparecem como "PARA NESTA CAIXA".
+  - As fusões ficam guardadas e voltam a valer se o cabo aumentar de novo.
+- Toda caixa nova começa com **12 FO**.
+- **Cabos grandes:** acima de 2 tubos aparecem os **botões de tubos** (T1…T24), para mostrar só os tubos em que se está trabalhando. O ● marca os tubos com fusão.
+
+**Menu lateral do supervisor:** novo item **Mapa de fusão**.
+- Abre o plano interativo de uma caixa pela TAG.
+- Na mesma tela ficam o diagrama linear da rota e o book de dados.
+
+**Mapeamento de caixa:** novos tipos de foto: "Acomodação das fibras", "Mapa de fusão (existente)" e "DGO / bastidor". A preventiva também ganhou "Acomodação das fibras".
+
+**KMZ da rota:**
+- **Rotas matriz:** o supervisor cadastra a rota e importa o KMZ raiz. O técnico abre a rota no app, vê o traçado e todas as **caixas já mapeadas pela equipe**, e dá andamento.
+- **Baixar KMZ da rota (suporte de campo):** leva o traçado oficial, o caminho das rondas e as caixas. Abre no Google Earth ou no Google Maps.
+- **Fim da ronda:** se a ronda tem rota, o app oferece **enviar o percurso do cabo e as caixas do dia** ao supervisor.
+- **Atualizações enviadas:** aparecem na rota. O supervisor escolhe:
+  - **Juntar ao KMZ raiz:** soma o traçado novo e atualiza as caixas pela TAG.
+  - **Trocar o arquivo oficial.**
+- **Atualizar o KMZ raiz com as caixas mapeadas:** coloca no arquivo raiz o ponto de cada caixa (TAG), na posição mais nova.
+
+**Para atualizar:** só subir os arquivos. Não precisa rodar SQL.
+
+## Acesso só com login, banco fechado, portal do parceiro, sobreposição de rotas e fotos (v39)
+
+**Faça nesta ordem (uma vez):**
+
+1. **Banco:** rode o **supabase.sql inteiro** no SQL Editor.
+2. **Função `acesso`:**
+   - Em **Edge Functions**, crie a função com o nome **acesso**, cole o arquivo `acesso-index.ts` e faça o deploy.
+   - **Importante:** na função, **desligue "Verify JWT"** (Enforce JWT verification). O primeiro acesso do técnico chega sem login; a própria função confere quem está chamando.
+   - Não precisa de chave nova: ela usa a chave de serviço que o Supabase já entrega para a função.
+3. **Técnicos:** em **Equipe e cadastros**, cadastre cada técnico (de preferência com a matrícula) e envie o convite pelo WhatsApp.
+   - **Primeiro acesso:** o técnico abre o link, vai em **Primeiro acesso** e cria a senha.
+   - **Depois:** entra com **matrícula + senha**.
+   - **Quem já usava o app:** recebe o convite também; o histórico dele é mantido.
+4. **Desligar o acesso anônimo:** em **Authentication > Sign In / Providers**, desligue:
+   - **Allow anonymous sign-ins** (login anônimo);
+   - **Allow new users to sign up** (as contas passam a nascer só pela função).
+
+**O que mudou na segurança:**
+- **Banco fechado:** sem login não se lê nada. Quem tem login, mas não tem cadastro ativo (ou é parceiro), também não lê as O.S., as rotas, as metas, os materiais nem as fotos.
+- **Fotos por equipe:** só a equipe (org) vê e envia fotos, e só o supervisor apaga.
+- **Esqueceu a senha:** em Equipe e cadastros, botão **Nova senha** na linha do técnico. Gera uma senha provisória e já monta a mensagem de WhatsApp.
+- **Sair:** o técnico tem o botão **Sair desta conta** no perfil.
+- **Corretiva:** o banco recusa a conclusão sem a liberação aprovada do NOC ou do supervisor, mesmo com um app antigo.
+
+**Portal do parceiro (`parceiro.html`):**
+- **Criar acesso:** em **Equipe e cadastros > Portal do parceiro**, crie o acesso com nome, e-mail e cliente (Claro, Master…). A senha provisória aparece na tela; envie por um canal seguro.
+- **O que o parceiro vê:** só as O.S. do cliente dele: indicadores, gráfico por cluster e por cidade, mapa, lista e detalhe com fotos (links que valem 1 hora). Também exporta planilha.
+- **Busca:** por ticket, node, endereço, cidade e cluster, com período e situação.
+- **Técnico:** o nome só aparece se você marcar "Mostrar o primeiro nome do técnico".
+- **Gerenciar:** **Nova senha** e **Desativar** ficam na mesma lista. O link também está no menu lateral do painel.
+
+**Rotas (arquivo original intacto):**
+- **No celular:** a rota cadastrada pelo supervisor fica só para leitura. Se o cabo mudou, o técnico envia uma **sobreposição** (KMZ/KML + observação), que aparece em laranja por cima do traçado.
+- **No painel:** o supervisor vê as sobreposições na rota e escolhe **Usar como arquivo oficial** ou **Descartar**.
+- **Trocar o arquivo:** ao trocar, ele pode descartar as sobreposições.
+- **Rotas do técnico:** as rotas que o próprio técnico criou continuam editáveis por ele.
+
+**Fotos:**
+- **No celular:** a foto já enviada para a nuvem sai do aparelho depois de 30 dias.
+- **Backup no fechamento:** em **Medição** > **Fotos do período**, baixe as fotos do período em .zip (até 500 por arquivo), organizadas por cluster e por O.S., com um índice em planilha. Guarde no Google Drive ou no OneDrive.
+- **Liberar espaço:** depois de guardar, toque em **Liberar espaço**: informe onde guardou e as fotos saem do Supabase. A O.S. fica marcada como "foto no arquivo", e o histórico do arquivamento aparece na mesma tela.
+- **PDFs e fotos de várias O.S.:** na lista da Medição, os botões **Relatórios PDF (.zip)** e **Fotos por O.S. (.zip)** baixam tudo da etapa (ou só as selecionadas) de uma vez. Para uma O.S., use o link **fotos** ao lado do número dela.
+
+## Mapa ao vivo com a última posição e centro de custo a definir (v38)
+
+**Mapa ao vivo:**
+- **Sem sinal ou offline:** o técnico continua no mapa, na última posição conhecida. O marcador fica cinza, tracejado, com 📵, e o balão mostra "Sem sinal · última posição há X".
+- **App reaberto sem GPS:** o celular manda a última posição guardada, em vez de apagar a do mapa.
+- **Disponíveis (sem O.S.):** continuam no mapa enquanto o expediente estiver aberto. Antes sumiam depois de 3 horas.
+
+**Centro de custo a definir** (topo da tela de **Medição**): lista as O.S. sem centro de custo / faturamento, por exemplo a corretiva aberta pelo técnico sem atividade cadastrada. Escolha o centro e toque em **Salvar**. A O.S. passa a usar esse centro no valor da LPU, na medição e nos relatórios. Fica registrado quem definiu e quando.
+
+## Bônus de produção, folha por cluster, rateio com equipe de apoio e LPU (v37)
+
+**No Supabase:** rode de novo o **supabase.sql inteiro**. Ele cria a tabela `bonus`, a função `eh_gestor` e a coluna `centro_custo` nos cadastros.
+
+**Bônus de produção** (em **Produção (BI)**, abaixo de Metas por equipe):
+- **Conta:** bônus sugerido = (produção da equipe − impostos da nota fiscal) × % do bônus. Os impostos vêm em 25% por padrão.
+- **Percentuais:** o gestor define os dois percentuais.
+- **Valor final:** o gestor define o valor final de cada equipe e o rateio entre os integrantes (o rateio precisa fechar com o valor final), aprova e depois marca como pago. Depois de pago, não muda mais.
+- **Supervisor:** vê os valores, mas não altera.
+
+**Centro de custo do colaborador:** em **Equipe e cadastros**, abra **Horas e salário** e escolha o cluster da folha. Se ficar em "Automático", vale o cluster da ficha. O técnico vê o centro de custo dele no perfil.
+
+**Folha por centro de custo (cluster)** fica em **Centro de custo**. Para cada cluster, soma:
+- salário + periculosidade + outros adicionais;
+- encargos e VR;
+- horas extras, noturno e DSR;
+- bônus aprovado.
+
+**Insalubridade:** saiu do cálculo, porque as equipes recebem só periculosidade.
+
+**Equipe de apoio:** quando uma O.S. tem apoio de outra equipe, a produção daquela O.S. é dividida em partes iguais entre as equipes (2 equipes = 50% cada). Isso vale para o BI, as metas por equipe e o bônus. Se o apoio for da mesma equipe, não divide. No celular, a "Minha produção" mostra só a parte de cada um. Os extratos de medição continuam com o valor cheio da O.S.
+
+**Corretiva da Claro:** não pede mais os dados do cabo (a etapa Cabos sai) nem a rota do cabo.
+
+**LPU:**
+- **Quantidade:** cada item tem um campo de quantidade. Digite, por exemplo, 500 e toque em **+ Adicionar** (ou Enter). Se o item já foi lançado, a quantidade soma.
+- **Centro de custo / faturamento:** na corretiva e na O.S. vinda de atividade cadastrada, o técnico não escolhe mais. Vale o que foi definido por quem cadastrou a atividade.
+
+## Funções, equipes MEC/FO, adicionais do salário, foto de perfil, Área NOC e exclusão de O.S. (v36)
+
+**No Supabase:** rode de novo o **supabase.sql inteiro**. Ele cria a coluna `cargo` nos cadastros, a foto do supervisor (`admins.foto` e a função `admin_foto`) e os adicionais do RH em `rh_dados`.
+
+**Funções:**
+- **Rede:** Auxiliar de rede; Oficial de rede, e de 1 a 5.
+- **Fibra:** Técnico de fibra 1 a 5.
+- **Campo:** Encarregado; Fiscal de campo.
+- **Gestão:** Supervisor 1 a 4; Coordenador; Gerente de projeto; Gerente geral.
+- **Escritório:** Auxiliar de escritório.
+
+O fiscal de campo vê só a vistoria, e o técnico de fibra tem o app de fibra; as demais funções usam o app do técnico.
+
+**Equipes:**
+- **Códigos:** MEC 1 a MEC 11 (mecânica) e FO 1 a FO 5 (fibra óptica).
+- **Onde vincular:** em **Produção (BI)**, abra **Configurar metas e equipes**, toque em **Vincular equipe**, escolha o código e até 3 integrantes, e salve.
+- **No cadastro:** a equipe é gravada no cadastro de cada integrante e também se escolhe no cadastro novo.
+
+**Salário (Equipe e cadastros > Horas e salário):** além do salário base, VR, jornada e locação, agora entram os adicionais.
+- **Periculosidade:** 30% do salário base.
+- **Adicional noturno:** padrão de 20%, das 22h às 5h, com a hora reduzida de 52min30s.
+- **Outros adicionais fixos:** gratificação, ajuda de custo etc.
+- **DSR:** sobre horas extras e noturno, calculado pelos domingos do período.
+- **Base da hora:** hora extra e noturno usam salário + periculosidade ÷ 220.
+- **Onde aparece:** tudo isso entra no extrato em PDF, no ganho por O.S. e no centro de custo.
+- **Feriados:** confira com o RH.
+
+**Foto de perfil:** o técnico põe a foto em **Meu perfil**. O supervisor toca na própria foto (as iniciais) no topo do menu lateral.
+
+**Área NOC:** o link fica no menu lateral do painel, logo abaixo de **Acionamentos Claro**.
+
+**Excluir O.S.:** abra a O.S. no painel e toque em **Excluir O.S. do sistema**, no fim do formulário. Para confirmar, digite **EXCLUIR**. A O.S. sai do banco de vez; a ronda e as fotos que o técnico já fez continuam no histórico.
+
+## Regiões, clusters dos supervisores e avisos do painel (v35)
+
+**No Supabase:** rode de novo o **supabase.sql inteiro**. Abra o arquivo, dê Ctrl+A e Ctrl+C, cole no SQL Editor e clique em Run. Se o painel mostrar a tarja vermelha "Banco de dados desatualizado", é porque o arquivo não foi rodado por inteiro; a tarja lista o que falta.
+
+**Clusters e mini clusters:**
+- **Cluster DDD11:** Implantação.
+- **Cluster DDD12:** São José dos Campos, Taubaté e Litoral.
+- **Cluster DDD13:** Santos.
+- **Cluster MG:** Sul de Minas.
+
+**Região do colaborador:** escolha o cluster e o mini cluster. A opção **Todas as áreas do cluster** serve, por exemplo, para o fiscal de campo; ao marcar a classe **Fiscal de campo**, ela já vem selecionada.
+
+**Supervisores:** no fim do **Calendário de recursos**, marque os clusters de cada supervisor (pode ser mais de um). O calendário abre filtrado em **Meus clusters**. Só o gestor muda os clusters dos outros.
+
+**Avisos do painel:** as tarjas de O.S. sem atualização, SLA, limite de horas e treinamentos têm um **X** para fechar. A tarja volta se a situação piorar: mais 1 hora sem atualização, SLA estourado ou novo dia. O SOS não tem X; ele só sai em **Atendido**.
+
+## SLA, agilidade na rua, histórico de ativos e segurança (v34)
+
+**No Supabase:** rode de novo o **supabase.sql**. Ele cria as tabelas `treinamentos`, `sos` e `escada`, e agenda a verificação do modo escada (a cada 5 minutos, com o pg_cron ativo).
+
+**Indicadores e SLA** ficam no menu do painel.
+- **Indicadores:** tempo de resposta (acionamento até a chegada), MTTR (acionamento até a conclusão) e % dentro do prazo, por contrato, cluster, mini cluster, equipe ou técnico. Dá para exportar em CSV.
+- **Prazos:** os prazos de cada contrato (Claro, backbone Multivale, backbone Master) se editam em **Prazos do contrato**.
+- **Alertas:** O.S. perto de estourar o prazo aparecem em laranja; as estouradas, em vermelho, com notificação.
+
+**Agilidade na rua (celular do técnico).**
+- **Ditado:** o botão 🎤 **Falar** fica embaixo dos campos de texto. Ele usa o reconhecimento de voz do celular; no APK, pede a permissão de microfone.
+- **Respostas prontas:** atalhos de texto para atualizar a O.S., pedir a liberação e mandar mensagem ao NOC.
+- **Chegada automática:** a menos de 150 m do endereço da O.S., o app pergunta "Você chegou ao local?" e já registra a chegada.
+
+**Histórico de ativos** fica no menu do painel.
+- **Busca:** por TAG da caixa, node ou endereço/ticket. Mostra tudo o que já foi feito ali e na vizinhança (200 m, últimos 12 meses), com PDF de cada evento.
+- **No celular:** ao digitar ou ler a TAG pelo **QR da plaqueta**, o técnico vê o histórico da caixa.
+- **Etiquetas QR:** o botão gera um PDF com 24 etiquetas por folha A4, para imprimir e colar nas caixas.
+
+**Segurança do trabalho.**
+- **APR na chegada:** ao chegar no ponto (corretiva ou rota), o técnico preenche a Análise Preliminar de Risco. Ele marca os riscos e os EPIs em uso e tira a foto da equipe com o EPI.
+  - **EPI obrigatório:** os EPIs exigidos pelos riscos marcados aparecem com *. Sem eles, a APR não fecha.
+  - **Treinamento obrigatório:** trabalho em altura exige NR-35 em dia; rede elétrica exige NR-10; espaço confinado exige NR-33. Se estiver vencido ou não cadastrado, o app bloqueia e registra o bloqueio na O.S.
+  - **No relatório:** a APR sai no PDF da ronda/corretiva.
+- **Treinamentos e ASO:** cadastre em **Calendário de recursos**, tocando no nome do técnico (ficha). Informe a emissão (a validade é calculada sozinha) ou a validade, e anexe o certificado, se quiser.
+  - **Avisos:** o painel avisa o que venceu ou vence em até 30 dias.
+  - **Para o técnico:** ele vê os próprios treinamentos no perfil.
+- **SOS:** com o expediente aberto, o técnico tem o botão vermelho **SOS**. O supervisor e o NOC recebem na hora, com som, notificação e a localização. Quem atender toca em **Atendido**. O botão também mostra os atalhos para ligar 192 e 193.
+- **Modo escada (trabalho em altura):** o técnico ativa o botão 🪜 **Escada** antes de subir no poste ou na escada.
+  - **Confirmações:** a cada 1 hora o app toca e pergunta "Você está bem?". Ele confirma em **Estou bem**, no alarme ou no próprio botão.
+  - **Sem resposta:** 5 minutos depois toca o 2º alarme. Se ele não responder ao 2º alarme, o supervisor e o NOC recebem o alerta "🪜 não respondeu", com a localização.
+  - **Se o técnico responder depois:** o alerta é encerrado sozinho.
+  - **Celular desligado ou sem sinal:** o servidor dá o mesmo alerta, com a última localização conhecida.
+  - **Desativar:** ao descer, o técnico desativa no botão. O modo também desliga ao encerrar o expediente.
+
+**APK (quando for gerar):** o APK novo pede as permissões de microfone (ditado) e câmera (QR). Não precisa gerar agora.
+
 ## Validação do endereço (v33 · Geoapify, sem cartão)
 
 Ao ler o ticket do acionamento, o sistema valida o endereço para o ponto sair certo no mapa e no mapa de calor. Isso vale no painel, na tela de acionamentos, no botão "Achar no mapa" e na importação em lote.
