@@ -441,6 +441,161 @@ A corretiva Claro continua sem cabos, fusões e mapa.
 **Para atualizar:** só subir os arquivos. Não precisa rodar SQL de novo.
 
 
+## Código em módulos, backup do banco, uso do plano e limite de tentativas de login (v54)
+
+**Já feito direto no seu Supabase (12/10/2026):**
+- As funções **acesso** (nova), **alertas** (nova) e **telegram** (atualizada) foram publicadas, as três com "Verify JWT" desligado.
+- Teste da `acesso`: a matrícula 32280111 respondeu "convite pendente", então está funcionando.
+- O agendamento `alertas-ronda-backbone` foi criado e chama a função a cada minuto.
+- A coluna `cadastros.senha_pedida` foi criada.
+
+**Falta você fazer (cerca de 10 minutos):**
+1. **Banco:** SQL Editor > cole o `supabase.sql` inteiro > **Run**. O banco estava numa versão antiga e faltam equipamentos, almoxarife restrito, backup, limite de login etc. Só acrescenta; não apaga dados.
+2. **Segredos dos alertas:** Edge Functions > **Secrets** > cadastre `VAPID_PUBLIC`, `VAPID_PRIVATE`, `VAPID_SUBJECT` e `CRON_SECRET` com os valores do arquivo `CHAVES-ALERTAS-NAO-ENVIAR-AO-GITHUB.txt`. Hoje o agendamento já chama a função, mas ela responde "não autorizado" porque o `CRON_SECRET` não está cadastrado.
+3. **Sem acesso anônimo:** Authentication > Sign In / Providers > desligue **Allow anonymous sign-ins**. O app não usa mais login anônimo.
+   - Na mesma área, em **Password security**, ligue **Leaked password protection**. Ela recusa senhas que já vazaram na internet.
+4. **Limpeza:** Edge Functions > apague as funções **super-worker** e **bright-handler**. São cópias antigas da telegram, criadas na primeira tentativa.
+5. **(Opcional) Endereço preciso no mapa:** crie a chave grátis no Geoapify, cadastre o segredo `GEOAPIFY_KEY` e publique a função `geocode` (arquivo `geocode-index.ts`).
+
+**O que mudou no app**
+- **Código em módulos:** o `index.html` virou uma página pequena. O código está em `app.css` e em 12 arquivos `app-01-base.js` … `app-12-projetos-inicio.js`, na **mesma pasta** (sem subpasta).
+  - Ao subir no GitHub, envie **todos** os arquivos do zip, inclusive esses novos.
+  - Para o técnico nada muda.
+- **Backup e armazenamento** (menu do painel):
+  - Mostra quanto do plano grátis está em uso (banco e fotos).
+  - Baixa o **backup completo** do banco em .zip, com um JSON por tabela, para guardar no Drive.
+  - No login, o painel avisa se o último backup tem mais de 7 dias ou se o uso passou de 80%.
+- **Limite de tentativas:** ativar convite, diagnóstico de login e "esqueci a senha" aceitam até 30 tentativas a cada 10 minutos por rede. Depois pedem para aguardar.
+- **Almoxarife:** não recebe os alertas de supervisor e não envia medição para o Telegram.
+
+## App do técnico mais simples e almoxarife restrito no banco (v53)
+
+**O que fazer:** SQL Editor > cole o `supabase.sql` inteiro > **Run**. Se a v52 ainda não foi aplicada, este Run já inclui a v52, mas a função **acesso** da v52 também precisa ser atualizada.
+
+**Segurança: o almoxarife só enxerga o estoque**
+- O almoxarife deixa de contar como supervisor no banco. Ele lê e grava materiais, movimentos, requisições e equipamentos, e lê os projetos e os nomes da equipe (função `equipe_nomes`).
+- Ele **não** lê mais RH, salários, cadastros, O.S., fotos nem medição.
+- Antes desta versão a restrição era só visual.
+
+**App do técnico (menos coisa na tela)**
+- **Início:** o tipo de atividade fica em 2 x 2, sem ficar cortado. Na corretiva, rota, referência e descrição do chamado ficam em "opcional", recolhidos. Só ticket, ocorrência, de quem é a corretiva e veículo ficam à vista.
+- **Ocorrência:** ficam à vista ticket, tipo, problema e TAG. Acionamento, fibras afetadas, causa e poste vão para "Mais detalhes (opcional)".
+- **Localização:** rota e backbone já informados viram uma linha "Rota e backbone: … (alterar)".
+- **Validação do NOC:** saiu do topo de todas as etapas. Agora aparece só em **Finalizar**, logo depois do "Serviço executado", e continua no cartão "Encerrar corretiva" da tela inicial.
+- **Fusões:** com "Todas fusionadas cor com cor" o diagrama fica recolhido em "Ver ou ajustar o diagrama de fusões".
+- **Finalizar:** WFC/WF2 ficam recolhidos no fim, como opcionais.
+- **Botões de segurança:** o botão da escada virou um ícone redondo e o SOS ficou um pouco menor, para não cobrir os campos.
+
+## Equipamentos de alto custo, acessos do painel pelo app, NR na APR e tom vermelho (v52)
+
+**O que fazer nesta versão (2 passos):**
+1. **SQL Editor** > cole o `supabase.sql` inteiro de novo e clique em **Run**. Cria as tabelas `equipamentos` e `equip_mov`, a função `equip_aceite` e a coluna `admins.email`.
+2. **Edge Functions** > função **acesso** > **Code** > cole o conteúdo novo de `acesso-index.ts` > **Deploy**. Sem isso o botão "Criar acesso do painel" responde "Ação desconhecida".
+
+**Acessos do painel sem abrir o Supabase**
+- Em **Equipe e cadastros** > **Acessos do painel**: informe nome, e-mail e papel e clique em **Criar acesso do painel**. O app mostra uma senha provisória para enviar à pessoa.
+- O **gestor** cria supervisor e almoxarife. O **supervisor** cria só almoxarife. Ninguém cria gestor por aqui.
+- Na mesma lista há **Nova senha** e **Remover acesso**. Remover tira do painel e bloqueia o login.
+- O passo a passo manual da v51 (Authentication + insert em admins) continua valendo, mas não é mais necessário.
+
+**Equipamentos de alto custo (Almoxarifado > Equipamentos)**
+- Cadastro de máquina de fusão, OTDR, máquina de espinar, clivador, power meter etc., com patrimônio, nº de série, valor, projeto e validade da calibração.
+- Ações: **Entregar a um técnico**, **Receber devolução** (estado: bom, avaria, defeito), **Transferir para outro técnico**, **Enviar para manutenção**, **Retorno da manutenção** (com nova calibração) e **Dar baixa** (perda, furto/roubo, sucata, venda).
+- Tudo fica no histórico do equipamento.
+- O técnico vê **Meus equipamentos** no Perfil e toca em **Confirmo que recebi**, que funciona como termo digital. Ao abrir o app, ele recebe um aviso se tiver recebimento pendente.
+- O botão **Termo de responsabilidade (PDF)** sai com a data da confirmação e linhas de assinatura.
+- Os indicadores mostram os equipamentos com técnicos, no almoxarifado, em manutenção, com recebimento pendente e com calibração vencida ou vencendo em até 30 dias. Há também exportação para planilha.
+- Em **Equipe** > técnico aparecem os equipamentos que estão com ele.
+
+**APR:** por padrão todo colaborador está habilitado com as NRs em dia. A APR mostra "Treinamentos em dia: NR-35 · OK" e grava isso. Só bloqueia se houver um certificado cadastrado e vencido. O controle de certificado e validade vem depois.
+
+**Aparência:** o tom verde virou **Vermelho Claro**. Quem usava verde passa automaticamente para o vermelho.
+
+## Almoxarife, estoque no perfil do técnico e busca de LPU/material (v51)
+
+Não precisa rodar SQL nesta versão.
+
+**Criar o usuário do almoxarife**
+1. Supabase > **Authentication** > **Users** > **Add user** > **Create new user**: e-mail e senha do almoxarife (marque *Auto Confirm User*). Copie o **UID** que aparece na lista.
+2. **SQL Editor** > rode (troque UID e nome):
+   ```sql
+   insert into public.admins (uid, org, nome, papel)
+   values ('UID-AQUI', 'multivale', 'Nome do Almoxarife', 'almoxarife');
+   ```
+3. Ele entra pelo **admin.html** com esse e-mail e senha. O painel abre direto no **Almoxarifado** e o menu mostra só Almoxarifado, Aparência e Sair.
+
+> O bloqueio das outras telas para o almoxarife é feito no painel. No banco ele tem a mesma permissão de um supervisor, então use esse papel só para pessoas de confiança da empresa.
+
+**O que mudou**
+- **Almoxarifado > Movimentar**: o estoque aparece por projeto (Manutenção Claro, Backbone Multivale, Backbone Master e os nomes dos projetos ligados a cada um). A saída agora se chama **Liberação para técnico**. Há um novo tipo, **Transferir de um técnico para outro**: tira do saldo de um técnico e coloca no do outro (fica registrado como devolução + liberação, com documento TRF-…). Não deixa transferir mais do que o técnico tem.
+- **Perfil do técnico**: novo cartão **Meu estoque de material**, com o saldo de corretiva (Manutenção Claro) primeiro.
+- **Equipe e cadastros** (supervisor): ao abrir um técnico, aparece o estoque dele e o botão **Liberar / transferir material**, que leva ao Almoxarifado com o técnico já escolhido.
+- **Materiais** (técnico): no topo, **Consultar LPU e materiais**: digite código ou nome (sem precisar de acento) e aparecem os itens da LPU e do catálogo, com o seu saldo. Na O.S., o campo "Material" sugere os itens do catálogo e da LPU enquanto o técnico digita.
+
+## O.S. separadas por projeto, aparência, alerta de expediente e fotos na horizontal (v50)
+
+**Cada O.S. pertence a um projeto (Centro de custo):**
+- **O.S. cadastrada no painel:** o campo **Projeto** é obrigatório. Ele vem sugerido pelo cliente e pelo contrato, e o supervisor pode trocar. A importação em lote aceita a coluna "Projeto".
+- **O.S. aberta pelo técnico:** o app sugere o projeto pelo faturamento (LPU) e pelo cliente. Sugestão: Claro vai para o projeto de vínculo Claro; parceiro Master, para o projeto Master; o resto, para Backbone Multivale.
+- **Faturamento no projeto:** em Centro de custo, cada projeto pode ter o **Faturamento (LPU)** (Claro SP, Claro interior ou Backbone). As O.S. com esse faturamento entram nele automaticamente.
+- **Medição:**
+  - Tem botões para filtrar por projeto e a coluna **Projeto** em cada O.S. ("auto" quando é a sugestão).
+  - Só valida O.S. com projeto. Ao validar, o projeto fica **gravado** na O.S. e na medição.
+  - Depois de **enviada para medição**, o projeto não muda mais.
+- **Envio ao Telegram:** sai **um lote por projeto**. A mensagem e a planilha do lote mostram o projeto.
+- **Planilhas:** a planilha da medição e a do BI levam a coluna Projeto, e o nome do arquivo leva o projeto filtrado.
+- **No banco:** o projeto fica em `eventos.dados.projeto`, `atividades.dados.projeto`, `medicoes.projeto` e `os_medidas.projeto`, com índices. O arquivo de O.S. medidas guarda o projeto.
+- **BI:** abas **Geral**, uma **por projeto** e **Sem projeto**. Cada aba mostra só a produção daquele projeto.
+- **Centro de custo:** a produção e o rateio do tempo dos técnicos passam a usar o projeto de cada O.S.
+
+**Aparência:** no perfil do técnico e no menu do painel (item **Aparência**).
+- **Modo:** Automático (segue o celular), Claro ou Escuro.
+- **Tom:** Azul Multivale, Verde ou Laranja.
+- Fica salvo em cada aparelho.
+
+**Expediente não iniciado:**
+- **No painel:** uma faixa amarela mostra quem não iniciou o expediente 15 minutos depois do início da jornada. Dá para fechar até o dia seguinte.
+- **Notificação:** com os alertas ativados no computador ou no celular, o supervisor recebe a notificação, uma vez por técnico por dia. Quem está de folga ou desativado não entra.
+- A tolerância pode ser mudada no segredo `EXP_TOLERANCIA_MIN` da função alertas.
+
+**Fotos na horizontal:** a etapa de fotos lembra de deitar o celular. Se a foto sai em pé, o app avisa logo depois.
+
+**Para atualizar:**
+1. Rode o `supabase.sql`, que cria as colunas de projeto e os índices.
+2. Publique de novo as funções **telegram** e **alertas** com os novos `telegram-index.ts` e `alertas-index.ts`.
+3. Suba os arquivos.
+4. Em **Centro de custo**, confira se cada projeto tem o vínculo e, se for o caso, o faturamento.
+
+## Login do técnico, senha esquecida e exclusão de O.S. executadas (v49)
+
+**Login do técnico mais claro:** quando a matrícula e a senha não entram, o app pergunta ao servidor o motivo e mostra a mensagem certa:
+- **Convite não usado:** a pessoa ainda não criou a senha. O app abre a aba **Primeiro acesso** e pede o código do convite. Este era o caso mais comum de "parece que não está no banco": o técnico tentava entrar direto com a matrícula antes de criar a senha.
+- **Matrícula não encontrada:** o cadastro não tem essa matrícula. Confira o cadastro em Equipe.
+- **Cadastro desativado.**
+- **Senha incorreta**, com o botão Esqueci a senha.
+- **Função "acesso" não configurada no Supabase.**
+
+**Esqueci a senha (técnico):** na tela de login, o técnico digita a matrícula e toca em **Esqueci a senha**.
+- O painel do supervisor mostra o aviso "🔑 Fulano esqueceu a senha do app" com o botão **Gerar senha nova**.
+- A senha sai com o link do WhatsApp para mandar ao técnico.
+- Em **Equipe**, o botão aparece como "🔑 Pediu senha nova".
+
+**Esqueci a senha (supervisor e gestor):** na tela de entrada do painel, digite o e-mail e toque em **Esqueci a senha**.
+- Chega um e-mail com o link. Ao abrir, o painel pede a senha nova.
+- Para o link voltar para o painel, em **Authentication > URL Configuration**:
+  - em **Site URL**, coloque `https://thiagorgomberg-star.github.io/ronda-backbone/admin.html`;
+  - em **Redirect URLs**, adicione `https://thiagorgomberg-star.github.io/ronda-backbone/**`.
+
+**Excluir O.S., mesmo já executadas (corretivas e preventivas):** a exclusão sempre pede para digitar EXCLUIR, e apaga a ficha, as fotos, o relatório e a medição.
+- **No cadastro da O.S.:** depois de confirmar, o app pergunta se apaga também o que já foi executado.
+- **No Histórico de ativos:** botão **Excluir** em cada registro.
+- **Na Medição:** link **excluir** em cada O.S.
+
+**Para atualizar:**
+1. Rode o `supabase.sql`, que cria a coluna `senha_pedida`.
+2. Publique de novo a função **acesso** com o novo `acesso-index.ts`.
+3. Suba os arquivos.
+
 ## Plano de fusão interativo com fotos, cabos de 12 a 288 FO, KMZ da rota (v46)
 
 **Plano de fusão interativo (só no app, online; o PDF continua igual):** abre a tela do plano com as **fotos de campo** de um lado e o **plano** do outro.

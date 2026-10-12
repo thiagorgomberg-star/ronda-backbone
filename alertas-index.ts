@@ -15,6 +15,8 @@ const TZ = "America/Sao_Paulo";
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const MIN = 60000;
 const INTERVALO = { atv: 2 * MIN - 10000, exp: 10 * MIN - 10000, ref: 5 * MIN - 10000 };
+// supervisor é avisado quando o técnico não inicia o expediente até X minutos depois do início da jornada
+const TOL_EXP = +(Deno.env.get("EXP_TOLERANCIA_MIN") ?? "15") || 15;
 
 type Envia = (uid: string, msg: Record<string, unknown>) => Promise<number>;
 type Db = {
@@ -25,6 +27,7 @@ type Db = {
   aoVivo?(): Promise<any[]>;
   limiteCfg?(): Promise<{ lim: number; aviso: number }>;
   tecnicos(): Promise<any[]>;
+  cadastrosAtivos?(): Promise<Set<string>>;
   expedientesDesde(ts: number): Promise<any[]>;
   comAssinatura(): Promise<Set<string>>;
   logLer(chaves: string[]): Promise<Map<string, number>>;
@@ -100,6 +103,20 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
       if (!log.has(k)) { const n = await envia(t.uid, { titulo: "Fim da jornada", corpo: `São ${JOR.fim}. Lembre de encerrar o expediente no app.`, tag: "fim", url: "./" }); await marca(k); out.push(`fim ${t.uid} → ${n}`); }
     }
   }
+  // 3b) gestor: técnico que não iniciou o expediente depois da tolerância (um aviso por técnico por dia, juntos numa notificação)
+  if (db.gestores && dentro && R.min >= hm(JOR.inicio) + TOL_EXP) {
+    const gest = (await db.gestores()).filter((u) => subs.has(u));
+    if (gest.length) {
+      const ativos = db.cadastrosAtivos ? await db.cadastrosAtivos() : null; const todos = (await db.tecnicos()).filter((t: any) => !ativos || !ativos.size || ativos.has(t.uid));
+      const faltam = todos.filter((t: any) => { const meus = exps.filter((e) => e.uid === t.uid); const folga = pls.some((p) => p.uid === t.uid && p.tipo === 'folga' && p.inicio < R.inicioDia + 86400000 && p.fim > R.inicioDia + 9 * 3600000); return !meus.find((e) => !e.fim) && !meus.some((e) => e.inicio >= R.inicioDia) && !folga; });
+      const ks = faltam.map((t: any) => `expsup:${t.uid}:${R.ymd}`); const lg = await db.logLer(ks); const novos = faltam.filter((t: any) => !lg.has(`expsup:${t.uid}:${R.ymd}`));
+      if (novos.length) {
+        const nomes = novos.map((t: any) => (t.dados || {}).nome || "Técnico");
+        const msg = { titulo: novos.length === 1 ? `⏰ ${nomes[0]} não iniciou o expediente` : `⏰ ${novos.length} técnicos não iniciaram o expediente`, corpo: `Jornada desde ${JOR.inicio}: ${nomes.slice(0, 6).join(", ")}${nomes.length > 6 ? "…" : ""}. Toque para ver no painel.`, tag: "expsup", url: "./index.html?modo=admin" };
+        let n = 0; for (const g of gest) n += await envia(g, msg); for (const t of novos) await db.logGravar(`expsup:${t.uid}:${R.ymd}`, agora); out.push(`expsup ${novos.length} → ${n}`);
+      }
+    }
+  }
   // 4) gestor: técnico com O.S. aberta perto de passar (ou passando) do limite de horas do dia (CLT: 2 h extras → 10 h)
   if (db.gestores && db.emCurso && db.aoVivo) {
     const gest = (await db.gestores()).filter((u) => subs.has(u));
@@ -153,12 +170,13 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
 function dbSupabase(sb: any): Db {
   return {
     async apoiosAbertos() { const { data, error } = await sb.from("atividades").select("id,tipo,ticket,tecnico_nome,status,endereco,dados,apoio_uids,apoio_st").eq("org", ORG).not("status", "in", "(concluida,cancelada)").neq("apoio_uids", "{}"); if (error) throw error; return data || []; },
-    async gestores() { const { data } = await sb.from("admins").select("uid").eq("org", ORG); return (data || []).map((r: any) => r.uid); },
+    async gestores() { const { data } = await sb.from("admins").select("uid,papel").eq("org", ORG); return (data || []).filter((r: any) => r.papel !== "almoxarife").map((r: any) => r.uid); },
     async emCurso() { const { data } = await sb.from("atividades").select("id,ticket,tipo,tecnico_uid,tecnico_nome,status,atualizado,criado,dados").eq("org", ORG).in("status", ["em_deslocamento", "no_local"]); return data || []; },
     async aoVivo() { const { data } = await sb.from("aovivo").select("uid,dados").eq("org", ORG); return data || []; },
     async limiteCfg() { const { data } = await sb.from("config").select("dados").eq("org", ORG).maybeSingle(); const d = (data && data.dados) || {}; return { lim: +d.limiteDiaMin || 600, aviso: +d.avisoMin || 30 }; },
     async atividadesPendentes() { const { data, error } = await sb.from("atividades").select("id,tipo,ticket,tecnico_uid,status,endereco,log,dados").eq("org", ORG).in("status", ["pendente", "recebida"]).not("tecnico_uid", "is", null); if (error) throw error; return data || []; },
     async tecnicos() { const { data, error } = await sb.from("tecnicos").select("uid,dados").eq("org", ORG); if (error) throw error; return data || []; },
+    async cadastrosAtivos() { const { data } = await sb.from("cadastros").select("uid,ativo").eq("org", ORG); return new Set((data || []).filter((c: any) => c.uid && c.ativo !== false).map((c: any) => c.uid)); },
     async expedientesDesde(ts: number) { const { data, error } = await sb.from("expedientes").select("id,uid,inicio,fim,dados").eq("org", ORG).gte("inicio", ts); if (error) throw error; return data || []; },
     async comAssinatura() { const { data, error } = await sb.from("push_subs").select("uid").eq("org", ORG); if (error) throw error; return new Set((data || []).map((r: any) => r.uid)); },
     async logLer(chaves: string[]) { const m = new Map<string, number>(); if (!chaves.length) return m; for (let i = 0; i < chaves.length; i += 200) { const { data } = await sb.from("push_log").select("chave,ts").in("chave", chaves.slice(i, i + 200)); (data || []).forEach((r: any) => m.set(r.chave, +r.ts)); } return m; },

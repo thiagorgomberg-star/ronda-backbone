@@ -6,6 +6,8 @@
 //
 // Ações (POST { acao, ... }):
 //   ativar          { codigo, senha }        técnico, sem login: cria a senha a partir do convite
+//   situacao        { login }                técnico, sem login: diz se a matrícula tem convite pendente, conta ativa ou não existe
+//   pedir_senha     { login }                técnico, sem login: avisa o painel que esqueceu a senha
 //   senha_temp      { cad_id }               supervisor: gera uma senha provisória para o técnico
 //   criar_parceiro  { nome, email, cliente } gestor/supervisor: cria o acesso do parceiro
 //   parceiro_senha  { uid }                  gestor/supervisor: nova senha do parceiro
@@ -23,7 +25,7 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 // ---------- regras puras (testadas) ----------
 export const MINI: Record<string, [string, string]> = { implantacao: ["Implantação", "ddd11"], sjc: ["São José dos Campos", "ddd12"], taubate: ["Taubaté", "ddd12"], litoral: ["Litoral", "ddd12"], santos: ["Santos", "ddd13"], sulminas: ["Sul de Minas", "mg"] };
 export const CLUSTERS: Record<string, string> = { ddd11: "Cluster DDD11", ddd12: "Cluster DDD12", ddd13: "Cluster DDD13", mg: "Cluster MG" };
-const limpa = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const limpa = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 // login do técnico: a matrícula ("m" + matrícula); sem matrícula, o código do convite
 export function loginDe(c: { id: string; matricula?: string | null }) { const m = limpa(c.matricula); return m ? "m" + m : limpa(c.id); }
 export const emailDe = (login: string, org = ORG) => `${limpa(login)}@${limpa(org)}.${DOMINIO}`;
@@ -66,6 +68,14 @@ export function linhaAtividade(a: any, cluster: string, mostrarTec: boolean) {
     criado: +a.criado || null, chegada: null, fim: null, tempoChegadaMin: null, tempoTotalMin: null, ocorrencia: ad.ocorrencia || "", problema: "", causa: "", servico: "", lat: a.lat, lon: a.lon, fotos: 0 };
 }
 
+// situação do login digitado pelo técnico (sem dizer nome nem dados): sem_cadastro | desativado | convite_pendente | ativo
+export const situacaoDe = (c: any) => !c ? "sem_cadastro" : c.ativo === false ? "desativado" : c.login_email ? "ativo" : "convite_pendente";
+// acha o cadastro pela matrícula (com ou sem o "m" do login) ou pelo código do convite
+export async function achaCadastro(sb: any, l: string) {
+  const mat = l.replace(/^m(?=\d)/, ""); const { data } = await sb.from("cadastros").select("id, matricula, ativo, uid, login_email, senha_pedida").eq("org", ORG);
+  const cs = data || []; return cs.find((x: any) => limpa(x.id) === l) || cs.find((x: any) => { const m = limpa(x.matricula); return m && (m === mat || "m" + m === l); }) || cs.find((x: any) => x.login_email && limpa(String(x.login_email).split("@")[0]) === l) || null;
+}
+
 // ---------- quem está chamando ----------
 async function quem(sb: any, req: Request) {
   const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""); if (!tok) return null;
@@ -76,12 +86,28 @@ async function quem(sb: any, req: Request) {
   if (p && p.ativo !== false) return { u, papel: "parceiro", parceiro: p };
   return { u, papel: "outro" };
 }
+export const LIM_TENTATIVAS = 30, LIM_JANELA_MS = 10 * 60000;
+export const ipDe = (req: Request) => (req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || "sem-ip").split(",")[0].trim().slice(0, 64);
+// conta as tentativas sem login do mesmo IP nos últimos 10 minutos (tabela acesso_limite, só a função grava)
+async function limiteTentativas(sb: any, req: Request): Promise<string | null> {
+  try {
+    const chave = ipDe(req), agora = Date.now();
+    const { data, error } = await sb.from("acesso_limite").select("ts").eq("chave", chave).gte("ts", agora - LIM_JANELA_MS);
+    if (error) return null; // tabela ainda não criada: não bloqueia
+    if ((data || []).length >= LIM_TENTATIVAS) return "Muitas tentativas seguidas. Aguarde 10 minutos e tente de novo.";
+    await sb.from("acesso_limite").insert({ chave, ts: agora });
+    if (Math.random() < 0.02) await sb.from("acesso_limite").delete().lte("ts", agora - 86400000);
+  } catch (_e) { /* sem tabela ou falha de rede: não bloqueia o login */ }
+  return null;
+}
 const todos = async (q: () => any) => { const out: any[] = []; for (let de = 0; ; de += 1000) { const { data, error } = await q().range(de, de + 999); if (error) throw error; out.push(...(data || [])); if (!data || data.length < 1000) return out; } };
 
 export async function handler(req: Request, sbFab = () => createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } })) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const sb: any = sbFab(); const b: any = await req.json().catch(() => ({})); const acao = String(b.acao || "");
   try {
+    // ações sem login (ativar convite, diagnóstico de login, esqueci a senha): limite de tentativas por aparelho/rede
+    if (acao === "ativar" || acao === "situacao" || acao === "pedir_senha") { const lim = await limiteTentativas(sb, req); if (lim) return json({ ok: false, motivo: lim }, 429); }
     if (acao === "ativar") {
       const codigo = String(b.codigo || "").trim().toUpperCase(); if (!codigo) return json({ ok: false, motivo: "Informe o código do convite." }, 400);
       if (!senhaOk(b.senha)) return json({ ok: false, motivo: "A senha precisa ter de 6 a 72 caracteres." }, 400);
@@ -100,13 +126,44 @@ export async function handler(req: Request, sbFab = () => createClient(env("SUPA
       const { error: e2 } = await sb.from("cadastros").update({ uid, login_email: email, resgatado_em: c.resgatado_em || new Date().toISOString() }).eq("id", c.id); if (e2) throw e2;
       return json({ ok: true, login, email, nome: c.nome });
     }
+    if (acao === "situacao" || acao === "pedir_senha") {
+      const l = limpa(b.login); if (!l) return json({ ok: false, motivo: "Informe a matrícula." }, 400);
+      const c = await achaCadastro(sb, l); const estado = situacaoDe(c);
+      if (acao === "pedir_senha" && estado === "ativo") { const ult = c.senha_pedida ? Date.parse(c.senha_pedida) : 0; if (!(Date.now() - ult < 10 * 60000)) await sb.from("cadastros").update({ senha_pedida: new Date().toISOString() }).eq("id", c.id); }
+      return json({ ok: true, estado });
+    }
     const q = await quem(sb, req); if (!q) return json({ ok: false, motivo: "Entre com seu login." }, 401);
     const adm = q.papel === "supervisor" || q.papel === "gestor";
+    // ---------- usuários do painel (supervisor e almoxarife) criados pelo próprio painel ----------
+    if (acao === "criar_painel" || acao === "painel_senha" || acao === "painel_remover") {
+      const podeCom = (papel: string) => q.papel === "gestor" ? ["supervisor", "almoxarife"].includes(papel) : q.papel === "supervisor" && papel === "almoxarife";
+      if (!adm) return json({ ok: false, motivo: "Só o supervisor ou o gestor cadastram acessos do painel." }, 403);
+      if (acao === "criar_painel") {
+        const email = String(b.email || "").trim().toLowerCase(), nome = String(b.nome || "").trim(), papel = String(b.papel || "");
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !nome) return json({ ok: false, motivo: "Informe nome e e-mail." }, 400);
+        if (!podeCom(papel)) return json({ ok: false, motivo: q.papel === "gestor" ? "Papel inválido." : "O supervisor só cadastra almoxarife. Supervisor novo é com o gestor." }, 403);
+        const senha = senhaProvisoria(8);
+        const { data: cr, error } = await sb.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome } });
+        if (error) return json({ ok: false, motivo: /already|registered|exists/i.test(error.message) ? "Este e-mail já tem acesso." : error.message }, 409);
+        const row = { uid: cr.user.id, org: ORG, nome, papel, email };
+        const { error: e2 } = await sb.from("admins").insert(row); if (e2) throw e2;
+        return json({ ok: true, senha, usuario: row });
+      }
+      const alvo = String(b.uid || ""); if (alvo === q.u.id) return json({ ok: false, motivo: "Para a sua própria senha use \"Esqueci a senha\" na tela de entrada." }, 400);
+      const { data: a } = await sb.from("admins").select("uid, nome, papel, email").eq("uid", alvo).eq("org", ORG).maybeSingle();
+      if (!a) return json({ ok: false, motivo: "Usuário não encontrado." }, 404);
+      if (!podeCom(a.papel || "supervisor")) return json({ ok: false, motivo: "Você não pode alterar o acesso deste usuário." }, 403);
+      if (acao === "painel_senha") { const senha = senhaProvisoria(8); const { error } = await sb.auth.admin.updateUserById(alvo, { password: senha }); if (error) throw error; return json({ ok: true, senha, email: a.email || null }); }
+      const { error: e3 } = await sb.from("admins").delete().eq("uid", alvo).eq("org", ORG); if (e3) throw e3;
+      await sb.auth.admin.updateUserById(alvo, { ban_duration: "876000h" });
+      return json({ ok: true });
+    }
     if (acao === "senha_temp") {
       if (!adm) return json({ ok: false, motivo: "Só o painel pode gerar senha." }, 403);
       const { data: c } = await sb.from("cadastros").select("*").eq("id", String(b.cad_id || "")).eq("org", ORG).maybeSingle();
       if (!c) return json({ ok: false, motivo: "Cadastro não encontrado." }, 404); if (!c.uid || !c.login_email) return json({ ok: false, motivo: "Este colaborador ainda não ativou o convite: envie o convite." }, 409);
       const senha = senhaProvisoria(); const { error } = await sb.auth.admin.updateUserById(c.uid, { password: senha }); if (error) throw error;
+      await sb.from("cadastros").update({ senha_pedida: null }).eq("id", c.id);
       return json({ ok: true, senha, login: c.login_email.split("@")[0] });
     }
     if (acao === "criar_parceiro" || acao === "parceiro_senha") {

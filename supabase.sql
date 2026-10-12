@@ -434,18 +434,21 @@ create or replace function public.ciclo_de(t timestamptz) returns date language 
     else (date_trunc('month', t at time zone 'America/Sao_Paulo') - interval '1 month' + interval '15 days')::date end
 $$;
 
+-- v50: cada O.S. pertence a um projeto (centro de custo) — separação para medição e faturamento
+alter table public.medicoes   add column if not exists projeto text;
+alter table public.os_medidas add column if not exists projeto text;
 create or replace function public.arquivar_medidas() returns int language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
   with mv as (
     delete from public.medicoes m where m.status = 'medida' returning m.*
   )
-  insert into public.os_medidas (id, org, uid, tecnico, os, wfc, wf2, tipo, cliente, data_os, ciclo, valor, itens, lote, validado_em, validado_por, enviado_em, enviado_por, medido_em, medido_por, tg_chat, tg_thread)
+  insert into public.os_medidas (id, org, uid, tecnico, os, wfc, wf2, tipo, cliente, data_os, ciclo, valor, itens, lote, validado_em, validado_por, enviado_em, enviado_por, medido_em, medido_por, tg_chat, tg_thread, projeto)
   select mv.id, mv.org, mv.uid, mv.dados->>'tecnico', mv.dados->>'os', nullif(coalesce(mv.dados->>'wfc', e.dados->>'wfc'), ''), nullif(coalesce(mv.dados->>'wf2', e.dados->>'wf2'), ''), mv.dados->>'tipo',
          case when coalesce(mv.dados->>'claro', '') = 'true' then 'Claro' end,
          to_timestamp(coalesce(e.chegada, mv.enviado_em, mv.medido_em) / 1000.0),
          public.ciclo_de(to_timestamp(coalesce(e.chegada, mv.enviado_em, mv.medido_em) / 1000.0)),
-         mv.valor, mv.itens, mv.lote, mv.validado_em, mv.validado_por, mv.enviado_em, mv.enviado_por, mv.medido_em, mv.medido_por, mv.tg_chat, mv.tg_thread
+         mv.valor, mv.itens, mv.lote, mv.validado_em, mv.validado_por, mv.enviado_em, mv.enviado_por, mv.medido_em, mv.medido_por, mv.tg_chat, mv.tg_thread, coalesce(mv.projeto, e.dados->>'projeto')
   from mv left join public.eventos e on e.id = mv.id
   on conflict (id) do update set medido_em = excluded.medido_em, medido_por = excluded.medido_por, valor = excluded.valor, itens = excluded.itens, wfc = coalesce(excluded.wfc, public.os_medidas.wfc), wf2 = coalesce(excluded.wf2, public.os_medidas.wf2), arquivado_em = now();
   get diagnostics n = row_count; return n;
@@ -735,7 +738,7 @@ declare
   z bigint := (extract(epoch from (v_fim::timestamp at time zone 'America/Sao_Paulo')) * 1000)::bigint;
   c text; v_itens jsonb; n int := 0; v_id text;
 begin
-  if auth.uid() is not null and not public.eh_admin(p_org) then raise exception 'sem permissão'; end if;
+  if auth.uid() is not null and not public.eh_estoque(p_org) then raise exception 'sem permissão'; end if;
   foreach c in array array['claro', 'master'] loop
     v_id := c || '-' || to_char(v_ini, 'YYYY-MM');
     -- já existe: só refaz quando pedido e se ainda estiver aberta (enviada/recebida não muda)
@@ -1216,5 +1219,148 @@ drop policy if exists fbook_ler on public.fiber_book;
 drop policy if exists fbook_gravar on public.fiber_book;
 create policy fbook_ler    on public.fiber_book for select to authenticated using (public.eh_admin(org) or public.eh_despacho(org) or public.eh_noc(org));
 create policy fbook_gravar on public.fiber_book for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+-- ============================ v49: técnico avisa que esqueceu a senha ============================
+alter table public.cadastros add column if not exists senha_pedida timestamptz;
+
+-- ============================ v50: O.S. separadas por projeto (centro de custo) ============================
+-- O projeto fica gravado em eventos.dados.projeto (O.S. executada), atividades.dados.projeto (O.S. cadastrada),
+-- medicoes.projeto e os_medidas.projeto (medição e faturamento). O projeto pode definir o faturamento (LPU) das O.S.
+alter table public.projetos   add column if not exists faturamento text;
+alter table public.medicoes   add column if not exists projeto text;
+alter table public.os_medidas add column if not exists projeto text;
+create index if not exists eventos_projeto    on public.eventos ((dados->>'projeto'));
+create index if not exists atividades_projeto on public.atividades ((dados->>'projeto'));
+create index if not exists medicoes_projeto   on public.medicoes (org, projeto, status);
+create index if not exists os_medidas_projeto on public.os_medidas (org, projeto, ciclo);
+
+-- ============================ v52: usuários do painel criados pelo painel ============================
+-- Supervisor e almoxarife passam a ser cadastrados em Equipe e cadastros (função "acesso"); o e-mail fica guardado para a lista.
+alter table public.admins add column if not exists email text;
+
+-- ============================ v52: equipamentos de alto custo (patrimônio) ============================
+-- Máquina de fusão, OTDR, máquina de espinar etc. Cada equipamento fica com um responsável (almoxarifado,
+-- técnico ou manutenção). O técnico só vê os equipamentos que estão com ele e confirma o recebimento (termo).
+create table if not exists public.equipamentos (
+  id          text primary key,
+  org         text not null default 'multivale',
+  tipo        text not null default 'outro',
+  descricao   text not null,
+  marca       text,
+  modelo      text,
+  patrimonio  text,
+  serie       text,
+  valor       numeric,
+  projeto     text,
+  status      text not null default 'almox' check (status in ('almox', 'tecnico', 'manutencao', 'baixado')),
+  tecnico_uid uuid,
+  tecnico_nome text,
+  desde       bigint,
+  calibracao  date,
+  obs         text,
+  atualizado  bigint
+);
+create index if not exists equipamentos_org on public.equipamentos (org, status);
+create index if not exists equipamentos_tec on public.equipamentos (tecnico_uid);
+alter table public.equipamentos enable row level security;
+drop policy if exists eqp_ler on public.equipamentos;
+drop policy if exists eqp_admin on public.equipamentos;
+create policy eqp_ler   on public.equipamentos for select to authenticated using (tecnico_uid = auth.uid() or public.eh_admin(org));
+create policy eqp_admin on public.equipamentos for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+create table if not exists public.equip_mov (
+  id          text primary key,
+  org         text not null default 'multivale',
+  ts          bigint not null,
+  equip_id    text not null references public.equipamentos (id) on delete cascade,
+  tipo        text not null check (tipo in ('cadastro', 'entrega', 'devolucao', 'transf', 'manutencao', 'retorno', 'baixa')),
+  de_uid      uuid,
+  de_nome     text,
+  para_uid    uuid,
+  para_nome   text,
+  estado      text,
+  obs         text,
+  por         uuid,
+  por_nome    text,
+  aceite_ts   bigint,
+  aceite_nome text
+);
+create index if not exists equip_mov_eq   on public.equip_mov (equip_id, ts);
+create index if not exists equip_mov_para on public.equip_mov (para_uid);
+alter table public.equip_mov enable row level security;
+drop policy if exists eqm_ler on public.equip_mov;
+drop policy if exists eqm_admin on public.equip_mov;
+create policy eqm_ler   on public.equip_mov for select to authenticated using (para_uid = auth.uid() or de_uid = auth.uid() or public.eh_admin(org));
+create policy eqm_admin on public.equip_mov for all    to authenticated using (public.eh_admin(org)) with check (public.eh_admin(org));
+
+-- o técnico confirma que recebeu o equipamento (termo de responsabilidade digital)
+create or replace function public.equip_aceite(p_id text) returns bigint language plpgsql security definer set search_path = public as $$
+declare v_ts bigint := (extract(epoch from now()) * 1000)::bigint;
+begin
+  update public.equip_mov
+     set aceite_ts = v_ts,
+         aceite_nome = coalesce((select dados->>'nome' from public.tecnicos where uid = auth.uid()), para_nome)
+   where id = p_id and para_uid = auth.uid() and aceite_ts is null;
+  if not found then raise exception 'Recebimento não encontrado ou já confirmado.'; end if;
+  return v_ts;
+end $$;
+revoke all on function public.equip_aceite(text) from public;
+grant execute on function public.equip_aceite(text) to authenticated;
+
+-- ============================ v53: almoxarife só enxerga o estoque ============================
+-- O almoxarife deixa de contar como supervisor no banco: não lê RH, cadastros, O.S., fotos nem medição.
+-- Ele lê e grava só materiais, movimentos, requisições e equipamentos, e lê os projetos e os nomes da equipe.
+create or replace function public.eh_estoque(p_org text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.admins where uid = auth.uid() and org = p_org);
+$$;
+revoke all on function public.eh_estoque(text) from public;
+grant execute on function public.eh_estoque(text) to authenticated;
+create or replace function public.eh_admin(p_org text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.admins where uid = auth.uid() and org = p_org and coalesce(papel, 'supervisor') <> 'almoxarife');
+$$;
+drop policy if exists mat_estoque on public.materiais;        create policy mat_estoque on public.materiais       for all    to authenticated using (public.eh_estoque(org)) with check (public.eh_estoque(org));
+drop policy if exists mov_estoque on public.mat_mov;          create policy mov_estoque on public.mat_mov         for all    to authenticated using (public.eh_estoque(org)) with check (public.eh_estoque(org));
+drop policy if exists req_estoque on public.mat_requisicoes;  create policy req_estoque on public.mat_requisicoes for all    to authenticated using (public.eh_estoque(org)) with check (public.eh_estoque(org));
+drop policy if exists eqp_estoque on public.equipamentos;     create policy eqp_estoque on public.equipamentos    for all    to authenticated using (public.eh_estoque(org)) with check (public.eh_estoque(org));
+drop policy if exists eqm_estoque on public.equip_mov;        create policy eqm_estoque on public.equip_mov       for all    to authenticated using (public.eh_estoque(org)) with check (public.eh_estoque(org));
+drop policy if exists proj_estoque on public.projetos;        create policy proj_estoque on public.projetos       for select to authenticated using (public.eh_estoque(org));
+-- nomes da equipe para escolher o técnico na liberação (sem o resto do perfil)
+create or replace function public.equipe_nomes(p_org text)
+returns table (uid uuid, nome text, matricula text) language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.eh_estoque(p_org) then raise exception 'sem permissão'; end if;
+  return query select t.uid, coalesce(t.dados->>'nome', ''), t.dados->>'matricula' from public.tecnicos t where t.org = p_org order by 2;
+end $$;
+revoke all on function public.equipe_nomes(text) from public;
+grant execute on function public.equipe_nomes(text) to authenticated;
+
+-- ============================ v54: limite de tentativas sem login, uso do armazenamento e backup ============================
+-- Tentativas de ativar convite / diagnóstico de login / esqueci a senha por IP (só a função "acesso" grava; ninguém lê pelo app).
+create table if not exists public.acesso_limite (
+  id    bigint generated always as identity primary key,
+  chave text not null,
+  ts    bigint not null
+);
+create index if not exists acesso_limite_chave on public.acesso_limite (chave, ts);
+alter table public.acesso_limite enable row level security;
+
+-- quanto do plano está em uso (banco e fotos), para o painel avisar antes de lotar
+create or replace function public.uso_armazenamento(p_org text)
+returns jsonb language plpgsql stable security definer set search_path = public, storage as $$
+declare v jsonb;
+begin
+  if not public.eh_admin(p_org) then raise exception 'sem permissão'; end if;
+  select jsonb_build_object(
+    'banco_bytes', pg_database_size(current_database()),
+    'fotos_bytes', coalesce((select sum(coalesce((o.metadata->>'size')::bigint, 0)) from storage.objects o where o.bucket_id = 'fotos'), 0),
+    'fotos_n',     coalesce((select count(*) from storage.objects o where o.bucket_id = 'fotos'), 0),
+    'fotos_org_bytes', coalesce((select sum(coalesce((o.metadata->>'size')::bigint, 0)) from storage.objects o where o.bucket_id = 'fotos' and o.name like p_org || '/%'), 0)
+  ) into v;
+  return v;
+end $$;
+revoke all on function public.uso_armazenamento(text) from public;
+grant execute on function public.uso_armazenamento(text) to authenticated;
 
 notify pgrst, 'reload schema';
