@@ -81,7 +81,7 @@ async function afterRota() {
   $('#fileKml') && ($('#fileKml').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { toast('Lendo arquivo…'); const k = parseKml(await lerKml(f)); if (!k.linhas.length && !k.pontos.length) { toast('O arquivo não tem linhas nem pontos.'); return; } if (ADMIN && sobsDe(rt).length && confirm(`Esta rota tem ${sobsDe(rt).length} sobreposição(ões) dos técnicos. Descartar ao trocar o arquivo?`)) { for (const o of sobsDe(rt)) await DB.del('rotas', o.id); } rt.kml = { ...k, arquivo: f.name, em: Date.now() }; rt.atualizado = Date.now(); await DB.put('rotas', rt); await carregaRotas(); toast(`Traçado importado: ${fKm(k.km)} em ${k.linhas.length} linha(s).`); render(); } catch (err) { toast('Não foi possível ler: ' + err.message, 6000); } });
   $('#bRemKml') && ($('#bRemKml').onclick = async () => { if (!confirm('Remover o traçado importado desta rota?')) return; delete rt.kml; rt.atualizado = Date.now(); await DB.put('rotas', rt); await carregaRotas(); render(); });
   bindSobs(rt);
-  $('#bDelRota') && ($('#bDelRota').onclick = async () => { if (!confirm('Excluir esta rota? As rondas e caixas continuam salvas.')) return; await DB.del('rotas', rt.id); await carregaRotas(); go(ADMIN ? 'adm' : 'rotas'); });
+  $('#bDelRota') && ($('#bDelRota').onclick = async () => { if (!confirm('Excluir esta rota? As rondas e caixas continuam salvas.')) return; await DB.del('rotas', rt.id); await carregaRotas(); go(ADMIN ? 'admRotasV' : 'rotas'); });
   const d = await dadosRota(rt);
   $('#rtStats').innerHTML = `<div class="stat"><b>${d.caixas.length}${rt.caixasPrev ? '/' + esc(rt.caixasPrev) : ''}</b><span>Caixas</span></div><div class="stat"><b>${fKm(d.km)}</b><span>Traçado GPS</span></div>${(() => { const cb = ADMIN ? cobertura(rt, d.rs) : null; return cb ? `<div class="stat"><b>${fPct(cb.pct)}</b><span>Rota percorrida (${fKm(cb.covKm)} de ${fKm(cb.totKm)})</span></div>` : ''; })()}<div class="stat"><b>${rt.extensao ? esc(rt.extensao) + ' km' : '—'}</b><span>Previsto</span></div><div class="stat"><b>${d.rs.length}</b><span>Rondas</span></div>`;
   $('#rtCx').innerHTML = rotaCxHtml(d.caixas); const abrePl = id => { const i = d.caixas.find(x => x.id === id); if (i) abrirPlano(i, { onSalvo: () => { const y = window.scrollY; render(); window.scrollTo(0, y); } }); };
@@ -110,7 +110,7 @@ async function importaRotaKmz(f) {
       await DB.put('rotas', rt); await carregaRotas(); toast(`Rota ${rt.codigo} importada (${fKm(k.km)}). Confira as pontas A e B.`, 5000); abrirRota(rt.id);
     } catch (err) { toast('Não foi possível ler: ' + err.message, 6000); }
 }
-async function abrirRota(id) { S.rotaEdit = id ? { ...(await DB.get('rotas', id)) } : { id: uid(), _novo: true, codigo: '', padrao: 'ABNT', criado: Date.now(), _autor: (Nuvem.user && Nuvem.user.id) || '' }; go('rota'); }
+async function abrirRota(id) { if (ADMIN) S.voltaRota = S.view === 'rota' ? (S.voltaRota || 'admRotasV') : S.view; S.rotaEdit = id ? { ...(await DB.get('rotas', id)) } : { id: uid(), _novo: true, codigo: '', padrao: 'ABNT', criado: Date.now(), _autor: (Nuvem.user && Nuvem.user.id) || '' }; go('rota'); }
 
 /* ============================ ações da ronda ============================ */
 async function iniciarRonda() {

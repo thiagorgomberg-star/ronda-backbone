@@ -18,7 +18,7 @@ $('#btnMenu').onclick = () => menu(true); $('#scrim').onclick = () => menu(false
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#drawer').hidden) { menu(false); $('#btnMenu').focus(); } });
 $$('.navi[data-nav]').forEach(b => b.onclick = () => { menu(false); go(b.dataset.nav); });
 $('#navSync').onclick = () => { menu(false); if (Nuvem.ativo()) { Nuvem.processar(); toast('Sincronizando com a nuvem…'); } else toast('Nuvem não configurada. Tudo fica salvo neste celular.'); };
-$('#btnBack').onclick = () => { if (S.view === 'evento') { go(S.evVolta || 'eventos'); return; } if (ADMIN && S.voltaPara && S.view === 'admAtv') { const v = S.voltaPara; S.voltaPara = null; go(v); return; } if (!ADMIN) saveInsp(true); S.insp = null; go(ADMIN ? (S.view === 'adm' || S.view === 'admMed' ? admInicio() : S.medVolta && S.view !== 'admBi' ? 'admMed' : admInicio()) : S.view === 'rota' ? 'rotas' : 'home'); };
+$('#btnBack').onclick = () => { if (S.view === 'evento') { go(S.evVolta || 'eventos'); return; } if (ADMIN && S.view === 'rota') { go(S.voltaRota || 'admRotasV'); return; } if (ADMIN && S.voltaPara && S.view === 'admAtv') { const v = S.voltaPara; S.voltaPara = null; go(v); return; } if (!ADMIN) saveInsp(true); S.insp = null; go(ADMIN ? (S.view === 'adm' || S.view === 'admMed' ? admInicio() : S.medVolta && S.view !== 'admBi' ? 'admMed' : admInicio()) : S.view === 'rota' ? 'rotas' : 'home'); };
 
 function render() {
   try { sosFixo(); } catch (e) {}
@@ -39,6 +39,7 @@ function render() {
   if (S.view === 'admSla') { app.innerHTML = viewAdmSla(); setBar(''); $('#topTitle').textContent = 'Indicadores e SLA'; $('#topSub').textContent = 'Prazos, tempo de resposta e MTTR'; afterAdmSla(); pintaLimites(); return; }
   if (S.view === 'admCal') { app.innerHTML = viewAdmCal(); setBar(''); $('#topTitle').textContent = 'Calendário de recursos'; $('#topSub').textContent = 'Escala, plantões e regiões'; afterAdmCal(); pintaLimites(); return; }
   if (S.view === 'admProj') { app.innerHTML = viewAdmProj(); setBar(''); $('#topTitle').textContent = 'Centro de custo'; $('#topSub').textContent = 'Projetos, equipes e resultado'; afterAdmProj(); pintaLimites(); return; }
+  if (S.view === 'admRotasV') { app.innerHTML = viewAdmRotas(); setBar(''); $('#topTitle').textContent = 'Rotas do cabo (KMZ)'; $('#topSub').textContent = `${(S.rotas || []).length} rota(s) cadastrada(s)`; afterAdmRotas(); pintaLimites(); return; }
   if (S.view === 'admPrev') { app.innerHTML = viewAdmPrev(); setBar(''); $('#topTitle').textContent = 'Preventivas do mês'; $('#topSub').textContent = 'Relatório consolidado por backbone'; afterAdmPrev(); pintaLimites(); return; }
   if (S.view === 'admMat') { app.innerHTML = viewAdmMat(); setBar(''); $('#topTitle').textContent = 'Almoxarifado'; $('#topSub').textContent = 'Materiais, saídas e saldos dos técnicos'; afterAdmMat(); pintaLimites(); return; }
   if (S.view === 'admLote') { app.innerHTML = viewAdmLote(); setBar(''); $('#topTitle').textContent = 'Importar O.S. em lote'; $('#topSub').textContent = 'O.S. pendentes de execução'; afterAdmLote(); return; }

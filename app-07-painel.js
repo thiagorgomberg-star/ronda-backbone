@@ -658,6 +658,18 @@ async function admCarregar() {
   S.perfil = { id: 'perfil', nome: t ? t.nome : 'Todos os técnicos', matricula: t ? t.matricula : '—', equipe: t ? t.equipe : (Nuvem.admin.equipe || ''), limiteVel: S.adm.lim || '80', prefixo: 'CE-BKB' };
   S.adm.carregando = false; return r;
 }
+/* ---------- rotas do cabo: importar o KMZ do traçado (fica para todos os técnicos) ---------- */
+function viewAdmRotas() {
+  const L = S.rotas || [];
+  return `<section class="card"><h2>Importar rota (KMZ)</h2><p class="muted small" style="margin:0">Envie o KMZ (ou KML) do traçado de cada rota. A rota vai para todos os técnicos e passa a valer na ronda preventiva, na referência de km das corretivas, na conjunta de site (alfinetes dos eventos do OTDR) e no mapa de fusão. Depois de importar, confira as pontas A e B e as siglas dos sites.</p>
+    <input type="file" id="fileRotaB" accept=".kmz,.kml" hidden><button type="button" class="btn pri block" id="bAdmRotaB">${ICON.pin}Escolher o arquivo KMZ da rota</button></section>
+  <section class="card"><h2>Rotas cadastradas (${L.length})</h2><div class="list" id="admRotasB">${L.map(rt => `<button class="item" data-rotab="${rt.id}"><span class="badge">${rt.cap ? esc(rt.cap) : '—'}</span><span class="tx"><b>${esc(rt.codigo)}${rt.nome ? ' · ' + esc(rt.nome) : ''}</b><span>${esc(rt.pontaA || '?')} (${esc(siglaSite(rt, 'A') || '—')}) > ${esc(rt.pontaB || '?')} (${esc(siglaSite(rt, 'B') || '—')})${rt.kml ? ` · traçado ${fKm(rt.kml.km)}` : ' · <b style="color:var(--bad)">sem traçado (KMZ)</b>'}</span></span><span class="muted small" style="white-space:nowrap">Abrir ›</span></button>`).join('') || '<p class="empty">Nenhuma rota ainda. Importe o primeiro KMZ acima.</p>'}</div></section>`;
+}
+function afterAdmRotas() {
+  $('#bAdmRotaB').onclick = () => $('#fileRotaB').click();
+  $('#fileRotaB').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) await importaRotaKmz(f); };
+  $$('[data-rotab]').forEach(b => b.onclick = () => abrirRota(b.dataset.rotab));
+}
 function viewAdm() {
   const A = S.adm;
   return `<section class="card"><div class="row" style="justify-content:space-between"><h2>Filtros</h2><span class="muted small">${esc(Nuvem.admin.nome || Nuvem.user.email || '')} · <a href="#" id="lnkSair">sair</a></span></div>
@@ -682,7 +694,7 @@ function viewAdm() {
     <div class="grid2"><div class="field"><label class="lb" for="cfgLim">Limite de trabalho por dia (h:mm)</label><input type="text" id="cfgLim" value="${fHm(limiteDia().lim).replace('h', ':')}" placeholder="10:00"></div><div class="field"><label class="lb" for="cfgAviso">Avisar o gestor com antecedência de (min)</label><input type="text" inputmode="numeric" id="cfgAviso" value="${limiteDia().aviso}"></div></div>
     <p class="muted small" style="margin:0">Pela CLT, no máximo 2 horas extras por dia (10 h de trabalho). Quem estiver com O.S. aberta perto do limite aparece no alerta do topo do painel e, com os alertas ativados, chega notificação neste computador. <button type="button" class="lnk" id="bAlertaAdm">Ativar alertas neste computador</button></p>
     <button type="button" class="btn" id="bCfgSalva">Salvar</button><span class="muted small">Jornada dos técnicos: ${jornada().inicio} às ${jornada().fim} · refeição de ${jornada().refeicaoMin} min (ajuste no arquivo supabase-config.js).</span></section>
-  <section class="card"><h2>Rotas</h2><div class="list" id="admRotas"></div><input type="file" id="fileRotaA" accept=".kmz,.kml" hidden><button class="btn" id="bAdmRota">${ICON.pin}Importar rota (KMZ) e enviar para os técnicos</button></section>`;
+  <section class="card"><h2>Rotas</h2><div class="list" id="admRotas"></div><input type="file" id="fileRotaA" accept=".kmz,.kml" hidden><button class="btn" id="bAdmRota">${ICON.pin}Importar rota (KMZ) e enviar para os técnicos</button><span class="muted small">Também no menu: <b>Rotas (KMZ)</b>.</span></section>`;
 }
 function iniciaisNome(n) { return iniciais(n || '?'); }
 // última posição conhecida de cada técnico (fica no mapa mesmo sem sinal ou offline)
