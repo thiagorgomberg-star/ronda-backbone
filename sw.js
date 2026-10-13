@@ -1,5 +1,5 @@
-const V = 'ronda-backbone-v77';
-const SHELL = ['./', 'index.html', 'admin.html', 'acionamento.html', 'noc.html', 'parceiro.html', 'manifest.webmanifest', 'supabase-config.js', 'supabase.min.js', 'lpu.js', 'jsqr.min.js', 'qrcode.min.js', 'logo.png', 'logo-pdf.jpg', 'icon-192.png', 'icon-512.png',
+const V = 'ronda-backbone-v81';
+const SHELL = ['./', 'index.html', 'admin.html', 'acionamento.html', 'noc.html', 'parceiro.html', 'manifest.webmanifest', 'supabase-config.js', 'supabase.min.js', 'lpu.js', 'jsqr.min.js', 'qrcode.min.js', 'logo.png', 'logo-pdf.jpg', 'icon-192.png', 'icon-512.png', 'icone-app.png', 'marca.png', 'marca-escuro.png',
   'leaflet.js', 'leaflet-heat.js', 'leaflet.css', 'jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js',
   // código do app em módulos (v54): o ?v= muda a cada versão, igual ao index.html
   ...['app.css', 'app-01-base.js', 'app-02-rotas-ronda.js', 'app-03-telas.js', 'app-04-pdf-kmz.js', 'app-05-despacho.js', 'app-06-nuvem.js', 'app-07-painel.js', 'app-08-almox.js', 'app-09-gestao.js', 'app-10-seguranca.js', 'app-11-fusao.js', 'app-12-projetos-inicio.js', 'app-13-conjunta.js'].map(f => f + '?v=' + V.split('-v')[1])];

@@ -1058,7 +1058,7 @@ Há também o botão "Gerar agora". O agendamento usa o pg_cron (o mesmo do arqu
 
 No último dia do mês, o painel avisa para gerar o relatório.
 
-**Tela de abertura:** ao abrir, o app mostra o logo da Multivale com uma animação leve.
+**Tela de abertura:** ao abrir, o app mostra o ícone do Técnico Plus (torre com sinal) com uma animação leve. A partir da v61 o ícone, o cabeçalho e o login usam a marca Técnico Plus; o logo da empresa (logo.png e logo-pdf.jpg) continua nos relatórios em PDF, no carimbo das fotos e nos diagramas exportados.
 
 **Alarme falado:** o alarme de nova O.S. fala "Nova O.S. recebida. Iniciar deslocamento." O APK usa a voz do Android, no volume de alarme.
 

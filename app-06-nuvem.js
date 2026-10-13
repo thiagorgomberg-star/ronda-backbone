@@ -39,14 +39,14 @@ const Nuvem = {
   async medApagar(id) { this.ok(await this.tab('medicoes').delete().eq('id', id)); },
   async medMinhas() { if (!this.user) return new Map(); const m = new Map(); try { (this.ok(await this.tab('os_medidas').select('id, lote, medido_em, enviado_em').eq('uid', this.user.id)) || []).forEach(r => m.set(r.id, { ...r, status: 'medida' })); } catch (e) {} (this.ok(await this.tab('medicoes').select('id, status, lote, medido_em, enviado_em').eq('uid', this.user.id)) || []).forEach(r => m.set(r.id, r)); return m; },
   ouvirMed(cb) { return this.canal('med', 'medicoes', (tipo, row) => cb(tipo, row), null, 'org=eq.' + this.org()); },
-  async telegram(corpo) { const r = await this.sb.functions.invoke('telegram', { body: corpo }); if (r.error) { let m = r.error.message || String(r.error); try { const j = r.error.context && await r.error.context.json(); if (j && j.erro) m = j.erro; } catch (e) {} throw new Error(m); } if (r.data && r.data.erro) throw new Error(r.data.erro); return r.data; },
+  async telegram(corpo) { const r = await this.fn('telegram', corpo); if (r.error) { let m = r.error.message || String(r.error); try { const j = r.error.context && await r.error.context.json(); if (j && j.erro) m = j.erro; } catch (e) {} throw new Error(m); } if (r.data && r.data.erro) throw new Error(r.data.erro); return r.data; },
   async loginAdmin(email, senha) {
     await this.sdk();
     const r = await this.sb.auth.signInWithPassword({ email, password: senha });
     if (r.error) { const e = new Error(r.error.message); e.code = /invalid/i.test(r.error.message) ? 'auth/invalid-credential' : r.error.code; throw e; }
     this.user = r.data.user;
     const ad = await this.euAdmin(this.user.id);
-    if (!ad) { await this.sb.auth.signOut(); this.user = null; throw new Error(ACION ? 'Este usuário não tem acesso aos acionamentos.' : NOC ? 'Este usuário não está cadastrado no NOC.' : 'Este usuário não está cadastrado como supervisor.'); }
+    if (!ad) { await this.sb.auth.signOut({ scope: 'local' }); this.user = null; throw new Error(ACION ? 'Este usuário não tem acesso aos acionamentos.' : NOC ? 'Este usuário não está cadastrado no NOC.' : 'Este usuário não está cadastrado como supervisor.'); }
     this.on = true; this.admin = ad; this.set('ok', 'Supervisor conectado'); return ad;
   },
   async sessaoAdmin() {
@@ -55,7 +55,7 @@ const Nuvem = {
     if (!u || u.is_anonymous) return null; this.user = u;
     const ad = await this.euAdmin(u.id); if (!ad) return null; this.on = true; this.admin = ad; return ad;
   },
-  async sairAdmin() { try { await this.sb.auth.signOut(); } catch (e) {} this.on = false; this.user = null; },
+  async sairAdmin() { try { await this.sb.auth.signOut({ scope: 'local' }); } catch (e) {} this.on = false; this.user = null; },
   async carregarAdmin(de, ate, tec) {
     const a = diaIni(de), b = diaFim(ate); const M = DB.mem; ['rondas', 'inspecoes', 'rotas', 'fotos'].forEach(k => M[k].clear()); S.inspCache.clear();
     const org = this.org();
@@ -85,6 +85,7 @@ const Nuvem = {
       await this.sdk();
       let { data } = await this.sb.auth.getSession(); let u = data && data.session && data.session.user;
       if (!u || u.is_anonymous) { this.conectando = false; this.precisaLogin = true; S.precisaLogin = true; this.set('err', 'Entre com sua matrícula e senha'); if (S.view !== 'entrar') go('entrar'); return; }
+      try { const ad = this.ok(await this.tab('admins').select('uid').eq('uid', u.id).maybeSingle()); if (ad) { await this.sb.auth.signOut({ scope: 'local' }); this.conectando = false; this.precisaLogin = true; S.precisaLogin = true; this.set('err', 'Login do painel: no app do técnico entre com a matrícula do técnico'); toast('Este é um login do painel (supervisor/gestor). No app do técnico, entre com a matrícula e a senha do técnico. O painel fica em admin.html.', 9000); if (S.view !== 'entrar') go('entrar'); return; } } catch (e) {}
       this.precisaLogin = false; S.precisaLogin = false;
       this.user = u; this.on = true; this.set('ok', 'Conectado à nuvem'); this.aoVivo(true); setInterval(() => { if ((S.ronda && !S.ronda.fim) || S.exp) this.aoVivo(); }, 60000);
       await this.restauraPerfil(); await this.aplicaCadastro(); this.ouvir(); this.processar(); this.iniciaAtv();
@@ -156,7 +157,9 @@ const Nuvem = {
   async parceirosLista() { return this.ok(await this.tab('parceiros').select('*').eq('org', this.org()).order('nome')) || []; },
   async parceiroAtivo(uid, ativo) { this.ok(await this.tab('parceiros').update({ ativo }).eq('uid', uid)); },
   // função "acesso" (contas, senhas e portal do parceiro)
-  async acesso(acao, body = {}) { const r = await this.sb.functions.invoke('acesso', { body: { acao, ...body } }); let d = r.data; if (r.error) { try { d = await r.error.context.json(); } catch (e) {} if (!d || !d.motivo) throw new Error('Função "acesso" indisponível: crie a função no Supabase (veja SUPABASE.md).'); } if (!d || !d.ok) throw new Error((d && d.motivo) || 'Falhou.'); return d; },
+  // chama a função do servidor sempre com o token da sessão atual (depois de sair e entrar de novo, o cliente podia mandar o token antigo)
+  async fn(nome, body) { let headers; try { const { data } = await this.sb.auth.getSession(); const t = data && data.session && data.session.access_token; if (t) headers = { Authorization: 'Bearer ' + t }; } catch (e) {} return this.sb.functions.invoke(nome, { body, ...(headers ? { headers } : {}) }); },
+  async acesso(acao, body = {}) { const r = await this.fn('acesso', { acao, ...body }); let d = r.data; if (r.error) { try { d = await r.error.context.json(); } catch (e) {} if (!d || !d.motivo) throw new Error('Função "acesso" indisponível: crie a função no Supabase (veja SUPABASE.md).'); } if (d && !d.ok && ADMIN && /Entre com seu login/.test(d.motivo || '')) throw new Error('Sua sessão do painel expirou (o login foi encerrado em outra tela). Toque em Sair e entre de novo.'); if (!d || !d.ok) throw new Error((d && d.motivo) || 'Falhou.'); return d; },
   async metasSalvar(d) { this.ok(await this.tab('metas').upsert({ org: this.org(), dados: d })); },
   async cfgLer() { try { const d = this.ok(await this.tab('config').select('dados').eq('org', this.org()).maybeSingle()); return (d && d.dados) || {}; } catch (e) { return {}; } },
   async cfgSalvar(d) { this.ok(await this.tab('config').upsert({ org: this.org(), dados: d })); },
@@ -202,6 +205,7 @@ const Nuvem = {
     await this.sdk(); const cands = login.includes('@') ? [login.trim().toLowerCase()] : this.emailLogin(login); let ult = null;
     for (const email of cands) { const r = await this.sb.auth.signInWithPassword({ email, password: senha }); if (!r.error) { ult = null; break; } ult = r.error; }
     if (ult) throw new Error(/invalid|credentials/i.test(ult.message) ? 'Matrícula ou senha incorreta.' : /fetch|network/i.test(ult.message) ? 'Sem internet no momento.' : ult.message);
+    { const { data: s0 } = await this.sb.auth.getSession(); const uid0 = s0 && s0.session && s0.session.user && s0.session.user.id; if (uid0) { try { const ad = this.ok(await this.tab('admins').select('uid').eq('uid', uid0).maybeSingle()); if (ad) { await this.sb.auth.signOut({ scope: 'local' }); throw new Error('Este é um login do painel (supervisor/gestor). No app do técnico, entre com a matrícula e a senha do técnico. O painel fica em admin.html.'); } } catch (e) { if (/painel/.test(e.message || '')) throw e; } } }
     this.precisaLogin = false; S.precisaLogin = false; this.on = false; await this.init();
   },
   async ativarConvite(codigo, senha) {
@@ -209,7 +213,7 @@ const Nuvem = {
     let d = r.data; if (r.error) { try { d = await r.error.context.json(); } catch (e) {} if (!d || !d.motivo) throw new Error(/fetch|network/i.test(String(r.error.message)) ? 'Sem internet no momento.' : 'O acesso ainda não foi liberado no servidor (função "acesso").'); }
     if (!d || !d.ok) throw new Error((d && d.motivo) || 'Não foi possível ativar.'); await this.entrar(d.email, senha); return d;
   },
-  async sair() { try { await this.sb.auth.signOut(); } catch (e) {} this.on = false; this.user = null; this.precisaLogin = true; S.precisaLogin = true; try { fechaAlerta(); Alarme.parar(); } catch (e) {} this.set('err', 'Entre com sua matrícula e senha'); go('entrar'); },
+  async sair() { try { await this.sb.auth.signOut({ scope: 'local' }); } catch (e) {} this.on = false; this.user = null; this.precisaLogin = true; S.precisaLogin = true; try { fechaAlerta(); Alarme.parar(); } catch (e) {} this.set('err', 'Entre com sua matrícula e senha'); go('entrar'); },
   async aplicaCadastro() {
     try {
       let cod = null; try { cod = localStorage.getItem('rb_convite'); localStorage.removeItem('rb_convite'); } catch (e) {} const pend = cod ? { codigo: cod } : null; let c = null;
@@ -337,7 +341,7 @@ const Nuvem = {
   async plantoesAdmin(a, b) { return (await this.todos(() => this.tab('plantoes').select('*').eq('org', this.org()).gte('fim', a).lte('inicio', b).order('inicio'))).map(plaDe); },
   async plantaoSalvar(p) { this.ok(await this.tab('plantoes').upsert({ id: p.id, org: this.org(), uid: p.uid, tecnico_nome: p.tecnicoNome, tipo: p.tipo, inicio: p.inicio, fim: p.fim, obs: p.obs || null })); },
   async plantaoApagar(id) { this.ok(await this.tab('plantoes').delete().eq('id', id)); },
-  async avisaFuncao() { try { if (this.sb && this.sb.functions) this.sb.functions.invoke('alertas', { body: { origem: 'despacho' } }).catch(() => {}); } catch (e) {} },
+  async avisaFuncao() { try { if (this.sb && this.sb.functions) this.fn('alertas', { origem: 'despacho' }).catch(() => {}); } catch (e) {} },
   async iniciaAtv() {
     const sync = async inicial => { try { const l = await this.atvMinhas(); const ids = new Set(l.map(a => a.id)); for (const a of l) await recebeAtv(a, inicial); for (const a of [...S.atvs.values()]) if (a.origem !== 'tecnico' && !ids.has(a.id) && !(S.ronda && S.ronda.atividadeId === a.id) && !(await DB.get('fila', 'atv:atv:' + a.id))) { await esqueceAtv(a.id); } Alarme.revisa(); if (S.view === 'home') render(); } catch (e) { console.warn(e); } };
     await sync(true); this.ouvirAtv((tipo, a) => recebeAtv(a)); setInterval(() => sync(false), 60000);

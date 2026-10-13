@@ -313,7 +313,7 @@ async function afterAdmEquipe() {
   if (S.eqDetSel) pintaEqDet();
   $$('[data-eqdel]').forEach(b => b.onclick = async () => { const x = linhas[+b.dataset.eqdel]; if (!x) return;
     if (!confirmaExcluir(`Excluir ${x.nome}${x.matricula ? ' (matrícula ' + x.matricula + ')' : ''}? O cadastro, a ficha, o RH e o login dele são apagados. As O.S. e fichas que ele já executou ficam no histórico; as O.S. que estavam com ele voltam para a fila.`)) return;
-    b.disabled = true; try { await Nuvem.acesso('remover_tecnico', { cad_id: x.cad ? x.cad.id : '', uid: x.uid || '' }); S.cads = (S.cads || []).filter(c => !x.cad || c.id !== x.cad.id); if (x.uid) S.adm.tecnicos = (S.adm.tecnicos || []).filter(t => t.uid !== x.uid); toast(`${x.nome} excluído.`, 5000); render(); } catch (e) { b.disabled = false; toast('Não foi possível excluir: ' + (e.message || e), 7000); } });
+    b.disabled = true; try { const rr = await Nuvem.acesso('remover_tecnico', { cad_id: x.cad ? x.cad.id : '', uid: x.uid || '' }); if (rr && rr.soPerfil) toast('Era um perfil de técnico gravado com um login do painel: o perfil foi apagado e o acesso ao painel continua.', 7000); S.cads = (S.cads || []).filter(c => !x.cad || c.id !== x.cad.id); if (x.uid) S.adm.tecnicos = (S.adm.tecnicos || []).filter(t => t.uid !== x.uid); toast(`${x.nome} excluído.`, 5000); render(); } catch (e) { b.disabled = false; toast('Não foi possível excluir: ' + (e.message || e), 7000); } });
   $$('[data-eqat]').forEach(b => b.onclick = async () => { const x = linhas[+b.dataset.eqat]; try { const c = await Nuvem.cadSalvar(x.cad.id, { ativo: x.cad.ativo === false }); Object.assign(x.cad, c); re(); } catch (e) { toast('Erro: ' + e.message, 6000); } });
 }
 

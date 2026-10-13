@@ -502,7 +502,7 @@ async function checaCasa() {
 }
 function viewEntrar() {
   let cv = ''; try { cv = localStorage.getItem('rb_convite') || ''; } catch (e) {} const pa = S.entrarPrimeiro ?? !!cv;
-  return `<section class="card" style="max-width:460px;margin:24px auto 0;width:100%"><div style="text-align:center"><img src="logo.png" alt="Multivale" style="height:56px"></div>
+  return `<section class="card" style="max-width:460px;margin:24px auto 0;width:100%"><div style="text-align:center"><img src="marca.png" alt="Técnico Plus" class="marca m-claro"><img src="marca-escuro.png" alt="Técnico Plus" class="marca m-escuro"></div>
     <div class="seg" role="group" aria-label="Como entrar"><button type="button" data-ent="0" aria-pressed="${!pa}">Já tenho senha</button><button type="button" data-ent="1" aria-pressed="${pa}">Primeiro acesso</button></div>
     ${pa ? `<p class="muted small" style="margin:0">Use o código do convite que o supervisor mandou pelo WhatsApp e crie a sua senha.</p>
       <div class="field"><label class="lb" for="enCod">Código do convite</label><input type="text" id="enCod" value="${esc(cv)}" autocapitalize="characters" autocomplete="off" placeholder="Ex.: K7M2QX"></div>

@@ -46,7 +46,7 @@ th{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}tbody tr
 </style>
 </head>
 <body>
-<header><img src="logo.png" alt="Multivale"><div><b>Portal do parceiro</b><span id="hSub">Técnico Plus - Multivale</span></div><div class="sp"></div><button type="button" id="bSair" hidden>Sair</button></header>
+<header><img src="icone-app.png" alt="Técnico Plus" style="background:none;padding:0;border-radius:8px"><div><b>Portal do parceiro</b><span id="hSub">Técnico Plus - Multivale</span></div><div class="sp"></div><button type="button" id="bSair" hidden>Sair</button></header>
 <main id="app"><section class="card login"><p class="muted">Carregando…</p></section></main>
 <script src="supabase-config.js"></script>
 <script src="leaflet.js"></script>
@@ -82,7 +82,7 @@ function telaLogin(msg) {
 async function carrega() {
   const [de, ate] = periodo(); $('#app').innerHTML = `<section class="card"><p class="muted">Carregando as O.S.…</p></section>`;
   try { const d = await chama('parceiro_dados', { de, ate }); S.rows = d.rows || []; S.par = d.parceiro; $('#hSub').textContent = `${d.parceiro.nome} · ${d.parceiro.cliente}`; $('#bSair').hidden = false; tela(); }
-  catch (e) { if (/login|exclusivo|401|403/i.test(e.message)) { try { await cliente().auth.signOut(); } catch (x) {} telaLogin(e.message); } else $('#app').innerHTML = `<section class="card"><p class="erro">${esc(e.message)}</p><button type="button" class="btn" onclick="carrega()">Tentar de novo</button></section>`; }
+  catch (e) { if (/login|exclusivo|401|403/i.test(e.message)) { try { await cliente().auth.signOut({ scope: 'local' }); } catch (x) {} telaLogin(e.message); } else $('#app').innerHTML = `<section class="card"><p class="erro">${esc(e.message)}</p><button type="button" class="btn" onclick="carrega()">Tentar de novo</button></section>`; }
 }
 const grupoSt = r => r.status === 'Concluída' ? 'concluidas' : r.status === 'Aberta' ? 'abertas' : 'andamento';
 function filtradas() { const F = S.f; return S.rows.filter(r => (S.st === 'todas' || grupoSt(r) === S.st) && (!F.ticket || norm(r.ticket).includes(norm(F.ticket))) && (!F.node || norm(r.node).includes(norm(F.node))) && (!F.end || norm(r.endereco + ' ' + r.bairro).includes(norm(F.end))) && (!F.cidade || norm(r.cidade).includes(norm(F.cidade))) && (!F.cluster || r.cluster === F.cluster)); }
@@ -127,7 +127,7 @@ async function detalhe(r) {
   document.body.appendChild(el); const fecha = () => el.remove(); $('#dX', el).onclick = fecha; el.onclick = e => { if (e.target === el) fecha(); }; document.addEventListener('keydown', function k(e) { if (e.key === 'Escape') { fecha(); document.removeEventListener('keydown', k); } }); $('#dX', el).focus();
   if (r.fotos && r.origem === 'os') { try { const d = await chama('parceiro_fotos', { id: r.id }); $('#dF', el).innerHTML = d.fotos.map(f => `<a href="${esc(f.url)}" target="_blank" rel="noopener"><img src="${esc(f.url)}" alt="${esc(f.cat || 'Foto')}" loading="lazy"><span>${esc(f.cat || '')}</span></a>`).join('') || '<p class="muted small">Fotos arquivadas.</p>'; } catch (e) { $('#dF', el).innerHTML = `<p class="erro">${esc(e.message)}</p>`; } }
 }
-$('#bSair').onclick = async () => { try { await cliente().auth.signOut(); } catch (e) {} S.rows = []; telaLogin(); };
+$('#bSair').onclick = async () => { try { await cliente().auth.signOut({ scope: 'local' }); } catch (e) {} S.rows = []; telaLogin(); };
 (async () => { try { await sdk(); const { data } = await cliente().auth.getSession(); if (data && data.session && !data.session.user.is_anonymous) await carrega(); else telaLogin(); } catch (e) { $('#app').innerHTML = `<section class="card login"><p class="erro">${esc(e.message)}</p></section>`; } })();
 </script>
 </body>

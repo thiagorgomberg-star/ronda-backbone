@@ -252,6 +252,8 @@ const perms = [
   'android.permission.WAKE_LOCK',
   'android.permission.VIBRATE',
   'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+  'android.permission.RECORD_AUDIO',
+  'android.permission.CAMERA',
 ];
 const faltam = perms.filter((p) => !man.includes(`"${p}"`));
 if (faltam.length) man = man.replace('</manifest>', faltam.map((p) => `    <uses-permission android:name="${p}" />`).join('\n') + '\n</manifest>');
@@ -259,6 +261,9 @@ if (faltam.length) man = man.replace('</manifest>', faltam.map((p) => `    <uses
 if (!man.includes('showWhenLocked')) man = man.replace(/<activity\b/, '<activity android:showWhenLocked="true" android:turnScreenOn="true"');
 fs.writeFileSync(manPath, man);
 ok('AndroidManifest: ' + perms.length + ' permissões conferidas');
+
+// ditado por voz: o Android 11+ precisa declarar o serviço de reconhecimento de fala
+if (!man.includes('android.speech.RecognitionService')) { man = man.replace('</manifest>', '    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n    </queries>\n</manifest>'); fs.writeFileSync(manPath, man); }
 
 // texto da notificação fixa do serviço em segundo plano
 const strPath = path.join(APP, 'res', 'values', 'strings.xml');
@@ -285,7 +290,7 @@ if (fs.existsSync(icone)) {
   ok('ícone da Multivale aplicado');
   // tela de abertura: fundo azul com o ícone no centro (no lugar do logo do Capacitor)
   for (const d of fs.readdirSync(res).filter((d) => d.startsWith('drawable'))) { const sp = path.join(res, d, 'splash.png'); if (fs.existsSync(sp)) fs.rmSync(sp); }
-  fs.writeFileSync(path.join(res, 'drawable', 'splash.xml'), '<?xml version="1.0" encoding="utf-8"?>\n<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n    <item><color android:color="#0b5f99" /></item>\n    <item><bitmap android:gravity="center" android:src="@mipmap/ic_launcher" /></item>\n</layer-list>\n');
+  fs.writeFileSync(path.join(res, 'drawable', 'splash.xml'), '<?xml version="1.0" encoding="utf-8"?>\n<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n    <item><color android:color="#0E2A3B" /></item>\n    <item><bitmap android:gravity="center" android:src="@mipmap/ic_launcher" /></item>\n</layer-list>\n');
   ok('tela de abertura da Multivale');
 } else {
   console.log('… icon-512.png não encontrado na raiz do repositório: o APK fica com o ícone padrão.');

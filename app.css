@@ -373,9 +373,9 @@ body.adm main{max-width:1280px}
 #splash .sp-logo{position:relative;width:100%;overflow:hidden;border-radius:6px;animation:spIn 1s cubic-bezier(.2,.8,.2,1) both}
 #splash .sp-logo img{display:block;width:100%;height:auto}
 #splash .sp-shine{position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.85) 50%,transparent 65%);transform:translateX(-120%);animation:spShine 1.3s .55s ease-in-out both}
-#splash .sp-nome{font:600 15px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:#0b5f99;animation:spUp .7s .45s ease both}
+#splash .sp-nome{font:600 15px/1 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:#0E2A3B;animation:spUp .7s .45s ease both}
 #splash .sp-bar{width:58%;height:3px;border-radius:3px;background:#dfe7ef;overflow:hidden;animation:spUp .7s .55s ease both}
-#splash .sp-bar i{display:block;height:100%;width:40%;border-radius:3px;background:linear-gradient(90deg,#f0555a,#f2c94c,#8cc63f,#0b78c8);animation:spBar 1.2s .6s ease-in-out infinite}
+#splash .sp-bar i{display:block;height:100%;width:40%;border-radius:3px;background:#FB8C03;animation:spBar 1.2s .6s ease-in-out infinite}
 @keyframes spIn{from{opacity:0;transform:scale(.92);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
 @keyframes spShine{to{transform:translateX(120%)}}
 @keyframes spUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -389,3 +389,19 @@ body.adm main{max-width:1280px}
 .sfib{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
 .seg.seg4 button:last-child:nth-child(odd){grid-column:1/-1}
 .sfev{border-left:3px solid #e8590c;padding:6px 0 6px 10px;display:flex;flex-direction:column;gap:4px}
+
+/* v61: marca Técnico Plus (ícone da torre) no cabeçalho, na abertura e no login */
+.top .logo.app{background:none;padding:0;border-radius:8px;height:34px}
+#splash .sp-logo{width:132px;border-radius:30px}
+/* marca: versão clara (texto azul-escuro) e versão para o modo escuro (texto claro), sem fundo; o app mostra a do tema atual */
+img.marca{height:56px;max-width:100%}
+img.marca.m-escuro{display:none}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) img.marca.m-claro{display:none} :root:not([data-theme="light"]) img.marca.m-escuro{display:inline} }
+:root[data-theme="dark"] img.marca.m-claro{display:none}
+:root[data-theme="dark"] img.marca.m-escuro{display:inline}
+/* abertura no modo escuro: fundo azul-escuro da marca em vez do clarão branco */
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) #splash{background:radial-gradient(120% 80% at 50% 40%,#16384d 0%,#0E2A3B 55%,#081a25 100%)} :root:not([data-theme="light"]) #splash .sp-nome{color:#e8eef2} }
+:root[data-theme="dark"] #splash{background:radial-gradient(120% 80% at 50% 40%,#16384d 0%,#0E2A3B 55%,#081a25 100%)}
+:root[data-theme="dark"] #splash .sp-nome{color:#e8eef2}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) #splash .sp-logo{box-shadow:0 0 0 2px rgba(232,238,242,.22),0 14px 44px rgba(0,0,0,.45)} }
+:root[data-theme="dark"] #splash .sp-logo{box-shadow:0 0 0 2px rgba(232,238,242,.22),0 14px 44px rgba(0,0,0,.45)}

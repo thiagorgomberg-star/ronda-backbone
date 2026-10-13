@@ -49,7 +49,7 @@ function ticketAcionHtml(a) {
 async function geocodifica(endereco) {
   const q = String(endereco || '').trim(); if (!q) return null;
   if (ADMIN && Nuvem.on && Nuvem.sb && Nuvem.sb.functions) {
-    try { const r = await Nuvem.sb.functions.invoke('geocode', { body: { endereco: q } }); const d = r && r.data;
+    try { const r = await Nuvem.fn('geocode', { endereco: q }); const d = r && r.data;
       if (d && d.ok) return { lat: +d.lat, lon: +d.lon, fonte: d.fonte || 'google', formatado: d.formatado, preciso: !!d.preciso, nivel: d.nivel || '', candidatos: d.candidatos || [], em: Date.now() };
       if (d && d.motivo === 'nao_encontrado') return { naoAchou: true, fonte: 'validador', em: Date.now() };
     } catch (e) { /* função não configurada: usa o OpenStreetMap */ }

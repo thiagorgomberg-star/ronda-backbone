@@ -179,7 +179,9 @@ export async function handler(req: Request, sbFab = () => createClient(env("SUPA
       let alvo = (c && c.uid) || String(b.uid || "");
       if (alvo && !c) { const { data: t } = await sb.from("tecnicos").select("uid").eq("uid", alvo).eq("org", ORG).maybeSingle(); if (!t) alvo = ""; }
       if (!c && !alvo) return json({ ok: false, motivo: "Técnico não encontrado." }, 404);
-      if (alvo) { if (alvo === q.u.id) return json({ ok: false, motivo: "Você não pode excluir o seu próprio acesso." }, 400); const { data: ad } = await sb.from("admins").select("uid").eq("uid", alvo).maybeSingle(); if (ad) return json({ ok: false, motivo: "Este usuário tem acesso ao painel: remova em Acessos do painel." }, 409); }
+      if (alvo) { const { data: ad } = await sb.from("admins").select("uid").eq("uid", alvo).maybeSingle();
+        // login do painel (ou o próprio): apaga só o perfil de técnico que ficou gravado com esse login; o acesso ao painel continua
+        if (ad || alvo === q.u.id) { if (c) await sb.from("cadastros").delete().eq("id", c.id); for (const t of ["recursos", "tecnicos", "aovivo"]) await sb.from(t).delete().eq("uid", alvo); return json({ ok: true, soPerfil: true }); } }
       if (c) { await sb.from("rh_dados").delete().eq("cad_id", c.id); const { error } = await sb.from("cadastros").delete().eq("id", c.id); if (error) throw error; }
       if (alvo) {
         for (const t of ["recursos", "tecnicos", "aovivo", "push_subs", "escada"]) await sb.from(t).delete().eq("uid", alvo);
