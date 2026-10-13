@@ -1,10 +1,10 @@
 /* Técnico Plus - Multivale · estilos do app (separados do index.html na v54) */
 /* Layout: app de campo, uma coluna, barra superior fixa e barra de ações embaixo; alvos de toque grandes, leitura sob sol */
 :root{
-  --bg:#f1efed; --surface:#ffffff; --surface-2:#f7f6f4; --line:#e3dfdb; --line-strong:#a39d97;
-  --ink:#161513; --muted:#655e58; --accent:#0b5f99; --accent-ink:#ffffff; --accent-soft:#e3eef7;
+  --bg:#fafafa; --surface:#ffffff; --surface-2:#f7f6f4; --line:#e3dfdb; --line-strong:#a39d97;
+  --ink:#161513; --muted:#655e58; --accent:#0572ce; --accent-ink:#ffffff; --accent-soft:#e4effa;
   --orange:#b85300; --ok:#3d7a1f; --ok-soft:#e5f0dd; --bad:#c2311d; --bad-soft:#fbe8e4; --warn-soft:#fdf1de;
-  --hdr:#312d2a; --hdr-ink:#ffffff; --cta:#312d2a; --cta-ink:#ffffff; --shadow:0 1px 3px rgba(22,21,19,.14);
+  --hdr:#e3260e; --hdr-ink:#ffffff; --cta:#0572ce; --cta-ink:#ffffff; --shadow:0 1px 3px rgba(22,21,19,.14);
   --st-pend:#d9a400; --st-ini:#4a9c2d; --st-done:#5d9fd6; --st-nc:#c2311d; --st-trav:#a39d97; --st-cabo:#7c95a8; --st-corr:#c75a00;
   --f-body:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --f-cond:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
@@ -14,20 +14,18 @@
   --bg:#1a1816; --surface:#262320; --surface-2:#2f2b28; --line:#3d3834; --line-strong:#756d66;
   --ink:#f2efec; --muted:#b3aba3; --accent:#5aa9e6; --accent-ink:#08131c; --accent-soft:#1b3449;
   --orange:#ff9a52; --ok:#7bc35a; --ok-soft:#1f3318; --bad:#ff8a72; --bad-soft:#40201a; --warn-soft:#3b2c16;
-  --hdr:#0f0e0d; --cta:#f2efec; --cta-ink:#1a1816; --shadow:0 1px 3px rgba(0,0,0,.5); color-scheme:dark } }
+  --hdr:#5a140b; --cta:#5aa9e6; --cta-ink:#08131c; --shadow:0 1px 3px rgba(0,0,0,.5); color-scheme:dark } }
 :root[data-theme="dark"]{
   --bg:#1a1816; --surface:#262320; --surface-2:#2f2b28; --line:#3d3834; --line-strong:#756d66;
   --ink:#f2efec; --muted:#b3aba3; --accent:#5aa9e6; --accent-ink:#08131c; --accent-soft:#1b3449;
   --orange:#ff9a52; --ok:#7bc35a; --ok-soft:#1f3318; --bad:#ff8a72; --bad-soft:#40201a; --warn-soft:#3b2c16;
-  --hdr:#0f0e0d; --cta:#f2efec; --cta-ink:#1a1816; --shadow:0 1px 3px rgba(0,0,0,.5); color-scheme:dark }
-/* tons do app (Aparência): azul Multivale é o padrão; vermelho (padrão Claro) e laranja mudam o destaque e a barra superior */
-:root[data-tom="vermelho"]{ --accent:#c4161c; --accent-soft:#fbe4e4; --hdr:#2b1213; --cta:#2b1213; }
-:root[data-tom="laranja"]{ --accent:#b4470d; --accent-soft:#fbe9dc; --hdr:#3a2a20; --cta:#3a2a20; }
+  --hdr:#5a140b; --cta:#5aa9e6; --cta-ink:#08131c; --shadow:0 1px 3px rgba(0,0,0,.5); color-scheme:dark }
+/* temas do field service da Claro (Aparência): "claro" (padrão) = cabeçalho #E3260E, fundo #FAFAFA, botão #0572CE;
+   "claro2" = cabeçalho #DA291C, fundo #FEFEFE, botão #DA291C */
+:root[data-tom="claro2"]{ --bg:#fefefe; --accent:#da291c; --accent-soft:#fbe4e2; --hdr:#da291c; --cta:#da291c; }
 @media (prefers-color-scheme: dark){
-  :root[data-tom="vermelho"]:not([data-theme="light"]){ --accent:#ff6f6a; --accent-ink:#1f0505; --accent-soft:#3d1818; --hdr:#170b0b; --cta:#fbe9e9; }
-  :root[data-tom="laranja"]:not([data-theme="light"]){ --accent:#ff9a5c; --accent-ink:#1e0d03; --accent-soft:#3d2414; --hdr:#1a120d; --cta:#fbeee5; } }
-:root[data-theme="dark"][data-tom="vermelho"]{ --accent:#ff6f6a; --accent-ink:#1f0505; --accent-soft:#3d1818; --hdr:#170b0b; --cta:#fbe9e9; }
-:root[data-theme="dark"][data-tom="laranja"]{ --accent:#ff9a5c; --accent-ink:#1e0d03; --accent-soft:#3d2414; --hdr:#1a120d; --cta:#fbeee5; }
+  :root[data-tom="claro2"]:not([data-theme="light"]){ --bg:#1a1816; --accent:#ff6f6a; --accent-ink:#1f0505; --accent-soft:#3d1818; --hdr:#5a120d; --cta:#ff6f6a; --cta-ink:#1f0505; } }
+:root[data-theme="dark"][data-tom="claro2"]{ --bg:#1a1816; --accent:#ff6f6a; --accent-ink:#1f0505; --accent-soft:#3d1818; --hdr:#5a120d; --cta:#ff6f6a; --cta-ink:#1f0505; }
 .tom-sw{display:inline-block;width:18px;height:18px;border-radius:50%;vertical-align:-4px;margin-right:6px;border:1px solid rgba(0,0,0,.2)}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.4;-webkit-text-size-adjust:100%}
@@ -383,3 +381,11 @@ body.adm main{max-width:1280px}
 @keyframes spUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes spBar{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
 @media (prefers-reduced-motion:reduce){#splash *{animation:none!important}#splash{transition:opacity .3s}}
+
+.vozlpu{display:flex;flex-direction:column;gap:6px;border:1.5px dashed var(--accent);background:var(--accent-soft);border-radius:12px;padding:10px 12px;margin:10px 0}.vozlpu textarea{min-height:56px}
+.vozlpu .vozbtn{min-height:48px;padding:0 18px;background:var(--accent);color:#fff;border-color:var(--accent);font-size:16px}.vozlpu .vozbtn.on{background:var(--bad);border-color:var(--bad)}
+
+/* conjunta de site: cada fibra num bloco */
+.sfib{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
+.seg.seg4 button:last-child:nth-child(odd){grid-column:1/-1}
+.sfev{border-left:3px solid #e8590c;padding:6px 0 6px 10px;display:flex;flex-direction:column;gap:4px}

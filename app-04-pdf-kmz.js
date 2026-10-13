@@ -86,11 +86,12 @@ async function gerarPdfInsp(i, silencioso) {
   if (!silencioso) toast('Gerando PDF…', 8000);
   try {
     const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const logo = await logoData();
-    const corr = isCorr(i), impl = isImpl(i), vist = isVist(i); let sn = 0;
-    let y = corr ? pdfHeader(doc, logo, 'Relatório de Corretiva Backbone', 'Manutenção corretiva · Rede óptica', i.corr.ticket, 'TICKET') : impl ? pdfHeader(doc, logo, 'Relatório de Implantação', (IMPL_SERV[i.impl.servico] || '') + ' · expansão e interligação de sites', i.impl.designacao, 'DESIGNAÇÃO') : vist ? pdfHeader(doc, logo, 'Registro de Vistoria de Rota', 'Fiscalização de campo · ' + (VIST_TIPOS[i.vist.tipo] || ''), null) : pdfHeader(doc, logo, 'Inspeção Preventiva Backbone', 'Relatório de inspeção · Rede óptica', i.info.tag);
+    const corr = isCorr(i), impl = isImpl(i), vist = isVist(i), site = isSite(i); let sn = 0;
+    let y = site ? pdfHeader(doc, logo, 'Conjunta de Site Backbone', 'Multivale x provedor parceiro · site ' + (i.site.sigla || ''), i.ticketAtv || i.site.sigla, i.ticketAtv ? 'TICKET' : 'SITE') : corr ? pdfHeader(doc, logo, 'Relatório de Corretiva Backbone', 'Manutenção corretiva · Rede óptica', i.corr.ticket, 'TICKET') : impl ? pdfHeader(doc, logo, 'Relatório de Implantação', (IMPL_SERV[i.impl.servico] || '') + ' · expansão e interligação de sites', i.impl.designacao, 'DESIGNAÇÃO') : vist ? pdfHeader(doc, logo, 'Registro de Vistoria de Rota', 'Fiscalização de campo · ' + (VIST_TIPOS[i.vist.tipo] || ''), null) : pdfHeader(doc, logo, 'Inspeção Preventiva Backbone', 'Relatório de inspeção · Rede óptica', i.info.tag);
     if (impl) { y = pdfSec(doc, y, ++sn, 'Designação e serviço'); const m = i.impl; y = kv(doc, y, [...(i.wfc || i.wf2 ? [['WFC', i.wfc || '—'], ['WF2', i.wf2 || '—']] : []), ['Designação', m.designacao], ['Serviço', IMPL_SERV[m.servico]], ['Projeto', m.projeto], ['Site A', m.siteA], ['Site B', m.siteB], ...(m.servico === 'ativacao' ? [['Equipamento', m.equipamento], ['Porta / slot', m.porta]] : []), ...(m.servico === 'dgo' ? [['Modelo do DGO', m.dgoModelo], ['Rack / posição', m.dgoPosicao], ['Portas ocupadas', m.dgoPortas]] : []), ['Técnico', i.info.tecnico], ['Data', fDH(i.chegada)], ...(usaImpl(i, 'caixa') ? [] : [['Endereço', [i.info.endereco, i.info.bairro, i.info.cidade].filter(Boolean).join(', ')]])]); }
     if (vist) { y = pdfSec(doc, y, ++sn, 'Registro'); const v = i.vist; y = kv(doc, y, [['Tipo', VIST_TIPOS[v.tipo]], ['Fiscal', i.info.tecnico], ['Data e hora', fDH(i.chegada)], ['Endereço', [i.info.endereco, i.info.cidade].filter(Boolean).join(', ')], ...(v.tipo === 'chaves' ? [['Local da retirada', v.chaveLocal], ['Chave / cadeado', v.chaveId], ['Quem entregou', v.chaveEntregou], ['Devolvida', v.chaveDevolvida ? 'Sim' : 'Não']] : []), ...(v.tipo === 'acomp' ? [['Equipe acompanhada', v.equipe], ['Responsável', v.responsavel], ['Ticket / OS', v.ticket], ['Atividade', v.atividade], ['Conformidade', v.conformidade]] : [])]);
       y = pdfSec(doc, y, ++sn, 'Registro escrito'); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(20); doc.splitTextToSize(v.descricao || '—', 186).forEach(line => { if (y > 280) { doc.addPage(); y = 16; } doc.text(line, 12, y + 1); y += 4.8; }); y += 4; }
+    if (site) ({ y, sn } = await pdfSite(doc, y, sn, i));
     if (corr) pdfLog(doc, await logDaInsp(i));
     const tipo = { aerea: 'Aérea (poste)', sub: 'Subterrânea (CS enterrada)', outro: 'Outro' + (i.info.tipoOutro ? ': ' + i.info.tipoOutro : '') }[i.info.tipo] || '';
     const dataBR = i.info.data ? i.info.data.split('-').reverse().join('/') : '';
@@ -98,9 +99,9 @@ async function gerarPdfInsp(i, silencioso) {
       y = pdfSec(doc, y, ++sn, 'Ocorrência');
       const r0 = i.rondaId ? ((S.ronda && S.ronda.id === i.rondaId) ? S.ronda : await DB.get('rondas', i.rondaId)) : null; const sd = r0 ? segmentos(r0).find(x => x.inspId === i.id) : null;
       y = kv(doc, y, [['Ticket', i.corr.ticket + (i.corr.ticketAuto ? ' (gerado pelo app)' : '')], ['Ocorrência', i.corr.ocorrencia], ['Backbone', donoLb(i.info.dono, i.info.parceiro) || '—'], ...(i.wfc || i.wf2 ? [['WFC', i.wfc || '—'], ['WF2', i.wf2 || '—']] : []), ['Rota', i.info.rota], ['Técnico', i.info.tecnico + (i.apoio ? ` (apoio a ${i.apoioDe || 'outro técnico'})` : '')], ['Matrícula', S.perfil.matricula], ...(i.info.apoio ? [['Equipe de apoio', i.info.apoio]] : []), ['Data', dataBR], ['Acionamento', i.corr.acionamento], ['Início do deslocamento', r0 ? fHora(r0.inicio) : ''], ['Chegada ao local', fHora(i.chegada)], ['Deslocamento', sd ? `${fKm(sd.km)} em ${fDur(sd.fim - sd.ini)}` : ''], ['Normalizado às', i.corr.normalizacao], ['Saída do local', i.saida ? fHora(i.saida) : '—'], ['Tempo no local', i.saida ? fDur(i.saida - i.chegada) : '—'], ['Fibras afetadas', i.corr.fibrasAfetadas], ['Caixa de emenda', [i.info.tag, i.corr.novaCaixa ? '(nova)' : ''].filter(Boolean).join(' ')], ['Endereço', [i.info.endereco, i.info.ref && 'ref.: ' + i.info.ref].filter(Boolean).join(' · ')], ['Bairro / cidade', [i.info.bairro, i.info.cidade, i.info.cep && 'CEP ' + i.info.cep].filter(Boolean).join(' - ')], ['Nº poste / CV', i.info.poste], ['Pendência', i.corr.pendente ? 'Sim' : 'Não'], ['Referência', refTxt(i)]]);
-    } else if (!vist && (!impl || usaImpl(i, 'caixa'))) {
+    } else if (!vist && !site && (!impl || usaImpl(i, 'caixa'))) {
     y = pdfSec(doc, y, ++sn, 'Identificação da caixa');
-    y = kv(doc, y, [['Backbone', donoLb(i.info.dono, i.info.parceiro) || '—'], ['Referência', refTxt(i)], ['Matrícula', S.perfil.matricula], ['Data', dataBR], ['Mês referência', i.info.mes], ['Técnico(s)', i.info.tecnico], ['TAG da caixa', i.info.tag], ['Modelo', i.info.modelo], ['Fabricante', i.info.fabricante], ['Tipo de instalação', tipo], ['Nº poste / CV', i.info.poste], ['Endereço', [i.info.endereco, i.info.ref && 'ref.: ' + i.info.ref].filter(Boolean).join(' · ')], ['Bairro', i.info.bairro], ['Cidade', [i.info.cidade, i.info.cep && 'CEP ' + i.info.cep].filter(Boolean).join(' · ')], ['Rota', i.info.rota], ['Chegada', fHora(i.chegada)], ['Saída', i.saida ? fHora(i.saida) : '—']]);
+    y = kv(doc, y, [...(i.ticketAtv ? [['Ticket interno', i.ticketAtv]] : []), ...(tkParcTxt(i) ? [['Ticket(s) do parceiro', tkParcTxt(i)]] : []), ['Backbone', donoLb(i.info.dono, i.info.parceiro) || '—'], ['Referência', refTxt(i)], ['Matrícula', S.perfil.matricula], ['Data', dataBR], ['Mês referência', i.info.mes], ['Técnico(s)', i.info.tecnico], ['TAG da caixa', i.info.tag], ['Modelo', i.info.modelo], ['Fabricante', i.info.fabricante], ['Tipo de instalação', tipo], ['Nº poste / CV', i.info.poste], ['Endereço', [i.info.endereco, i.info.ref && 'ref.: ' + i.info.ref].filter(Boolean).join(' · ')], ['Bairro', i.info.bairro], ['Cidade', [i.info.cidade, i.info.cep && 'CEP ' + i.info.cep].filter(Boolean).join(' · ')], ['Rota', i.info.rota], ['Chegada', fHora(i.chegada)], ['Saída', i.saida ? fHora(i.saida) : '—']]);
     }
     y = pdfSec(doc, y, ++sn, 'Localização (GPS)');
     const l = i.loc;
@@ -112,7 +113,7 @@ async function gerarPdfInsp(i, silencioso) {
     if (l) {
       const img = await mapaImg(seg ? [{ pts: seg.pts, color: SEGCOR[seg.tipo] }] : [], [{ lat: l.lat, lon: l.lon, label: corr ? 'P' : 'C', color: corr ? '#d9480f' : '#0b5f99' }], 1400, 600);
       if (img) { if (y > 205) { doc.addPage(); y = 16; } doc.addImage(img, 'JPEG', 12, y - 3, 186, 79.7); y += 79.7; doc.setFontSize(7.5); doc.setTextColor(90); doc.setFont('helvetica', 'normal');
-        doc.text(seg ? `${SEGLB[seg.tipo]}: ${corr ? seg.de.replace('Início da ronda', 'Início do deslocamento') : seg.de} > ${corr ? 'ponto da corretiva' : seg.para} · ${fKm(seg.km)} · ${fHora(seg.ini)}–${fHora(seg.fim)}` : 'Posição da caixa', 12, y + 1); y += 8; }
+        doc.text(seg ? `${SEGLB[seg.tipo]}: ${corr ? seg.de.replace('Início da ronda', 'Início do deslocamento') : seg.de} > ${corr ? 'ponto da corretiva' : seg.para} · ${fKm(seg.km)} · ${fHora(seg.ini)}–${fHora(seg.fim)}` : site ? 'Posição do site' : 'Posição da caixa', 12, y + 1); y += 8; }
     }
     if (corr) {
       y = pdfSec(doc, y, ++sn, 'Descrição do atendimento'); y += 3;
@@ -121,20 +122,20 @@ async function gerarPdfInsp(i, silencioso) {
       bloco('Sobra técnica puxada', i.corr.sobra ? i.corr.sobra + ' m' : 'Não informada'); y += 3;
     }
     const vistCx = vist && i.vist && i.vist.tipo === 'caixa';
-    const semCabos = (vist && !vistCx) || (impl && !usaImpl(i, 'cabos')) || claroCorr(i);
+    const semCabos = site || (vist && !vistCx) || (impl && !usaImpl(i, 'cabos')) || claroCorr(i);
     if (!semCabos) { y = pdfSec(doc, y, ++sn, 'Cabos');
     const cab = [['Entrada', i.cabos.entrada], ['Saída 1', i.cabos.s1]]; if (i.cabos.temS2) cab.push(['Saída 2', i.cabos.s2]);
     doc.autoTable({ ...TB, startY: y, head: [['Cabo', 'Marca', 'Lote', 'Nº de fibras', 'Padrão de cores', 'Metragem (m)']], body: cab.map(([n, c]) => [n, c.marca || '—', c.lote || '—', c.fibras || '—', (c.padrao ? padNome(c.padrao) : 'Não informado'), c.metragem || '—']), columnStyles: { 0: { fontStyle: 'bold' } } });
     y = doc.lastAutoTable.finalY + 7; }
     if (impl) y = pdfImplCheck(doc, y, ++sn, i);
-    if (!corr && !impl && !vist) {
+    if (!corr && !impl && !vist && !site) {
     y = pdfSec(doc, y, ++sn, 'Itens inspecionados');
     doc.autoTable({ ...TB, startY: y, head: [['Item', 'Situação', 'Observação']], body: CHECK.map(([k, lb]) => [lb, i.check[k] === 'NC' ? 'N/C' : i.check[k] === 'NA' ? 'N/A' : (i.check[k] || '—'), i.checkObs[k] || '']),
       columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 22, halign: 'center', fontStyle: 'bold' } },
       didParseCell: d => { if (d.section === 'body' && d.column.index === 1) { if (d.cell.raw === 'OK') d.cell.styles.textColor = [31, 122, 58]; if (d.cell.raw === 'N/C') { d.cell.styles.textColor = [255, 255, 255]; d.cell.styles.fillColor = [180, 35, 27]; } } } });
     y = doc.lastAutoTable.finalY + 7;
     }
-    const fm = (vist && !vistCx) || (impl && !usaImpl(i, 'fusoes')) || claroCorr(i) ? '__skip' : (i.fo.modo || 'det');
+    const fm = site || (vist && !vistCx) || (impl && !usaImpl(i, 'fusoes')) || claroCorr(i) ? '__skip' : (i.fo.modo || 'det');
     if (fm !== 'det' && fm !== '__skip') {
       y = pdfSec(doc, y, ++sn, 'Fusões');
       doc.setFont('helvetica', fm === 'cor' ? 'bold' : 'normal'); doc.setFontSize(9); doc.setTextColor(fm === 'cor' ? 31 : 20, fm === 'cor' ? 122 : 20, fm === 'cor' ? 58 : 20);
@@ -185,7 +186,7 @@ async function gerarPdfInsp(i, silencioso) {
     // fotos
     if (i.fotos.length) {
       for (let k = 0; k < i.fotos.length; k++) {
-        const p = i.fotos[k]; if (k % 2 === 0) { doc.addPage(); y = corr ? pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de corretiva · ticket ' + i.corr.ticket, i.corr.ticket, 'TICKET') : pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de inspeção · ' + (i.info.tag || ''), i.info.tag); }
+        const p = i.fotos[k]; if (k % 2 === 0) { doc.addPage(); y = site ? pdfHeader(doc, logo, 'Evidências fotográficas', siteTitulo(i), i.site.sigla, 'SITE') : corr ? pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de corretiva · ticket ' + i.corr.ticket, i.corr.ticket, 'TICKET') : pdfHeader(doc, logo, 'Evidências fotográficas', 'Relatório de inspeção · ' + (i.info.tag || ''), i.info.tag); }
         const fb = await fotoBlob(p); if (!fb) continue; const data = await blobToData(fb); const bw = 186, bh = 112; let w = bw, h = w * p.h / p.w; if (h > bh) { h = bh; w = h * p.w / p.h; }
         doc.addImage(data, 'JPEG', 12 + (bw - w) / 2, y, w, h); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20);
         doc.text(`Foto ${k + 1} — ${p.cat}${p.desc ? ': ' + p.desc : ''}`, 12, y + h + 5, { maxWidth: 186 }); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90);
@@ -193,9 +194,10 @@ async function gerarPdfInsp(i, silencioso) {
         y += h + 16;
       }
     }
+    if (site) await pdfCurvas(doc, logo, i);
     pdfFooter(doc, `Multivale Engenharia · Ronda Preventiva Backbone · gerado em ${fDH(Date.now())}`);
     const blob = doc.output('blob');
-    return new File([blob], nomeArq(isCorr(i) ? `Corretiva_${i.corr.ticket || 'sem_ticket'}_${i.info.data || isoDate(i.criado)}` : isImpl(i) ? `Implantacao_${i.impl.designacao || 'sem_designacao'}_${i.impl.servico}_${isoDate(i.criado)}` : isVist(i) ? `Vistoria_${i.vist.tipo}_${isoDate(i.criado)}_${fHora(i.chegada).replace(':', 'h')}` : `Inspecao_${i.info.tag || 'sem_TAG'}_${i.info.data || isoDate(i.criado)}`), { type: 'application/pdf' });
+    return new File([blob], nomeArq(site ? `Conjunta_${i.ticketAtv || 'sem_ticket'}_${i.site.sigla || 'sem_sigla'}_${isoDate(i.criado)}` : isCorr(i) ? `Corretiva_${i.corr.ticket || 'sem_ticket'}_${i.info.data || isoDate(i.criado)}` : isImpl(i) ? `Implantacao_${i.impl.designacao || 'sem_designacao'}_${i.impl.servico}_${isoDate(i.criado)}` : isVist(i) ? `Vistoria_${i.vist.tipo}_${isoDate(i.criado)}_${fHora(i.chegada).replace(':', 'h')}` : `Inspecao_${i.info.tag || 'sem_TAG'}_${i.info.data || isoDate(i.criado)}`), { type: 'application/pdf' });
   } catch (e) { console.error(e); toast('Erro ao gerar o PDF: ' + e.message, 6000); return null; }
 }
 
@@ -206,7 +208,7 @@ async function gerarPdfRonda(r) {
     await cacheInspRonda(r);
     const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4' }); const logo = await logoData();
     const { t, segs } = totais(r);
-    let y = pdfHeader(doc, logo, isCorr(r) ? 'Resumo de Corretiva' : isImpl(r) ? 'Relatório de Designação · Implantação' : isVist(r) ? 'Relatório Final de Vistoria de Rota' : 'Relatório de Ronda Preventiva', isCorr(r) ? 'Deslocamento e atendimento' : isImpl(r) ? (IMPL_SERV[r.servico] || '') + ' · percurso e produção' : isVist(r) ? 'Fiscalização de campo · ' + (r.objetivo || '') : 'Controle de percurso e produção', isCorr(r) ? r.ticket : isImpl(r) ? r.designacao : null, isImpl(r) ? 'DESIGNAÇÃO' : 'TICKET');
+    let y = pdfHeader(doc, logo, isCorr(r) ? 'Resumo de Corretiva' : isImpl(r) ? 'Relatório de Designação · Implantação' : isVist(r) ? 'Relatório Final de Vistoria de Rota' : isSite(r) ? 'Relatório de Conjunta de Site' : 'Relatório de Ronda Preventiva', isCorr(r) ? 'Deslocamento e atendimento' : isImpl(r) ? (IMPL_SERV[r.servico] || '') + ' · percurso e produção' : isVist(r) ? 'Fiscalização de campo · ' + (r.objetivo || '') : isSite(r) ? 'Multivale x provedor parceiro · deslocamento e sites' : 'Controle de percurso e produção', isCorr(r) ? r.ticket : isImpl(r) ? r.designacao : r.ticket || null, isImpl(r) ? 'DESIGNAÇÃO' : 'TICKET');
     if (isCorr(r)) pdfLog(doc, r.atvLog);
     y = pdfSec(doc, y, 1, 'Resumo do dia');
     y = kv(doc, y, [...(isCorr(r) ? [['Ticket', r.ticket + (r.ticketAuto ? ' (gerado pelo app)' : '')], ['Ocorrência', r.ocorrencia]] : []), ['Backbone', donoLb(r.dono, r.parceiro) || '—'], ['Equipe', S.perfil.equipe], ['Técnico', r.tecnico], ['Matrícula', r.matricula], ['Data', fData(r.inicio)], ['Veículo', veicTxt(r.veiculo) || r.placa], ...(r.distCasa != null ? [['Início a', fDist(r.distCasa) + ' da residência']] : []), ...((r.refeicoes || []).length ? [['Refeição', r.refeicoes.map(x => `${fHora(x.ini)}–${x.fim ? fHora(x.fim) : '…'}`).join(', ')]] : []), ['Odômetro inicial', fOdo(kmNum(r.odoIni))], ['Odômetro final', fOdo(kmNum(r.odoFim))], [ADMIN ? 'Km odômetro x GPS' : 'Km rodado (odômetro)', (() => { const o = odoInfo(r); return o ? (ADMIN ? odoTxt(o) + (o.diverge ? ' - NÃO CONFERE' : ' - confere') : fKm(o.odo)) : '—'; })()], ['Início', fHora(r.inicio)], ['Fim', r.fim ? fHora(r.fim) : 'Em andamento'], ['Duração', fDur(t.dur)], ['Caixas inspecionadas', String(t.caixas)], ['Km total', fKm(t.km)], ['Km deslocamento', fKm(t.desl + t.ret + t.atual)], ['Km rota do cabo', fKm(t.cabo)], ['Sem GPS (>3 min)', t.gapN ? `${t.gapN} trecho(s), ${fDur(t.gapMs)}` : 'Nenhum'], ['Rota', r.rotaId && rotaById(r.rotaId) ? rotaLb(rotaById(r.rotaId)) : '—'], ['Fotos da rede', String((await fotosRede(r.id)).length)], ...aprPdfLinhas(r)]);
@@ -231,7 +233,7 @@ async function gerarPdfRonda(r) {
     const ch = r.eventos.filter(e => e.tipo === 'chegada');
     doc.autoTable({ ...TB, startY: y, head: [['#', 'TAG', 'Endereço', 'Chegada', 'Saída', 'Na caixa', 'Fusões', 'N/C', 'Fotos']],
       body: ch.map((e, k) => { const i = S.inspCache.get(e.inspId); if (!i) return [k + 1, '—', '', fHora(e.ts), '', '', '', '', '']; const nf = i.fo.rows.slice(0, i.fo.total).filter(x => x.f).length; const nc = Object.values(i.check).filter(v => v === 'NC').length;
-        return [k + 1, isVist(i) ? VIST_TIPOS[i.vist.tipo] : isImpl(i) ? (IMPL_SERV[i.impl.servico] || '') + (usaImpl(i, 'caixa') ? ' · ' + (i.info.tag || '') : '') : (i.info.tag || '—'), [i.info.endereco, i.info.bairro].filter(Boolean).join(' - ') || '—', fHora(i.chegada), i.saida ? fHora(i.saida) : '—', i.saida ? fDur(i.saida - i.chegada) : '—', `${nf}/${i.fo.total}`, String(nc), String(i.fotos.length)]; }),
+        return [k + 1, isSite(i) ? siteTitulo(i) : isVist(i) ? VIST_TIPOS[i.vist.tipo] : isImpl(i) ? (IMPL_SERV[i.impl.servico] || '') + (usaImpl(i, 'caixa') ? ' · ' + (i.info.tag || '') : '') : (i.info.tag || '—'), [i.info.endereco, i.info.bairro].filter(Boolean).join(' - ') || '—', fHora(i.chegada), i.saida ? fHora(i.saida) : '—', i.saida ? fDur(i.saida - i.chegada) : '—', `${nf}/${i.fo.total}`, String(nc), String(i.fotos.length)]; }),
       columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { fontStyle: 'bold' }, 6: { halign: 'center' }, 7: { halign: 'center' }, 8: { halign: 'center' } },
       didParseCell: d => { if (d.section === 'body' && d.column.index === 7 && +d.cell.raw > 0) { d.cell.styles.textColor = [180, 35, 27]; d.cell.styles.fontStyle = 'bold'; } } });
     y = doc.lastAutoTable.finalY + 6;

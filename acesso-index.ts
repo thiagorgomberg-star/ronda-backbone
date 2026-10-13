@@ -30,6 +30,18 @@ const limpa = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[\u0300-
 export function loginDe(c: { id: string; matricula?: string | null }) { const m = limpa(c.matricula); return m ? "m" + m : limpa(c.id); }
 export const emailDe = (login: string, org = ORG) => `${limpa(login)}@${limpa(org)}.${DOMINIO}`;
 export function senhaOk(s: unknown) { const t = String(s ?? ""); return t.length >= 6 && t.length <= 72; }
+// senha que aparece em vazamentos conhecidos (Have I Been Pwned, consulta anônima: só os 5 primeiros caracteres do hash saem daqui)
+const FRACAS = new Set(["123456", "1234567", "12345678", "123456789", "1234567890", "654321", "111111", "000000", "123123", "abc123", "senha123", "multivale", "claro123", "qwerty"]);
+export async function senhaVazada(s: string, f: typeof fetch = fetch): Promise<boolean> {
+  const t = String(s || ""); if (FRACAS.has(t.toLowerCase()) || /^(.)\1+$/.test(t)) return true;
+  try {
+    const h = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-1", new TextEncoder().encode(t)))).map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 3000);
+    const r = await f(`https://api.pwnedpasswords.com/range/${h.slice(0, 5)}`, { headers: { "Add-Padding": "true" }, signal: ctl.signal }); clearTimeout(tm);
+    if (!r.ok) return false; const txt = await r.text();
+    return txt.split("\n").some((l) => { const [suf, n] = l.trim().split(":"); return suf === h.slice(5) && +n > 0; });
+  } catch (_) { return false; } // serviço fora do ar: não trava a ativação
+}
 export function senhaProvisoria(n = 6) { const a = new Uint32Array(n); crypto.getRandomValues(a); return [...a].map((x) => String(x % 10)).join(""); }
 // a O.S. é do parceiro? (Claro, Master ou outro nome cadastrado)
 export function doCliente(textos: unknown[], cliente: string) { const c = limpa(cliente); if (!c) return false; return textos.some((t) => limpa(t).includes(c)); }
@@ -56,14 +68,14 @@ export function linhaEvento(e: any, atv: any, cluster: string, mostrarTec: boole
   const d = e.dados || {}; const info = d.info || {}; const corr = d.corr || {}; const ad = (atv && atv.dados) || {};
   const ticket = corr.ticket || (d.impl && d.impl.designacao) || info.tag || "";
   const criado = (atv && +atv.criado) || null, chegada = d.chegada || null, fim = d.saida || null;
-  return { id: e.id, origem: "os", tipo: d.tipo === "corretiva" ? "Corretiva" : d.tipo === "implantacao" ? "Implantação" : d.tipo === "vistoria" ? "Vistoria" : "Preventiva", ticket, status: d.status === "concluida" ? "Concluída" : "Em execução",
+  return { id: e.id, origem: "os", tipo: d.tipo === "corretiva" ? "Corretiva" : d.tipo === "implantacao" ? "Implantação" : d.tipo === "vistoria" ? "Vistoria" : d.tipo === "site" ? "Conjunta de site" : "Preventiva", ticket, status: d.status === "concluida" ? "Concluída" : "Em execução",
     endereco: info.endereco || (atv && atv.endereco) || "", cidade: info.cidade || ad.cidade || "", bairro: info.bairro || "", node: ad.node || corr.node || "", cluster, clusterNome: CLUSTERS[cluster] || "",
     tecnico: mostrarTec ? String(info.tecnico || "").split(" ")[0] : "", criado, chegada, fim, tempoChegadaMin: criado && chegada && chegada > criado ? Math.round((chegada - criado) / 60000) : null, tempoTotalMin: (criado || chegada) && fim ? Math.round((fim - (criado || chegada)) / 60000) : null,
     ocorrencia: corr.ocorrencia || ad.ocorrencia || "", problema: corr.problema || "", causa: corr.causa || "", servico: corr.servico || "", lat: d.loc ? d.loc.lat : (atv ? atv.lat : null), lon: d.loc ? d.loc.lon : (atv ? atv.lon : null), fotos: (d.fotos || []).filter((f: any) => f && f.path).length };
 }
 export function linhaAtividade(a: any, cluster: string, mostrarTec: boolean) {
   const ad = a.dados || {};
-  return { id: a.id, origem: "atividade", tipo: a.tipo === "emergencial" ? "Corretiva" : a.tipo === "preventiva" ? "Preventiva" : String(a.tipo || "Atividade"), ticket: a.ticket || "", status: ST_ATV[a.status] || a.status,
+  return { id: a.id, origem: "atividade", tipo: a.tipo === "emergencial" ? "Corretiva" : a.tipo === "preventiva" ? "Preventiva" : a.tipo === "conjunta" ? "Conjunta de site" : String(a.tipo || "Atividade"), ticket: a.ticket || "", status: ST_ATV[a.status] || a.status,
     endereco: a.endereco || "", cidade: ad.cidade || "", bairro: ad.bairro || "", node: ad.node || "", cluster, clusterNome: CLUSTERS[cluster] || "", tecnico: mostrarTec ? String(a.tecnico_nome || "").split(" ")[0] : "",
     criado: +a.criado || null, chegada: null, fim: null, tempoChegadaMin: null, tempoTotalMin: null, ocorrencia: ad.ocorrencia || "", problema: "", causa: "", servico: "", lat: a.lat, lon: a.lon, fotos: 0 };
 }
@@ -111,6 +123,7 @@ export async function handler(req: Request, sbFab = () => createClient(env("SUPA
     if (acao === "ativar") {
       const codigo = String(b.codigo || "").trim().toUpperCase(); if (!codigo) return json({ ok: false, motivo: "Informe o código do convite." }, 400);
       if (!senhaOk(b.senha)) return json({ ok: false, motivo: "A senha precisa ter de 6 a 72 caracteres." }, 400);
+      if (await senhaVazada(String(b.senha))) return json({ ok: false, motivo: "Essa senha é fácil de adivinhar ou já apareceu em vazamentos na internet. Escolha outra." }, 400);
       const { data: c } = await sb.from("cadastros").select("*").eq("id", codigo).eq("org", ORG).maybeSingle();
       if (!c || c.ativo === false) return json({ ok: false, motivo: "Convite não encontrado ou desativado." }, 404);
       let login = loginDe(c); let email = emailDe(login);

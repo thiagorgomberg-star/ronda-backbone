@@ -15,6 +15,7 @@ function trocaSenhaRecuperacao() {
   el.innerHTML = `<div style="background:var(--surface);border-radius:10px;max-width:420px;width:100%;padding:14px;display:flex;flex-direction:column;gap:10px" role="dialog" aria-modal="true"><b>Criar senha nova</b><div class="field"><label class="lb" for="rcS1">Senha nova (mínimo 6)</label><input type="password" id="rcS1" autocomplete="new-password"></div><div class="field"><label class="lb" for="rcS2">Repita a senha</label><input type="password" id="rcS2" autocomplete="new-password"></div><button type="button" class="btn pri" id="rcOk">Salvar senha</button></div>`;
   document.body.appendChild(el);
   $('#rcOk', el).onclick = async () => { const a = $('#rcS1', el).value, b = $('#rcS2', el).value; if (a.length < 6) { toast('A senha precisa ter pelo menos 6 caracteres.'); return; } if (a !== b) { toast('As senhas não conferem.'); return; }
+    if (await senhaVazada(a)) { toast('Essa senha é fácil de adivinhar ou já apareceu em vazamentos na internet. Escolha outra.', 7000); return; }
     try { const r = await Nuvem.sb.auth.updateUser({ password: a }); if (r && r.error) throw r.error; el.remove(); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} toast('Senha nova salva. Use-a para entrar.', 5000); } catch (e) { toast('Não foi possível salvar: ' + (e.message || e), 6000); } };
 }
 function afterAdmLogin() {

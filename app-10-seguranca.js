@@ -105,6 +105,14 @@ function meusTreinosHtml() {
   return `<section class="card"><h2>Meus treinamentos</h2><div class="list">${L.map(t => { const s = statusTreino(t); const [c, l] = ST_TR[s.st]; return `<div class="item" style="cursor:default;align-items:center"><span class="tx"><b>${esc(t.tipo)}</b><span>${s.v ? 'válido até ' + fDM(s.v) : 'sem validade'}</span></span><span class="pill ${c}">${l}</span></div>`; }).join('')}</div></section>`;
 }
 
+// aviso na tela inicial do técnico: NR/ASO vencido ou vencendo em até 30 dias (só o mais novo de cada tipo)
+function meusTreinosAviso() {
+  const L = S.meusTreinos || []; const tipos = [...new Set(L.map(t => t.tipo))];
+  const av = tipos.map(tp => treinoValido(L, tp)).filter(v => v && (v.s.st === 'vencido' || v.s.st === 'vence'));
+  if (!av.length) return '';
+  const venc = av.filter(v => v.s.st === 'vencido');
+  return `<div class="warnbox" style="${venc.length ? 'border-color:var(--bad);background:var(--bad-soft)' : ''}"><b>${venc.length ? 'Treinamento vencido' : 'Treinamento vencendo'}:</b> ${av.map(v => `${esc(v.t.tipo)} ${v.s.st === 'vencido' ? 'venceu em ' + fDM(v.s.v) : `vence em ${v.s.dias} dia(s) (${fDM(v.s.v)})`}`).join(' · ')}. ${venc.length ? 'A APR bloqueia serviços que exigem esse treinamento. ' : ''}Fale com o supervisor para renovar.</div>`;
+}
 async function carregaMeusTreinos(forca) {
   if (ADMIN) return; if (!S.meusTreinos) { const m = await DB.get('meta', 'treinos'); S.meusTreinos = (m && m.lista) || []; }
   if ((forca || !S.treinosOk) && Nuvem.on && Nuvem.user && navigator.onLine) { try { S.meusTreinos = await Nuvem.treinosMeus(); S.treinosOk = true; await DB.put('meta', { id: 'treinos', lista: S.meusTreinos }); } catch (e) {} }

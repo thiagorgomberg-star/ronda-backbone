@@ -33,7 +33,65 @@ type Db = {
   logLer(chaves: string[]): Promise<Map<string, number>>;
   logGravar(chave: string, ts: number): Promise<void>;
   plantoes(de: number, ate: number): Promise<any[]>;
+  // despacho automático do backlog (não emergencial) para técnico livre do mesmo mini cluster
+  despachoCfg?(): Promise<boolean>;
+  backlog?(): Promise<any[]>;
+  abertasTec?(): Promise<any[]>;
+  recursos?(): Promise<any[]>;
+  fiscais?(): Promise<Set<string>>;
+  atribuir?(a: any, uid: string, nome: string, agora: number, nota: string): Promise<boolean>;
+  retomar?(a: any, agora: number): Promise<boolean>;
 };
+export const MINI_CLU: Record<string, string> = { implantacao: "ddd11", sjc: "ddd12", taubate: "ddd12", litoral: "ddd12", santos: "ddd13", sulminas: "mg" };
+// a O.S. do backlog combina com o técnico? mesmo mini cluster (ou mesmo cluster quando um dos dois não tem mini) e serviço liberado na ficha
+export function combina(a: any, rec: any) {
+  const d = a.dados || {}; const reg = rec && rec.regiao && rec.regiao !== "todas" ? rec.regiao : ""; const clu = (rec && rec.cluster) || (reg ? MINI_CLU[reg] : "") || "";
+  const serv = rec && Array.isArray(rec.servicos) && rec.servicos.length ? rec.servicos : null;
+  if (serv && a.tipo === "preventiva" && !serv.includes("preventiva")) return false;
+  if (serv && a.tipo === "implantacao" && !serv.includes("implantacao")) return false;
+  if (serv && a.tipo === "conjunta" && !serv.includes("conjunta") && !serv.includes("preventiva")) return false;
+  if (d.mini && reg) return d.mini === reg;
+  if (d.cluster && clu) return d.cluster === clu;
+  return false;
+}
+const distM = (p: any, q: any) => { if (!p || !q || p.lat == null || q.lat == null) return Infinity; const R = 6371000, r = Math.PI / 180; const a = Math.sin((q.lat - p.lat) * r / 2) ** 2 + Math.cos(p.lat * r) * Math.cos(q.lat * r) * Math.sin((q.lon - p.lon) * r / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(a)); };
+// técnico livre: expediente aberto, fora de refeição, sem ronda ativa e sem O.S. aberta; primeiro retoma a O.S. pausada mais antiga, depois pega a mais antiga do backlog
+export async function despachoAuto(db: Db, agora: number, nomes: Map<string, string>) {
+  const out: string[] = [];
+  if (!db.backlog || !db.abertasTec || !db.recursos || !db.atribuir || !db.aoVivo) return out;
+  if (db.despachoCfg && !(await db.despachoCfg())) return out;
+  const vivo = (await db.aoVivo()).filter((v: any) => { const d = v.dados || {}; return d.expediente && !d.ativo && !d.refeicao && agora - (+d.ts || +v.ts || 0) < 15 * MIN; });
+  if (!vivo.length) return out;
+  const abertas = await db.abertasTec(); const fiscais = db.fiscais ? await db.fiscais() : new Set<string>();
+  const ocupado = new Set<string>(); const pausadas = new Map<string, any[]>();
+  for (const a of abertas) {
+    if (a.status === "pausada") { if (a.tecnico_uid) (pausadas.get(a.tecnico_uid) || pausadas.set(a.tecnico_uid, []).get(a.tecnico_uid)!).push(a); continue; }
+    if (a.tecnico_uid) ocupado.add(a.tecnico_uid); (a.apoio_uids || []).forEach((u: string) => ocupado.add(u));
+  }
+  const recs = new Map((await db.recursos()).map((r: any) => [r.uid, r]));
+  const livres = vivo.filter((v: any) => !ocupado.has(v.uid) && !fiscais.has(v.uid));
+  const restantes: any[] = [];
+  for (const v of livres) {
+    const p = (pausadas.get(v.uid) || []).sort((x, y) => +x.criado - +y.criado)[0];
+    if (p && db.retomar) { if (await db.retomar(p, agora)) out.push(`retomar ${p.id} → ${v.uid}`); continue; }
+    restantes.push(v);
+  }
+  if (!restantes.length) return out;
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date(agora));
+  const fila = (await db.backlog()).filter((a: any) => a.tipo !== "emergencial" && !((a.dados || {}).agendaDia && (a.dados || {}).agendaDia > hoje)).sort((x: any, y: any) => +x.criado - +y.criado);
+  const usados = new Set<string>();
+  for (const a of fila) {
+    const cand = restantes.filter((v: any) => !usados.has(v.uid) && combina(a, recs.get(v.uid)));
+    if (!cand.length) continue;
+    const alvo = { lat: a.lat ?? (a.dados || {}).lat, lon: a.lon ?? (a.dados || {}).lon };
+    cand.sort((x: any, y: any) => distM(x.dados, alvo) - distM(y.dados, alvo));
+    const t = cand[0]; const nome = nomes.get(t.uid) || (t.dados || {}).nome || "Técnico"; const rec = recs.get(t.uid) || {};
+    const nota = `Despacho automático: técnico livre no ${(a.dados || {}).mini && rec.regiao ? "mini cluster" : "cluster"} da O.S.`;
+    if (await db.atribuir(a, t.uid, nome, agora, nota)) { usados.add(t.uid); out.push(`auto ${a.id} → ${t.uid}`); }
+    if (usados.size >= restantes.length) break;
+  }
+  return out;
+}
 
 export function relogio(agora: number) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23" }).formatToParts(new Date(agora)).map((x) => [x.type, x.value]));
@@ -69,15 +127,15 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
   // 1) atividades aguardando o técnico iniciar o deslocamento
   for (const a of pend) {
     const k = "atv:" + a.id; if (!pode(k, INTERVALO.atv)) continue;
-    const d = a.dados || {}; const em = a.tipo === "emergencial"; const impl = a.tipo === "implantacao";
-    const titulo = `${em ? "🚨 EMERGENCIAL" : impl ? "Nova implantação" : "Nova preventiva"} · ${a.ticket || ""}${a.log >= 2 ? ` · LOG ${a.log}` : ""}`;
-    const corpo = [d.ocorrencia, d.designacao, a.endereco || d.refLocal, "Toque para abrir e confirmar o recebimento."].filter(Boolean).join(" · ");
+    const d = a.dados || {}; const em = a.tipo === "emergencial"; const impl = a.tipo === "implantacao"; const cnj = a.tipo === "conjunta";
+    const titulo = `${em ? "🚨 EMERGENCIAL" : impl ? "Nova implantação" : cnj ? "Nova conjunta de site" : "Nova preventiva"} · ${a.ticket || ""}${a.log >= 2 ? ` · LOG ${a.log}` : ""}`;
+    const corpo = [d.ocorrencia, d.designacao, d.siteSigla ? "Site " + d.siteSigla : "", a.endereco || d.refLocal, "Toque para abrir e confirmar o recebimento."].filter(Boolean).join(" · ");
     const n = await envia(a.tecnico_uid, { titulo, corpo, tag: "atv-" + a.id, url: "./" });
     await marca(k); out.push(`atv ${a.id} → ${n}`);
   }
   for (const { a, uid } of apo) {
     const k = `apo:${a.id}:${uid}`; if (!pode(k, INTERVALO.atv)) continue; const d = a.dados || {};
-    const titulo = `🤝 APOIO · ${a.tipo === "emergencial" ? "emergencial" : a.tipo === "implantacao" ? "implantação" : "preventiva"} · ${a.ticket || ""}`;
+    const titulo = `🤝 APOIO · ${a.tipo === "emergencial" ? "emergencial" : a.tipo === "implantacao" ? "implantação" : a.tipo === "conjunta" ? "conjunta de site" : "preventiva"} · ${a.ticket || ""}`;
     const corpo = [d.ocorrencia, a.endereco || d.refLocal, a.tecnico_nome ? "Principal: " + a.tecnico_nome : "", "Toque para abrir e confirmar o recebimento."].filter(Boolean).join(" · ");
     const n = await envia(uid, { titulo, corpo, tag: "apo-" + a.id, url: "./" }); await marca(k); out.push(`apo ${a.id} ${uid} → ${n}`);
   }
@@ -158,6 +216,8 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
       await db.logGravar(k, agora); out.push(`upd ${a.id} → ${n}`);
     }
   }
+  // 6) despacho automático do backlog para técnico livre (só dentro da jornada)
+  if (dentro) { try { const nomes = new Map((await db.tecnicos()).map((t: any) => [t.uid, (t.dados || {}).nome || "Técnico"])); out.push(...await despachoAuto(db, agora, nomes)); } catch (e) { console.error("despacho", e); } }
   // 3) aviso 30 min antes do início do plantão
   for (const p of pls) {
     if (p.tipo !== 'plantao' || !subs.has(p.uid) || p.inicio <= agora || p.inicio - agora > 30 * MIN || log.has('pla:' + p.id)) continue;
@@ -181,6 +241,21 @@ function dbSupabase(sb: any): Db {
     async comAssinatura() { const { data, error } = await sb.from("push_subs").select("uid").eq("org", ORG); if (error) throw error; return new Set((data || []).map((r: any) => r.uid)); },
     async logLer(chaves: string[]) { const m = new Map<string, number>(); if (!chaves.length) return m; for (let i = 0; i < chaves.length; i += 200) { const { data } = await sb.from("push_log").select("chave,ts").in("chave", chaves.slice(i, i + 200)); (data || []).forEach((r: any) => m.set(r.chave, +r.ts)); } return m; },
     async logGravar(chave: string, ts: number) { await sb.from("push_log").upsert({ chave, ts }); },
+    async despachoCfg() { const { data } = await sb.from("config").select("dados").eq("org", ORG).maybeSingle(); return !(data && data.dados && data.dados.despachoAuto === false); },
+    async backlog() { const { data, error } = await sb.from("atividades").select("id,tipo,ticket,criado,lat,lon,status,dados").eq("org", ORG).eq("status", "pendente").is("tecnico_uid", null).neq("tipo", "emergencial").order("criado").limit(200); if (error) throw error; return data || []; },
+    async abertasTec() { const { data, error } = await sb.from("atividades").select("id,tipo,ticket,criado,status,tecnico_uid,apoio_uids,dados").eq("org", ORG).in("status", ["pendente", "recebida", "em_deslocamento", "no_local", "pausada"]); if (error) throw error; return data || []; },
+    async recursos() { const { data } = await sb.from("recursos").select("*").eq("org", ORG); return data || []; },
+    async fiscais() { const { data } = await sb.from("cadastros").select("uid,funcao,ativo").eq("org", ORG); return new Set((data || []).filter((c: any) => c.uid && (c.funcao === "fiscal" || c.ativo === false)).map((c: any) => c.uid)); },
+    async atribuir(a: any, uid: string, nome: string, agora: number, nota: string) {
+      const d = a.dados || {}; const atu = [...(d.atualizacoes || []), { ts: agora, sit: "auto", txt: nota, por: "Sistema" }].slice(-60);
+      const { data, error } = await sb.from("atividades").update({ tecnico_uid: uid, tecnico_nome: nome, atualizado: agora, dados: { ...d, tecnicoUid: uid, tecnicoNome: nome, autoDespachoEm: agora, atualizado: agora, atualizacoes: atu } }).eq("id", a.id).is("tecnico_uid", null).eq("status", "pendente").select("id");
+      if (error) throw error; return !!(data && data.length);
+    },
+    async retomar(a: any, agora: number) {
+      const d = a.dados || {}; const atu = [...(d.atualizacoes || []), { ts: agora, sit: "retomar", txt: "Técnico livre: O.S. pausada mais antiga reenviada para ele concluir.", por: "Sistema" }].slice(-60);
+      const { data, error } = await sb.from("atividades").update({ status: "pendente", atualizado: agora, dados: { ...d, status: "pendente", vistaEm: null, retomarEm: agora, atualizado: agora, atualizacoes: atu } }).eq("id", a.id).eq("status", "pausada").select("id");
+      if (error) throw error; return !!(data && data.length);
+    },
     async plantoes(de: number, ate: number) { const { data, error } = await sb.from("plantoes").select("id,uid,tipo,inicio,fim,obs").eq("org", ORG).gte("fim", de).lte("inicio", ate); if (error) throw error; return (data || []).map((p: any) => ({ ...p, inicio: +p.inicio, fim: +p.fim })); },
   };
 }

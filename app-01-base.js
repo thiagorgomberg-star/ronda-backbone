@@ -13,7 +13,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const pad2 = n => String(n).padStart(2, '0');
 const fData = ts => { const d = new Date(ts); return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`; };
-const fHora = ts => { const d = new Date(ts); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const fHora = ts => { const d = new Date(ts); if (ts == null || ts === true || isNaN(d)) return '—'; return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
 const fHoraS = ts => { const d = new Date(ts); return `${fHora(ts)}:${pad2(d.getSeconds())}`; };
 const fDH = ts => `${fData(ts)} ${fHora(ts)}`;
 const fDur = ms => { if (!(ms > 0)) return '0 min'; const m = Math.round(ms / 60000); const h = Math.floor(m / 60); return h ? `${h}h ${pad2(m % 60)}min` : `${m} min`; };
@@ -85,18 +85,22 @@ const STEPS_VIST = [['vist', 'Registro'], ['fotos', 'Evidências'], ['final', 'F
 const STEPS_VIST_CAIXA = [['vist', 'Caixa'], ['cabos', 'Cabos'], ['fusoes', 'Fusões e mapa'], ['fotos', 'Evidências'], ['final', 'Finalizar']];
 // corretiva da Claro: sem dados de cabo nem rota do cabo
 const STEPS_CORR_CLARO = STEPS_CORR.filter(([k]) => k !== 'cabos');
-const ST = () => S.insp && S.insp.tipo === 'corretiva' ? (claroCorr(S.insp) ? STEPS_CORR_CLARO : STEPS_CORR) : isImpl(S.insp) ? STEPS_IMPL(S.insp) : isVist(S.insp) ? (S.insp.vist && S.insp.vist.tipo === 'caixa' ? STEPS_VIST_CAIXA : STEPS_VIST) : STEPS_PREV;
+const STEPS_SITE = [['site', 'Check-in e site'], ['sfib', 'Fibras'], ['smapa', 'OTDR no mapa'], ['fotos', 'Fotos'], ['final', 'Finalizar']];
+const ST = () => isSite(S.insp) ? STEPS_SITE : S.insp && S.insp.tipo === 'corretiva' ? (claroCorr(S.insp) ? STEPS_CORR_CLARO : STEPS_CORR) : isImpl(S.insp) ? STEPS_IMPL(S.insp) : isVist(S.insp) ? (S.insp.vist && S.insp.vist.tipo === 'caixa' ? STEPS_VIST_CAIXA : STEPS_VIST) : STEPS_PREV;
 const OCORR = ['Rompimento de cabo','Atenuação / sinal degradado','Vandalismo / furto','Queimada','Poste abalroado ou caído','Obra de terceiros','Caixa de emenda danificada','Outro'];
 const CATS_CORR = ['Antes (rompimento)','Local / rede','Sobra técnica','Caixa de emenda','Bandeja / fusões','Cabo lançado','Depois (normalizado)','Identificação (TAG)','Outra'];
 const CATS_CORR_OBRIG = ['Antes (rompimento)','Local / rede','Depois (normalizado)'];
 const MATERIAIS = [['ceo','Caixa de emenda óptica (CEO)','un'],['bandeja','Bandeja de emenda','un'],['tubete','Protetor de emenda (tubete)','un'],['cabo','Cabo óptico','m'],['alca','Alça preformada','un'],['bap','Braçadeira BAP','un'],['suporteVT','Suporte de reserva técnica (cruzeta)','un'],['fitaInox','Fita de aço inox','m'],['fecho','Fecho para fita de aço','un'],['cordoalha','Cordoalha','m'],['fioEspinar','Fio de espinar','m'],['abracNylon','Abraçadeira de nylon','un'],['plaqueta','Plaqueta de identificação','un'],['fitaIsol','Fita isolante / autofusão','un'],['limpeza','Kit de limpeza (álcool isopropílico)','un']];
 const CATS_CAIXA = ['Caixa fechada', 'Caixa aberta', 'Bandeja', 'Acomodação das fibras', 'Mapa de fusão (existente)', 'DGO / bastidor', 'Identificação (TAG)', 'Poste / CV', 'Irregularidade', 'Outra'];
-const catsOf = i => i && i.tipo === 'corretiva' ? CATS_CORR : i && i.tipo === 'implantacao' ? CATS_IMPL : i && i.tipo === 'vistoria' ? (i.vist && i.vist.tipo === 'caixa' ? CATS_CAIXA : CATS_VIST) : CATS;
-const obrigOf = i => i && i.tipo === 'corretiva' ? CATS_CORR_OBRIG : i && i.tipo === 'implantacao' ? ['Antes', 'Depois'] : i && i.tipo === 'vistoria' ? [] : CATS_OBRIG;
+const catsOf = i => isSite(i) ? CATS_SITE : i && i.tipo === 'corretiva' ? CATS_CORR : i && i.tipo === 'implantacao' ? CATS_IMPL : i && i.tipo === 'vistoria' ? (i.vist && i.vist.tipo === 'caixa' ? CATS_CAIXA : CATS_VIST) : CATS;
+const obrigOf = i => isSite(i) ? CATS_SITE_OBRIG : i && i.tipo === 'corretiva' ? CATS_CORR_OBRIG : i && i.tipo === 'implantacao' ? ['Antes', 'Depois'] : i && i.tipo === 'vistoria' ? [] : CATS_OBRIG;
 const isCorr = x => !!(x && x.tipo === 'corretiva');
 const isImpl = x => !!(x && x.tipo === 'implantacao');
 const isVist = x => !!(x && x.tipo === 'vistoria');
-const TIPOLB = { preventiva: 'Ronda preventiva', corretiva: 'Corretiva', implantacao: 'Implantação', vistoria: 'Vistoria de rota' };
+const isSite = x => !!(x && x.tipo === 'site');
+// tickets do parceiro (até 2) da preventiva e da conjunta; o automático é o ticket interno
+const tkParcTxt = x => ((x && x.tkParc) || []).map(t => String(t || '').trim()).filter(Boolean).join(' / ');
+const TIPOLB = { preventiva: 'Ronda preventiva', corretiva: 'Corretiva', implantacao: 'Implantação', vistoria: 'Vistoria de rota', site: 'Conjunta de site' };
 const tipoLb = x => TIPOLB[(x && x.tipo) || 'preventiva'] || 'Ronda preventiva';
 const IMPL_SERV = { roteamento: 'Roteamento de fibras', ativacao: 'Ativação de site', dgo: 'Montagem de DGO', fechamento: 'Fechamento de caixa' };
 const IMPL_USA = { roteamento: { caixa: 1, cabos: 1, fusoes: 1 }, ativacao: {}, dgo: { fusoes: 1 }, fechamento: { caixa: 1, cabos: 1, fusoes: 1 } };
@@ -109,6 +113,9 @@ const IMPL_CHECK = {
 };
 const VIST_TIPOS = { caixa: 'Mapeamento de caixa de emenda', chaves: 'Retirada de chaves', acomp: 'Acompanhamento de atividade', rota: 'Inspeção da rota', outro: 'Outro registro' };
 const CATS_IMPL = ['Antes', 'Caixa de emenda', 'Bandeja / fusões', 'DGO', 'Site / equipamento', 'Etiquetas / identificação', 'Medição (OTDR / power meter)', 'Depois', 'Outra'];
+// conjunta de site: fotos obrigatórias (todas menos Irregularidade e Outra)
+const CATS_SITE = ['Porta do site', 'Estado de conservação do site', 'DGO', 'Power meter TX', 'Power meter RX', 'OTDR TX', 'OTDR RX', 'Irregularidade', 'Outra'];
+const CATS_SITE_OBRIG = CATS_SITE.slice(0, 7);
 const CATS_VIST = ['Retirada de chaves', 'Atividade em andamento', 'Equipe / EPI', 'Rede / cabo', 'Caixa / site', 'Irregularidade', 'Outra'];
 const S = { view: 'home', perfil: { id: 'perfil', nome: '', matricula: '', placa: '', prefixo: 'CE-BKB' }, ronda: null, insp: null, step: 0,
   rondaView: null, gps: { status: 'off', last: null, msg: 'GPS desligado' }, watchId: null, wake: null, inspCache: new Map(), map: null, mapLayers: null, logoData: null, atvs: new Map(), exp: null, ciente: new Set(), atvPend: null };
@@ -155,6 +162,13 @@ const Nativo = {
   async compartilha(files, texto) { const F = this.p('Filesystem'), Sh = this.p('Share'); if (!F || !Sh) return false; try { const uris = []; for (const f of files) uris.push(await this.arquivo(f)); await Sh.share({ title: files[0].name, text: texto || undefined, files: uris, dialogTitle: 'Salvar ou enviar' }); } catch (e) { if (!/cancel/i.test(String(e && e.message))) toast('Não foi possível abrir o arquivo: ' + (e && e.message || e), 6000); } return true; }
 };
 if (NATIVO) { document.documentElement.classList.add('nativo'); setInterval(() => { try { Nativo.fundo(); } catch (e) {} }, 60000); }
+// senha fraca ou vazada (Have I Been Pwned: só os 5 primeiros caracteres do hash SHA-1 saem do aparelho)
+async function senhaVazada(t) {
+  t = String(t || ''); if (/^(.)\1+$/.test(t) || ['123456', '1234567', '12345678', '123456789', '654321', '111111', '000000', '123123', 'abc123', 'senha123', 'multivale', 'claro123', 'qwerty'].includes(t.toLowerCase())) return true;
+  try { const h = [...new Uint8Array(await crypto.subtle.digest('SHA-1', new TextEncoder().encode(t)))].map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 3000); const r = await fetch('https://api.pwnedpasswords.com/range/' + h.slice(0, 5), { headers: { 'Add-Padding': 'true' }, signal: ctl.signal }); clearTimeout(tm);
+    if (!r.ok) return false; return (await r.text()).split('\n').some(l => { const [s, n] = l.trim().split(':'); return s === h.slice(5) && +n > 0; }); } catch (e) { return false; }
+}
 /* ---------- agilidade na rua: ditado por voz, respostas prontas e aviso de chegada ---------- */
 const Voz = {
   rec: null, el: null,
@@ -453,11 +467,11 @@ function bindRegiao(cSel, rSel, claSel, aoMudar) {
   rSel.addEventListener('change', () => { if (rSel.value && rSel.value !== 'todas') cSel.value = MINI[rSel.value][1]; muda(); });
   claSel && claSel.addEventListener('change', () => { if (claSel.value === 'fiscal' && cSel.value && !rSel.value) { rSel.value = 'todas'; muda(); } });
 }
-const SERVICOS = { claro_int: 'Corretiva Claro interior', bb_multivale: 'Corretiva backbone Multivale', bb_master: 'Corretiva backbone Master', vistoria: 'Vistoria de rede', preventiva: 'Preventiva (ativar rota)', implantacao: 'Implantação' };
+const SERVICOS = { claro_int: 'Corretiva Claro interior', bb_multivale: 'Corretiva backbone Multivale', bb_master: 'Corretiva backbone Master', vistoria: 'Vistoria de rede', preventiva: 'Preventiva (ativar rota)', conjunta: 'Conjunta de site (parceiro)', implantacao: 'Implantação' };
 // perfis antigos: "backbone próprio" vira Multivale e "backbone de parceiros" vira Master
 const SERV_ANTIGO = { bb_proprio: 'bb_multivale', bb_parceiro: 'bb_master' };
-function meusServ() { const l = S.perfil.servicos; return Array.isArray(l) && l.length ? [...new Set(l.map(k => SERV_ANTIGO[k] || k))].filter(k => SERVICOS[k]) : Object.keys(SERVICOS); }
-function modosPermitidos() { if (S.perfil.funcao === 'fiscal') return ['vistoria']; const s = meusServ(); const m = []; if (s.includes('preventiva')) m.push('preventiva'); if (s.some(x => x === 'bb_multivale' || x === 'bb_master' || x === 'claro_int')) m.push('corretiva'); if (s.includes('implantacao')) m.push('implantacao'); if (s.includes('vistoria')) m.push('vistoria'); return m.length ? m : ['corretiva']; }
+function meusServ() { const l = S.recurso && S.recurso.servicos; return Array.isArray(l) && l.length ? [...new Set(l.map(k => SERV_ANTIGO[k] || k))].filter(k => SERVICOS[k]) : Object.keys(SERVICOS); }
+function modosPermitidos() { if (S.perfil.funcao === 'fiscal') return ['vistoria']; const s = meusServ(); const m = []; if (s.includes('preventiva')) m.push('preventiva'); if (s.includes('conjunta') || s.includes('preventiva')) m.push('conjunta'); if (s.some(x => x === 'bb_multivale' || x === 'bb_master' || x === 'claro_int')) m.push('corretiva'); if (s.includes('implantacao')) m.push('implantacao'); if (s.includes('vistoria')) m.push('vistoria'); return m.length ? m : ['corretiva']; }
 // na corretiva: de quem é o backbone (Multivale = próprio · Master e Claro interior = parceiro)
 const CORR_OPC = { multivale: ['Backbone Multivale', 'proprio', ''], master: ['Backbone Master', 'parceiro', 'Master'], claro: ['Claro interior', 'parceiro', 'Claro'] };
 function corrOpcoes() { const s = meusServ(); const o = []; if (s.includes('bb_multivale')) o.push('multivale'); if (s.includes('bb_master')) o.push('master'); if (s.includes('claro_int')) o.push('claro'); return o.length ? o : ['multivale', 'master', 'claro']; }
@@ -479,14 +493,11 @@ function donoHtml(prefix, dono, parc) {
 }
 function lembraParceiro(p) { p = String(p || '').trim(); if (!p) return; const l = S.perfil.parceiros || []; if (!l.includes(p)) { S.perfil.parceiros = [...l, p].slice(-10); DB.put('meta', S.perfil); } }
 const RAIO_CASA = 500;
-function casaInfo() { const c = S.perfil.casa; return c && c.lat != null ? `Residência marcada no mapa (${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}). O expediente e a rota só podem começar a mais de ${RAIO_CASA} m dela.` : `Marque o local da residência. O expediente e a rota só podem começar a mais de ${RAIO_CASA} m dela.`; }
+function casaInfo() { const c = S.perfil.casa; return c && c.lat != null ? `Residência marcada no mapa (${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}). Serve só de referência no relatório de jornada (distância de casa no início do expediente).` : 'Opcional. Se marcar, o relatório de jornada mostra a que distância de casa o expediente começou.'; }
 async function checaCasa() {
-  const c = S.perfil.casa; if (!c || c.lat == null) { toast('Cadastre o local da sua residência no perfil antes de iniciar.', 6000); go('perfil'); return false; }
-  gpsStart(); toast('Conferindo sua localização…', 4000);
-  const loc = await posAtual(20000);
-  if (!loc) { toast('Sem sinal de GPS. Vá para um local aberto e tente de novo.', 6000); return false; }
-  const d = hav(loc, c); S.distCasa = Math.round(d);
-  if (d < RAIO_CASA) { toast(`Você está a ${Math.round(d)} m da sua residência. O expediente e a rota só podem começar a mais de ${RAIO_CASA} m de casa.`, 9000); return false; }
+  // sem exigência de endereço nem de distância de casa: só registra a distância, se houver casa marcada e GPS (não bloqueia)
+  S.distCasa = null; const c = S.perfil.casa;
+  if (c && c.lat != null) { gpsStart(); posAtual(8000).then(loc => { if (loc) { S.distCasa = Math.round(hav(loc, c)); if (S.exp && S.exp.distCasa == null) { S.exp.distCasa = S.distCasa; salvaExp().catch(() => {}); } } }).catch(() => {}); }
   return true;
 }
 function viewEntrar() {
@@ -529,13 +540,14 @@ function afterEntrar() {
     vai($('#enAtivar'), async () => { const d = await Nuvem.ativarConvite(c, s1); try { localStorage.removeItem('rb_convite'); } catch (e) {} toast(`Senha criada. Seu login é a matrícula${d.login && !d.login.startsWith('m') ? ' (ou o código ' + c + ')' : ''}.`, 6000); }); });
 }
 /* ---------- Aparência: modo claro/escuro e tom de cor (fica salvo neste aparelho) ---------- */
-const TONS = { azul: ['Azul Multivale', '#0b5f99'], vermelho: ['Vermelho Claro', '#c4161c'], laranja: ['Laranja', '#b4470d'] };
-function temaAtual() { try { const t = JSON.parse(localStorage.getItem('rb_tema') || '{}'); if (t.tom === 'verde') t.tom = 'vermelho'; return t; } catch (e) { return {}; } }
-function aplicaTema(t) { const r = document.documentElement; if (t.modo) r.dataset.theme = t.modo; else delete r.dataset.theme; if (t.tom && t.tom !== 'azul') r.dataset.tom = t.tom; else delete r.dataset.tom; try { localStorage.setItem('rb_tema', JSON.stringify(t)); } catch (e) {} const m = document.querySelector('meta[name="theme-color"]'); if (m) setTimeout(() => { m.content = getComputedStyle(r).getPropertyValue('--hdr').trim() || '#312d2a'; }, 30); }
+// os 2 temas do field service da Claro (as cores de cada um estão no app.css)
+const TONS = { claro: ['Vermelho e azul', 'linear-gradient(135deg,#e3260e 50%,#0572ce 50%)'], claro2: ['Vermelho', '#da291c'] };
+function temaAtual() { try { const t = JSON.parse(localStorage.getItem('rb_tema') || '{}'); if (t.tom && !TONS[t.tom]) t.tom = t.tom === 'vermelho' || t.tom === 'verde' ? 'claro2' : 'claro'; return t; } catch (e) { return {}; } }
+function aplicaTema(t) { const r = document.documentElement; if (t.modo) r.dataset.theme = t.modo; else delete r.dataset.theme; if (t.tom && t.tom !== 'claro') r.dataset.tom = t.tom; else delete r.dataset.tom; try { localStorage.setItem('rb_tema', JSON.stringify(t)); } catch (e) {} const m = document.querySelector('meta[name="theme-color"]'); if (m) setTimeout(() => { m.content = getComputedStyle(r).getPropertyValue('--hdr').trim() || '#e3260e'; }, 30); }
 function aparenciaHtml() { const t = temaAtual();
   return `<section class="card" id="cardAparencia"><h2>Aparência</h2>
     <span class="lb">Modo</span><div class="seg" role="group" aria-label="Modo de cor">${[['', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(([k, l]) => `<button type="button" data-tmodo="${k}" aria-pressed="${(t.modo || '') === k}">${l}</button>`).join('')}</div>
-    <span class="lb">Tom</span><div class="seg" role="group" aria-label="Tom de cor">${Object.entries(TONS).map(([k, [l, c]]) => `<button type="button" data-ttom="${k}" aria-pressed="${(t.tom || 'azul') === k}"><span class="tom-sw" style="background:${c}"></span>${l}</button>`).join('')}</div>
+    <span class="lb">Tema (padrão Claro field service)</span><div class="seg" role="group" aria-label="Tema de cor">${Object.entries(TONS).map(([k, [l, c]]) => `<button type="button" data-ttom="${k}" aria-pressed="${(t.tom || 'claro') === k}"><span class="tom-sw" style="background:${c}"></span>${l}</button>`).join('')}</div>
     <p class="muted small" style="margin:0">Automático segue o celular (escuro à noite, se o aparelho estiver assim). Fica salvo neste aparelho.</p></section>`; }
 function bindAparencia(root = document) { $$('[data-tmodo]', root).forEach(b => b.onclick = () => { aplicaTema({ ...temaAtual(), modo: b.dataset.tmodo }); $$('[data-tmodo]', root).forEach(x => x.setAttribute('aria-pressed', x === b)); }); $$('[data-ttom]', root).forEach(b => b.onclick = () => { aplicaTema({ ...temaAtual(), tom: b.dataset.ttom }); $$('[data-ttom]', root).forEach(x => x.setAttribute('aria-pressed', x === b)); }); }
 function abrirAparencia() { const el = document.createElement('div'); el.className = 'modal'; el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:950;display:flex;align-items:center;justify-content:center;padding:12px';
@@ -551,9 +563,9 @@ function viewPerfil() {
     <div class="field"><label class="lb" for="pf_clu">Cluster</label><select id="pf_clu">${cluOpts(clusterDe(S.perfil.regiao, S.perfil.cluster))}</select></div>
     <div class="field"><label class="lb" for="pf_reg">Mini cluster que atendo</label><select id="pf_reg">${miniOpts(clusterDe(S.perfil.regiao, S.perfil.cluster), S.perfil.regiao || '')}</select></div>
     <div class="field"><label class="lb" for="pf_cla">Minha classe</label><select id="pf_cla" data-pf="classe"><option value="">Selecione…</option>${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}" ${S.perfil.classe === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-    <div class="field full"><span class="lb">Serviços que eu executo</span><div class="chips" role="group" aria-label="Serviços que eu executo" style="flex-wrap:wrap">${Object.entries(SERVICOS).map(([k, l]) => `<button type="button" data-serv="${k}" role="checkbox" aria-checked="${meusServ().includes(k)}">${l}</button>`).join('')}</div><span class="muted small">Só esses aparecem na tela inicial. O.S. enviadas pelo supervisor chegam sempre, de qualquer tipo.</span></div>
+    <div class="field full"><span class="lb">Serviços liberados para você</span><b style="font-weight:600">${meusServ().map(k => esc(SERVICOS[k])).join(' · ')}</b><span class="muted small">Definidos pelo supervisor na sua ficha. O.S. enviadas pelo supervisor chegam sempre, de qualquer tipo.</span></div>
     ${selAdd('pf_veic', 'veiculo', S.perfil.veiculoTxt || '', 'Veículo (placa e modelo)', 'data-pf="veiculoTxt"', true)}
-    <div class="field full"><label class="lb" for="pf_casa">Endereço da residência <span class="req">*</span></label><input type="text" id="pf_casa" value="${esc((S.perfil.casa || {}).endereco || '')}" placeholder="Rua, nº, bairro, cidade" autocomplete="street-address">
+    <div class="field full"><label class="lb" for="pf_casa">Endereço da residência (opcional)</label><input type="text" id="pf_casa" value="${esc((S.perfil.casa || {}).endereco || '')}" placeholder="Rua, nº, bairro, cidade" autocomplete="street-address">
       <div class="row" style="margin-top:6px"><button type="button" class="btn" id="bCasaGps">${ICON.pin}Estou em casa: usar o GPS</button><button type="button" class="btn" id="bCasaBusca">Localizar o endereço</button></div>
       <span class="muted small" id="casaInfo">${casaInfo()}</span></div></div>
     <details><summary class="small" style="cursor:pointer;min-height:40px;display:flex;align-items:center;color:var(--accent);font-weight:600">Mais opções (não obrigatório)</summary>
@@ -597,7 +609,6 @@ function afterPerfil() {
   $('#bCasaBusca').onclick = async () => { const q = (casa().endereco || '').trim(); if (!q) { toast('Digite o endereço primeiro.'); $('#pf_casa').focus(); return; } try { const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(q)}`, { headers: { 'Accept-Language': 'pt-BR' } }); const j = await r.json(); if (!j.length) { toast('Endereço não encontrado. Confira ou use o GPS estando em casa.', 6000); return; } marcou(+j[0].lat, +j[0].lon, 'endereco'); } catch (e) { toast('Sem internet para localizar o endereço.'); } };
   $('#bSalvaPerfil').onclick = async () => {
     if (!S.perfil.nome.trim() || !String(S.perfil.matricula || '').trim()) { toast('Preencha nome e matrícula.'); return; }
-    if (!S.perfil.casa || S.perfil.casa.lat == null) toast('Lembre de marcar o local da residência: sem ele o expediente não inicia.', 6000);
     S.perfil.nome = S.perfil.nome.trim(); await DB.put('meta', S.perfil); toast('Perfil salvo.'); go('home');
   };
 }

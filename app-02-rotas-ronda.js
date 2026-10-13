@@ -115,10 +115,10 @@ async function abrirRota(id) { S.rotaEdit = id ? { ...(await DB.get('rotas', id)
 /* ============================ ações da ronda ============================ */
 async function iniciarRonda() {
   if (!S.perfil.nome.trim() || !String(S.perfil.matricula || '').trim()) { toast('Crie seu perfil (nome e matrícula) antes de iniciar.'); go('perfil'); return; }
-  const conj = !!S.conjunta && !S.atvPend && (S.modo === 'preventiva' || S.modo === 'vistoria');
+  const conj = !!S.conjunta && !S.atvPend && (S.modo === 'preventiva' || S.modo === 'vistoria'); const site = S.modo === 'conjunta';
   if (!conj && !S.perfil.ultDono) { toast('Informe se o backbone é próprio ou de parceiro.'); return; }
   if (!S.perfil.veiculoTxt && !S.perfil.placa) { toast('Escolha o veículo.'); $('#st_veic') && $('#st_veic').focus(); return; }
-  if (S.atvPend && kmNum(S.odoIni) == null) { toast('Informe o odômetro inicial do veículo.'); $('#odoIni') && $('#odoIni').focus(); return; }
+  if (S.atvPend && ODO_POR === 'os' && kmNum(S.odoIni) == null) { toast('Informe o odômetro inicial do veículo.'); $('#odoIni') && $('#odoIni').focus(); return; }
   if (!conj && S.perfil.ultDono === 'parceiro' && !String(S.perfil.ultParc || '').trim()) { toast('Informe o nome do parceiro.'); $('#rd_parc') && $('#rd_parc').focus(); return; }
   if (S.perfil.ultDono === 'parceiro') lembraParceiro(S.perfil.ultParc);
   if (S.modo === 'corretiva' && S.cr && S.cr.refLocal) lembraLocal(S.cr.refLocal);
@@ -132,13 +132,16 @@ async function iniciarRonda() {
   const distCasa = S.distCasa ?? null;
   const cr = S.modo === 'corretiva' ? { ...(S.cr || {}) } : null; const ac = new Date();
   if (cr && !String(cr.ticket || '').trim()) { cr.ticket = await proximoTicket(); cr.ticketAuto = true; }
+  // preventiva e conjunta: usam o ticket da O.S. recebida; sem ele, o app gera um automático (PREV-… / CONJ-…)
+  const atvA = S.atvPend ? S.atvs.get(S.atvPend) : null; let tkPv = '', tkPvAuto = false;
+  if (!cr && (site || S.modo === 'preventiva')) { tkPv = String((atvA && atvA.ticket) || '').trim().toUpperCase(); if (!tkPv) { tkPv = await proximoTicket(site ? 'CONJ' : 'PREV', tkRota(S.perfil.rotaId ? rotaById(S.perfil.rotaId) : null)); tkPvAuto = true; } }
   const im = S.modo === 'implantacao' ? { ...(S.im || {}) } : null, vi = S.modo === 'vistoria' ? { ...(S.vi || {}) } : null;
-  S.ronda = { id: uid(), tipo: im ? 'implantacao' : vi ? 'vistoria' : cr ? 'corretiva' : 'preventiva', ...(im ? { designacao: String(im.designacao || '').trim().toUpperCase(), servico: im.servico || 'roteamento', projeto: im.projeto || '', siteA: im.siteA || '', siteB: im.siteB || '' } : {}), ...(vi ? { objetivo: vi.objetivo || 'Vistoria de rota', diario: [] } : {}), ticket: cr ? cr.ticket.trim().toUpperCase() : '', ticketAuto: !!(cr && cr.ticketAuto), cliente: (cr && cr.cliente) || '', refLocal: cr ? (cr.refLocal || '').trim() : '', refKm: cr ? cr.refKm || '' : '', refSentido: cr ? cr.refSentido || '' : '', ocorrencia: cr ? cr.ocorrencia || '' : '', descricao: cr ? cr.descricao || '' : '', acionamento: cr ? `${pad2(ac.getHours())}:${pad2(ac.getMinutes())}` : '', rotaId: S.perfil.rotaId || null, dono: conj ? 'conjunta' : S.perfil.ultDono, parceiro: !conj && S.perfil.ultDono === 'parceiro' ? S.perfil.ultParc.trim() : '', tecnico: S.perfil.nome.trim(), matricula: S.perfil.matricula, placa: S.perfil.placa, veiculo: veicPerfil(), odoIni: S.atvPend && kmNum(S.odoIni) != null ? String(kmNum(S.odoIni)) : '', odoFotoIni: S.atvPend ? S.odoFotoIni || null : null, inicio: now, fim: null, pontos: loc ? [loc] : [], eventos: [{ tipo: 'inicio', ts: now, lat: loc && loc.lat, lon: loc && loc.lon }] };
+  S.ronda = { id: uid(), tipo: im ? 'implantacao' : vi ? 'vistoria' : cr ? 'corretiva' : site ? 'site' : 'preventiva', ...(im ? { designacao: String(im.designacao || '').trim().toUpperCase(), servico: im.servico || 'roteamento', projeto: im.projeto || '', siteA: im.siteA || '', siteB: im.siteB || '' } : {}), ...(vi ? { objetivo: vi.objetivo || 'Vistoria de rota', diario: [] } : {}), ticket: cr ? cr.ticket.trim().toUpperCase() : tkPv, ticketAuto: !!(cr && cr.ticketAuto) || tkPvAuto, ...(!cr && (site || S.modo === 'preventiva') ? { tkParc: [0, 1].map(k => String(((S.tkParc || (atvA && atvA.tkParc) || [])[k]) || '').trim().toUpperCase()) } : {}), cliente: (cr && cr.cliente) || '', refLocal: cr ? (cr.refLocal || '').trim() : '', refKm: cr ? cr.refKm || '' : '', refSentido: cr ? cr.refSentido || '' : '', ocorrencia: cr ? cr.ocorrencia || '' : '', descricao: cr ? cr.descricao || '' : '', acionamento: cr ? `${pad2(ac.getHours())}:${pad2(ac.getMinutes())}` : '', rotaId: S.perfil.rotaId || null, dono: conj ? 'conjunta' : S.perfil.ultDono, parceiro: !conj && S.perfil.ultDono === 'parceiro' ? S.perfil.ultParc.trim() : '', tecnico: S.perfil.nome.trim(), matricula: S.perfil.matricula, placa: S.perfil.placa, veiculo: veicPerfil(), odoIni: S.atvPend && kmNum(S.odoIni) != null ? String(kmNum(S.odoIni)) : '', odoFotoIni: S.atvPend ? S.odoFotoIni || null : null, inicio: now, fim: null, pontos: loc ? [loc] : [], eventos: [{ tipo: 'inicio', ts: now, lat: loc && loc.lat, lon: loc && loc.lon }] };
   if (S.odoFotoIniData) { S.odoFotoIniData.rondaId = S.ronda.id; await DB.put('fotos', S.odoFotoIniData); S.odoFotoIniData = null; }
-  S.ronda.distCasa = distCasa; if (im) S.im = { servico: 'roteamento' };
+  S.ronda.distCasa = distCasa; if (im) S.im = { servico: 'roteamento' }; S.tkParc = null;
   await vinculaAtividade(S.ronda, now);
   await DB.put('rondas', S.ronda); await DB.put('meta', { id: 'ativa', rondaId: S.ronda.id }); Alarme.revisa();
-  S.cr = {}; S.odoIni = ''; S.odoFotoIni = null; Nuvem.aoVivo(true); toast(loc ? (isCorr(S.ronda) ? (S.ronda.ticketAuto ? `Corretiva ${S.ronda.ticket} iniciada (número automático).` : 'Corretiva iniciada. Deslocamento até o local sendo registrado.') : isImpl(S.ronda) ? 'Designação iniciada. Deslocamento sendo registrado.' : isVist(S.ronda) ? 'Vistoria iniciada. Deslocamento sendo registrado.' : 'Ronda iniciada. Deslocamento sendo registrado.') : 'Atividade iniciada. Aguardando sinal de GPS.');
+  S.cr = {}; S.odoIni = ''; S.odoFotoIni = null; Nuvem.aoVivo(true); toast(loc ? (isCorr(S.ronda) ? (S.ronda.ticketAuto ? `Corretiva ${S.ronda.ticket} iniciada (número automático).` : 'Corretiva iniciada. Deslocamento até o local sendo registrado.') : isImpl(S.ronda) ? 'Designação iniciada. Deslocamento sendo registrado.' : isVist(S.ronda) ? 'Vistoria iniciada. Deslocamento sendo registrado.' : isSite(S.ronda) ? `Conjunta ${S.ronda.ticket} iniciada. Deslocamento até o site sendo registrado.` : `Ronda ${S.ronda.ticket} iniciada. Deslocamento sendo registrado.`) : 'Atividade iniciada. Aguardando sinal de GPS.');
   render();
 }
 /* ---------- corretiva: sair do local / fechar a O.S. só com a liberação do gestor ---------- */
@@ -187,7 +190,7 @@ async function encerrarRonda() {
   if (!Lib.liberada(S.ronda)) { toast('A corretiva só encerra com a liberação do gestor. Peça a liberação.', 6000); const el = document.querySelector('[data-libpede]'); el && el.scrollIntoView({ block: 'center' }); return; }
   if (kmNum(S.ronda.odoIni) != null && kmNum(S.ronda.odoFim) == null) { toast('Informe o odômetro final do veículo antes de encerrar.'); $('#odoFim') && $('#odoFim').focus(); return; }
   if (kmNum(S.ronda.odoIni) != null && kmNum(S.ronda.odoFim) < kmNum(S.ronda.odoIni)) { toast('O odômetro final está menor que o inicial. Confira.'); $('#odoFim') && $('#odoFim').focus(); return; }
-  if (!confirm(isCorr(S.ronda) ? 'Encerrar a corretiva agora? O percurso para de ser registrado.' : 'Encerrar a ronda agora? O percurso para de ser registrado.')) return;
+  if (!confirm(isCorr(S.ronda) ? 'Encerrar a corretiva agora? O percurso para de ser registrado.' : isSite(S.ronda) ? 'Encerrar a conjunta agora? O percurso para de ser registrado.' : 'Encerrar a ronda agora? O percurso para de ser registrado.')) return;
   const loc = await posAtual(60000);
   if (loc && S.ronda.pontos.length && loc.ts > S.ronda.pontos[S.ronda.pontos.length - 1].ts) S.ronda.pontos.push(loc);
   S.ronda.fim = Date.now(); S.ronda.eventos.push({ tipo: 'fim', ts: S.ronda.fim, lat: loc && loc.lat, lon: loc && loc.lon });
@@ -212,7 +215,10 @@ function rotaAtual(i) { const id = (i && i.info && i.info.rotaId) || (S.ronda &&
 const baseTag = rt => [prefixo(), siglaSite(rt, 'A'), siglaSite(rt, 'B')].filter(Boolean).join('-');
 function montaTag(n, rt) { return `${baseTag(rt)}-${String(n).padStart(4, '0')}`; }
 function tagExemplo() { return montaTag(1, rotaAtual()); }
-async function proximoTicket() { const m = (await DB.get('meta', 'seqCorr')) || { id: 'seqCorr', n: 0 }; m.n++; await DB.put('meta', m); const d = new Date(); return `COR-${String(d.getFullYear()).slice(2)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${iniciais(S.perfil.nome)}-${String(m.n).padStart(3, '0')}`; }
+// trecho da rota para o ticket: siglas das pontas (ex.: PDAxTBT); sem siglas, o código da rota
+function tkRota(rt) { if (!rt) return ''; const a = siglaSite(rt, 'A'), b = siglaSite(rt, 'B'); const t = a && b ? a + 'x' + b : a || b || String(rt.codigo || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return t.slice(0, 14); }
+// ticket automático: PREFIXO-[ROTA/SITE-]AAMMDD-INICIAIS-NNN (COR corretiva, PREV preventiva, CONJ conjunta de site)
+async function proximoTicket(pref, meio) { pref = pref || 'COR'; const k = pref === 'COR' ? 'seqCorr' : 'seq' + pref; const m = (await DB.get('meta', k)) || { id: k, n: 0 }; m.n++; await DB.put('meta', m); const d = new Date(); return `${pref}-${meio ? meio + '-' : ''}${String(d.getFullYear()).slice(2)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${iniciais(S.perfil.nome)}-${String(m.n).padStart(3, '0')}`; }
 // próximo número do trecho: o maior já usado (na nuvem e neste aparelho) + 1
 async function proximaTag(i) { const rt = rotaAtual(i), base = baseTag(rt); const rx = new RegExp('^' + base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '-(\\d+)$', 'i'); let mx = 0; const ver = t => { const m = rx.exec(String(t || '').trim()); if (m) mx = Math.max(mx, +m[1]); };
   try { (await DB.all('inspecoes')).forEach(x => ver(x.info && x.info.tag)); } catch (e) {} S.inspCache.forEach(x => ver(x.info && x.info.tag));
@@ -221,15 +227,19 @@ async function proximaTag(i) { const rt = rotaAtual(i), base = baseTag(rt); cons
   m.bases[base] = mx + 1; await DB.put('meta', m); if (!online) toast('Sem conexão: a TAG saiu pela numeração deste aparelho. Confira se não repetiu quando tiver sinal.', 4500); return montaTag(mx + 1, rt); }
 async function geraTag(i) { i.info.tag = await proximaTag(i); i.info.tagAuto = true; const rt = rotaAtual(i); if (rt) { i.info.trecho = trechoTxt(rt); if (!i.info.rotaId) { i.info.rotaId = rt.id; i.info.rota = rotaLb(rt); } } return i.info.tag; }
 async function novaInsp() {
+  const site = !!(S.ronda && !S.ronda.fim && isSite(S.ronda));
   if (aprNecessaria()) { await carregaMeusTreinos(); abrirAPR(() => novaInsp()); return; }
-  toast(S.ronda && isCorr(S.ronda) ? 'Registrando chegada no ponto da corretiva…' : S.ronda && isVist(S.ronda) ? 'Abrindo novo registro…' : S.ronda && isImpl(S.ronda) ? 'Registrando chegada no ponto…' : 'Registrando chegada na caixa…', 2000);
+  toast(site ? 'Registrando chegada no site…' : S.ronda && isCorr(S.ronda) ? 'Registrando chegada no ponto da corretiva…' : S.ronda && isVist(S.ronda) ? 'Abrindo novo registro…' : S.ronda && isImpl(S.ronda) ? 'Registrando chegada no ponto…' : 'Registrando chegada na caixa…', 2000);
   const loc = await posAtual(45000);
   const i = novaInspecao(loc);
   if (S.ronda && !S.ronda.fim) { S.ronda.eventos.push({ tipo: 'chegada', ts: i.chegada, inspId: i.id, lat: loc && loc.lat, lon: loc && loc.lon, acc: loc && loc.acc }); if (loc && (!S.ronda.pontos.length || loc.ts > S.ronda.pontos[S.ronda.pontos.length-1].ts)) S.ronda.pontos.push(loc); saveRonda(true);  Nuvem.aoVivo(true); atvChegou(loc); }
   if (S.ronda && !S.ronda.fim && isCorr(S.ronda)) { i.tipo = 'corretiva'; i.corr = { cliente: S.ronda.cliente || '', ticket: S.ronda.ticket || '', ticketAuto: !!S.ronda.ticketAuto, ocorrencia: S.ronda.ocorrencia || '', acionamento: S.ronda.acionamento || '', problema: S.ronda.descricao || '', fibrasAfetadas: '', causa: '', servico: '', sobra: '', normalizacao: '', novaCaixa: false, pendente: false }; i.mat = {}; i.matExtra = []; }
   else if (S.ronda && !S.ronda.fim && isVist(S.ronda)) { i.tipo = 'vistoria'; i.vist = { tipo: 'acomp', descricao: '', equipe: '', responsavel: '', ticket: '', atividade: '', conformidade: '', chaveLocal: '', chaveId: '', chaveEntregou: '', chaveDevolvida: false }; }
+  else if (site) { i.tipo = 'site'; i.site = siteNovo(); if (S.ronda.siteSigla) i.site.sigla = S.ronda.siteSigla; if (S.ronda.siteNome) i.site.nome = S.ronda.siteNome; if (S.ronda.siteParceiro) i.site.parc.empresa = S.ronda.siteParceiro; }
   else { await geraTag(i); if (S.ronda && !S.ronda.fim && isImpl(S.ronda)) { i.tipo = 'implantacao'; i.impl = { servico: S.ronda.servico || 'roteamento', designacao: S.ronda.designacao || '', projeto: S.ronda.projeto || '', siteA: S.ronda.siteA || '', siteB: S.ronda.siteB || '', equipamento: '', porta: '', dgoModelo: '', dgoPosicao: '', check: {}, checkObs: {}, med: {} }; } }
   const rt = S.ronda && !S.ronda.fim && S.ronda.rotaId ? rotaById(S.ronda.rotaId) : null;
+  if (S.ronda && !S.ronda.fim && !isCorr(S.ronda) && S.ronda.ticket) i.ticketAtv = S.ronda.ticket;
+  if (S.ronda && !S.ronda.fim && Array.isArray(S.ronda.tkParc)) i.tkParc = [...S.ronda.tkParc];
   if (S.ronda && !S.ronda.fim) { if (S.ronda.wfc) i.wfc = S.ronda.wfc; if (S.ronda.wf2) i.wf2 = S.ronda.wf2; if (S.ronda.centro) i.centro = S.ronda.centro; if (S.ronda.projeto) i.projeto = S.ronda.projeto; if (S.ronda.atividadeId) i.centroAtv = true; if (S.ronda.rede) i.rede = S.ronda.rede; }
   if (S.ronda && !S.ronda.fim && S.ronda.apoio) { i.apoio = true; i.apoioDe = S.ronda.apoioDe || ''; } else if (S.ronda && !S.ronda.fim && (S.ronda.apoioNomes || []).length) i.info.apoio = S.ronda.apoioNomes.join(', '); marcaApoios(i);
   if (rt) { i.info.rotaId = rt.id; i.info.rota = rotaLb(rt); ['entrada', 's1', 's2'].forEach(k => { if (rt.cap) i.cabos[k].fibras = String(rt.cap); if (rt.marca) i.cabos[k].marca = rt.marca; }); if (CAPS.includes(+rt.cap)) { i.fo.total = +rt.cap; ensureRows(i); } }
@@ -262,7 +272,7 @@ function refTxt(i) {
 }
 const normLocal = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 const fDist = m => m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km`;
-function rotuloEvento(e) { return (isCorr(e) ? `Corretiva · Ticket ${e.corr.ticket || '—'}` : isImpl(e) ? `Implantação · ${IMPL_SERV[e.impl.servico] || ''} · ${e.impl.designacao || '—'}` : isVist(e) ? `Vistoria · ${VIST_TIPOS[e.vist.tipo] || ''}` : `Preventiva · Caixa ${e.info.tag || '—'}`) + (e._doEquipe ? ` · ${e._tecnico || 'outro técnico'}` : ''); }
+function rotuloEvento(e) { return (isSite(e) ? siteTitulo(e) : isCorr(e) ? `Corretiva · Ticket ${e.corr.ticket || '—'}` : isImpl(e) ? `Implantação · ${IMPL_SERV[e.impl.servico] || ''} · ${e.impl.designacao || '—'}` : isVist(e) ? `Vistoria · ${VIST_TIPOS[e.vist.tipo] || ''}` : `Preventiva · Caixa ${e.info.tag || '—'}`) + (e._doEquipe ? ` · ${e._tecnico || 'outro técnico'}` : ''); }
 function eventosProximos(i, todos) {
   const out = [];
   todos.forEach(e => {
@@ -325,11 +335,11 @@ window.addEventListener('online', () => { S.geoTry = 0; tentaGeo(); });
 async function concluirInsp() {
   const i = S.insp; if (!i) return; marcaApoios(i);
   if (isCorr(i) && S.ronda && S.ronda.id === i.rondaId && !Lib.liberada(S.ronda)) { const p = Lib.de(S.ronda); if (!p || p.status === 'recusado') { if (confirm('Para concluir e sair do local é preciso a liberação do gestor. Pedir agora?')) pedirLiberacao(S.ronda); } else toast('Aguardando a liberação do gestor para concluir.', 6000); return; }
-  if (isCorr(i)) { if (!String(i.corr.ticket || '').trim()) { i.corr.ticket = await proximoTicket(); i.corr.ticketAuto = true; toast('Ticket gerado automaticamente: ' + i.corr.ticket); } } else if (isVist(i)) { if (!String(i.vist.descricao || '').trim()) { toast('Escreva o registro da vistoria.'); S.step = 0; render(); return; } } else if (isImpl(i) && !usaImpl(i, 'caixa')) { if (!String(i.impl.designacao || '').trim()) { toast('Informe a designação.'); S.step = 0; render(); return; } } else if (!i.info.tag.trim()) { toast('Preencha a TAG da caixa.'); S.step = isImpl(i) ? 1 : 0; render(); return; }
+  if (isCorr(i)) { if (!String(i.corr.ticket || '').trim()) { i.corr.ticket = await proximoTicket(); i.corr.ticketAuto = true; toast('Ticket gerado automaticamente: ' + i.corr.ticket); } } else if (isVist(i)) { if (!String(i.vist.descricao || '').trim()) { toast('Escreva o registro da vistoria.'); S.step = 0; render(); return; } } else if (isImpl(i) && !usaImpl(i, 'caixa')) { if (!String(i.impl.designacao || '').trim()) { toast('Informe a designação.'); S.step = 0; render(); return; } } else if (isSite(i)) { const stp = k => Math.max(0, ST().findIndex(x => x[0] === k)); if (!i.site.checkin) { toast('Faça o check-in no site.'); S.step = 0; render(); return; } if ((i.site.fibras || []).some(f => (f.bobina && mNum(f.bobinaM) == null) || (f.ev || []).some(e => mNum(e.dist) == null))) { toast('Informe o tamanho da bobina e a distância de cada evento do OTDR.'); S.step = stp('sfib'); render(); return; } if (!String(i.site.sigla || '').trim()) { toast('Informe a sigla do site.'); S.step = 0; render(); return; } if (!String(i.site.parc.nome || '').trim()) { toast('Informe o técnico do parceiro que acompanhou.'); S.step = 0; render(); return; } if (!siteFibOk(i).length) { toast('Informe as fibras trabalhadas (origem x destino).'); S.step = stp('sfib'); render(); return; } if (siteFibSemPot(i).length) { toast('Escreva a potência TX e RX de todas as fibras.'); S.step = stp('sfib'); render(); return; } const ff = obrigOf(i).filter(c => !i.fotos.some(x => x.cat === c)); if (ff.length && !confirm('Faltam fotos de: ' + ff.join(', ') + '. Concluir assim mesmo?')) { S.step = stp('fotos'); render(); return; } } else if (!i.info.tag.trim()) { toast('Preencha a TAG da caixa.'); S.step = isImpl(i) ? 1 : 0; render(); return; }
   i.status = 'concluida'; i.saida = Date.now();
   const r = S.ronda && S.ronda.id === i.rondaId ? S.ronda : null;
   if (r && !r.eventos.some(e => e.tipo === 'saida' && e.inspId === i.id)) { r.eventos.push({ tipo: 'saida', ts: i.saida, inspId: i.id }); saveRonda(true);  Nuvem.aoVivo(true); }
-  saveInsp(true); baixaDaInsp(i); toast(isCorr(i) ? 'Atendimento concluído. Ao sair do local, toque em Encerrar corretiva.' : r ? 'Inspeção concluída. Percurso até a próxima caixa sendo registrado.' : 'Inspeção concluída.');
+  saveInsp(true); baixaDaInsp(i); toast(isCorr(i) ? 'Atendimento concluído. Ao sair do local, toque em Encerrar corretiva.' : isSite(i) ? 'Conjunta concluída. Fica pendente para o supervisor anexar as curvas do OTDR (TX e RX).' : r ? 'Inspeção concluída. Percurso até a próxima caixa sendo registrado.' : 'Inspeção concluída.');
   S.insp = null; go('home');
 }
 

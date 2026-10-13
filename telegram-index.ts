@@ -41,7 +41,7 @@ export function resumoOS(e: any, m: any = null) {
     if (!ehLanc(x)) return { c: x.c, d: x.d, u: x.u, q, v, t: 0, cont: true };
     const usa = Math.min(fr, q); fr -= usa; return { c: x.c, d: x.d, u: x.u, q, v, t: (q - usa) * v, qf: q - usa, franq: usa }; });
   const valor = itens.reduce((a: number, x: any) => a + x.t, 0);
-  const tipo = d.tipo === "corretiva" ? "Corretiva" : d.tipo === "implantacao" ? "Implantação" : d.tipo === "vistoria" ? "Vistoria" : "Preventiva";
+  const tipo = d.tipo === "corretiva" ? "Corretiva" : d.tipo === "implantacao" ? "Implantação" : d.tipo === "vistoria" ? "Vistoria" : d.tipo === "site" ? "Conjunta de site" : "Preventiva";
   const os = (d.corr && d.corr.ticket) || (d.impl && d.impl.designacao) || (d.info && d.info.tag) || d.id;
   const info = d.info || {};
   return { projeto: String(md.projetoNome || d.projetoNome || ""), projetoId: String((m && m.projeto) || d.projeto || ""), id: d.id, os, tipo, valor, itens, data: d.chegada || d.criado, tecnico: info.tecnico || d._tecnico || "", matricula: d._matricula || "", endereco: [info.endereco, info.bairro, info.cidade].filter(Boolean).join(", "), ocorrencia: (d.corr && d.corr.ocorrencia) || "", servico: (d.impl && d.impl.servico) || "", uid: d._uid, claro: so, centro: String(d.centro || ""), wfc: String(md.wfc || d.wfc || ""), wf2: String(md.wf2 || d.wf2 || "") };
@@ -148,7 +148,9 @@ async function handler(req: Request) {
   const token = env("TELEGRAM_BOT_TOKEN"); if (!token) return json({ erro: "Configure o segredo TELEGRAM_BOT_TOKEN" }, 500);
   const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
   const db = dbSupabase(sb), tg = tgReal(token);
-  const segredo = env("TELEGRAM_WEBHOOK_SECRET");
+  // o Telegram só aceita A-Z, a-z, 0-9, _ e - no secret_token: se o segredo cadastrado tiver outros caracteres, usa o hash dele
+  const segredoBruto = env("TELEGRAM_WEBHOOK_SECRET");
+  const segredo = /^[A-Za-z0-9_-]{1,256}$/.test(segredoBruto) ? segredoBruto : segredoBruto ? Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(segredoBruto)))).map((b) => b.toString(16).padStart(2, "0")).join("") : "";
   if (req.headers.get("x-telegram-bot-api-secret-token")) {
     if (!segredo || req.headers.get("x-telegram-bot-api-secret-token") !== segredo) return new Response("forbidden", { status: 403 });
     try { await tratarUpdate(db, tg, await req.json()); } catch (e) { console.error(e); }

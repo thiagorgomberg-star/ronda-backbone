@@ -301,7 +301,7 @@ const ESC_PADRAO = { 0: null, 1: { e: '08:00', s: '17:48' }, 2: { e: '08:00', s:
 // junta o que o gestor cadastrou (recursos) com o que o técnico informou no perfil
 function fichaTec(t) {
   const r = (S.recursos || new Map()).get(t.uid) || {};
-  const reg = r.regiao || t.regiao || ''; const clu = clusterDe(reg, r.regiao ? r.cluster : (t.cluster || r.cluster)); return { ...t, regiao: reg, mini: miniNome(reg, clu), cluster: clu, classe: r.classe || t.classe || '', telefone: r.telefone || t.fone || '', placa: r.placa || t.placa || '', escala: r.escala || null, temFicha: !!S.recursos && S.recursos.has(t.uid) };
+  const reg = r.regiao || t.regiao || ''; const clu = clusterDe(reg, r.regiao ? r.cluster : (t.cluster || r.cluster)); return { ...t, regiao: reg, mini: miniNome(reg, clu), cluster: clu, classe: r.classe || t.classe || '', telefone: r.telefone || t.fone || '', placa: r.placa || t.placa || '', escala: r.escala || null, servicos: Array.isArray(r.servicos) && r.servicos.length ? r.servicos : null, temFicha: !!S.recursos && S.recursos.has(t.uid) };
 }
 function turnoDia(f, dow) { const e = (f.escala || ESC_PADRAO)[dow]; return e && e.e && e.s ? e : null; }
 function viewAdmCal() {
@@ -348,10 +348,13 @@ async function afterAdmCal() {
       <div class="field"><label class="lb" for="rcReg">Mini cluster</label><select id="rcReg">${miniOpts(t.cluster, t.regiao, 'Não definido')}</select></div>
       <div class="field"><label class="lb" for="rcCla">Classe</label><select id="rcCla"><option value="">Não definida</option>${Object.entries(CLASSES).map(([k, l]) => `<option value="${k}" ${t.classe === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label class="lb" for="rcTel">Telefone</label><input type="tel" id="rcTel" value="${esc(t.telefone)}"></div><div class="field"><label class="lb" for="rcPla">Placa do veículo</label><input type="text" id="rcPla" value="${esc(t.placa)}" autocapitalize="characters"></div></div>
+      <h3>Serviços que ele executa</h3><div class="chips" role="group" aria-label="Serviços que o técnico executa" style="flex-wrap:wrap">${Object.entries(SERVICOS).map(([k, l]) => `<button type="button" role="checkbox" data-rcserv="${k}" aria-checked="${!t.servicos || t.servicos.includes(k)}">${l}</button>`).join('')}</div>
+      <p class="muted small" style="margin:0">Só esses aparecem para ele iniciar no app. As O.S. que você envia chegam sempre, de qualquer tipo. Fiscal de campo faz só vistoria.</p>
       <h3>Escala de trabalho</h3><div class="tw"><table class="t"><thead><tr><th>Dia</th><th>Trabalha</th><th>Entrada</th><th>Saída</th></tr></thead><tbody>${[1, 2, 3, 4, 5, 6, 0].map(d => `<tr><td>${DIAS_SEM[d]}</td><td><input type="checkbox" data-rcon="${d}" ${E[d] ? 'checked' : ''}></td><td><input type="time" data-rce="${d}" value="${(E[d] || {}).e || '08:00'}"></td><td><input type="time" data-rcs="${d}" value="${(E[d] || {}).s || '17:48'}"></td></tr>`).join('')}</tbody></table></div>
       <p class="muted small" style="margin:0">O alarme de "expediente não iniciado" do técnico segue esta escala.</p>
       <div class="row" style="gap:8px"><button type="button" class="btn pri" id="bRcSalva">Salvar ficha</button><button type="button" class="btn" id="bRcCanc">Cancelar</button></div></section>`;
     bindRegiao($('#rcClu'), $('#rcReg'), $('#rcCla'));
+    $$('[data-rcserv]', form).forEach(b => b.onclick = () => { const on = b.getAttribute('aria-checked') === 'true'; if (on && $$('[data-rcserv][aria-checked="true"]', form).length === 1) { toast('Deixe pelo menos um serviço.'); return; } b.setAttribute('aria-checked', String(!on)); });
     form.insertAdjacentHTML('beforeend', '<section class="card" id="trBox"><p class="muted small">Carregando treinamentos…</p></section>');
     const pTr = () => { const bx = $('#trBox'); if (!bx) return; bx.innerHTML = treinoListaHtml(t.uid); bindTreinos(t.uid, pTr); };
     (async () => { if (!S.treinosTodos) { try { S.treinosTodos = await Nuvem.treinosTodos(); } catch (e) { S.treinosTodos = []; } } pTr(); })();
@@ -360,7 +363,7 @@ async function afterAdmCal() {
     $('#bRcSalva').onclick = async () => {
       const esc2 = {}; [0, 1, 2, 3, 4, 5, 6].forEach(d => { const on = $(`[data-rcon="${d}"]`).checked; const e = $(`[data-rce="${d}"]`).value, s2 = $(`[data-rcs="${d}"]`).value; esc2[d] = on && e && s2 ? { e, s: s2 } : null; });
       if (Object.values(esc2).some(x => x && x.s <= x.e)) { toast('A saída precisa ser depois da entrada.'); return; }
-      const r = { uid: t.uid, org: Nuvem.org(), nome: t.nome, regiao: $('#rcReg').value || null, cluster: $('#rcClu').value || clusterDe($('#rcReg').value, '') || null, classe: $('#rcCla').value || null, telefone: $('#rcTel').value.trim() || null, placa: $('#rcPla').value.trim().toUpperCase() || null, escala: esc2, atualizado: Date.now() };
+      const r = { uid: t.uid, org: Nuvem.org(), nome: t.nome, regiao: $('#rcReg').value || null, cluster: $('#rcClu').value || clusterDe($('#rcReg').value, '') || null, classe: $('#rcCla').value || null, telefone: $('#rcTel').value.trim() || null, placa: $('#rcPla').value.trim().toUpperCase() || null, escala: esc2, servicos: (() => { const l = $$('[data-rcserv]', form).filter(x => x.getAttribute('aria-checked') === 'true').map(x => x.dataset.rcserv); return l.length === Object.keys(SERVICOS).length ? null : l; })(), atualizado: Date.now() };
       try { await Nuvem.recursoSalvar(r); S.recursos.set(r.uid, r); toast('Ficha salva.'); form.innerHTML = ''; render(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); }
     };
   });
@@ -606,9 +609,10 @@ async function usoArmazenamento() { const r = await Nuvem.sb.rpc('uso_armazename
 async function lembraBackup() {
   if (RESTRITO || ehAlmox() || S.lembrouBackup) return; S.lembrouBackup = true;
   try { if (!S.cfg) S.cfg = await Nuvem.cfgLer(); } catch (e) {}
-  const u = ultBackup(); const d = u ? diasDesde(u.em) : null; let msg = '';
+  const u = ultBackup(); const ua = ((S.cfg || {}).backupsAuto || []).slice(-1)[0]; const d = u ? diasDesde(u.em) : null; const da = ua ? diasDesde(ua.em) : null; let msg = '';
   try { const x = await usoArmazenamento(); const pb = x.banco_bytes / PLANO.banco, pf = x.fotos_bytes / PLANO.fotos; if (Math.max(pb, pf) >= 0.8) msg = `Armazenamento em ${Math.round(Math.max(pb, pf) * 100)}% do plano grátis (${pf >= pb ? 'fotos' : 'banco'}). Veja em menu > Backup e armazenamento.`; } catch (e) {}
-  if (!msg && (d == null || d > 7)) msg = d == null ? 'Nenhum backup do banco feito ainda. Menu > Backup e armazenamento.' : `Último backup do banco há ${d} dias. Faça o backup semanal: menu > Backup e armazenamento.`;
+  if (!msg && da != null && da <= 8) { if (d == null || d > 35) msg = `Backup automático em dia. Uma vez por mês, baixe uma cópia e guarde no Drive: menu > Backup e armazenamento.`; }
+  else if (!msg && (d == null || d > 7)) msg = da != null ? `O backup automático não roda há ${da} dias. Baixe um backup manual: menu > Backup e armazenamento.` : d == null ? 'Nenhum backup do banco feito ainda. Menu > Backup e armazenamento.' : `Último backup do banco há ${d} dias. Faça o backup semanal: menu > Backup e armazenamento.`;
   if (msg) setTimeout(() => toast(msg, 9000), 3500);
 }
 function viewAdmBackup() {
@@ -622,11 +626,15 @@ async function afterAdmBackup() {
   catch (e) { $('#bkUso').innerHTML = `<div class="warnbox">Não foi possível ler o uso: ${esc(e.message || e)}. Rode o supabase.sql novo (v54).</div>`; }
   $('#bkFotos').onclick = () => { S.medAba = S.medAba || 'lotes'; go('admMed'); setTimeout(() => { const b = $('#faBox'); b && b.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 600); };
   const pinta = () => { const L = ((S.cfg || {}).backups || []).slice().reverse(); const u = L[0]; const d = u ? diasDesde(u.em) : null;
-    $('#bkBox').innerHTML = `<p class="muted small" style="margin:0">Baixa uma cópia de todas as tabelas (O.S., técnicos, cadastros, RH, medição, materiais, equipamentos, rotas, configurações) em um arquivo .zip. Guarde no Google Drive ou OneDrive. Faça <b>uma vez por semana</b>: o plano grátis do Supabase não guarda cópias para restaurar. As fotos não entram aqui (veja abaixo).</p>
-      ${u ? `<div class="${d > 7 ? 'warnbox' : 'okbox'}">Último backup: <b>${fDH(u.em)}</b> (${d === 0 ? 'hoje' : d === 1 ? 'ontem' : `há ${d} dias`}) por ${esc(u.por || '—')} · ${(u.linhas || 0).toLocaleString('pt-BR')} registros · ${fMB(u.bytes || 0)}</div>` : '<div class="warnbox">Nenhum backup feito ainda.</div>'}
+    const A = ((S.cfg || {}).backupsAuto || []).slice().reverse(); const ua = A[0]; const da = ua ? diasDesde(ua.em) : null;
+    $('#bkBox').innerHTML = `<h3 style="margin-top:0">Backup automático (toda semana)</h3><p class="muted small" style="margin:0">O servidor grava sozinho uma cópia de todas as tabelas uma vez por semana e guarda as 8 últimas no armazenamento privado. Uma vez por mês, baixe a mais recente e guarde no Drive: assim você tem uma cópia fora do Supabase.</p>
+      ${ua ? `<div class="${da > 8 ? 'warnbox' : 'okbox'}">Último automático: <b>${fDH(ua.em)}</b> (${da === 0 ? 'hoje' : da === 1 ? 'ontem' : `há ${da} dias`}) · ${(ua.linhas || 0).toLocaleString('pt-BR')} registros · ${fMB(ua.bytes || 0)}</div><div class="list">${A.map(b => `<div class="item" style="cursor:default;align-items:center"><span class="tx"><b>${fDH(b.em)}</b><span>${(b.linhas || 0).toLocaleString('pt-BR')} registros · ${fMB(b.bytes || 0)}</span></span><button type="button" class="btn" data-bkauto="${esc(b.arquivo)}" style="margin-left:auto">Baixar</button></div>`).join('')}</div>` : '<div class="warnbox">O primeiro backup automático ainda não rodou (roda de madrugada).</div>'}
+      <h3>Backup manual (.zip)</h3><p class="muted small" style="margin:0">Baixa uma cópia de todas as tabelas (O.S., técnicos, cadastros, RH, medição, materiais, equipamentos, rotas, configurações) em um arquivo .zip. Guarde no Google Drive ou OneDrive. Use quando quiser uma cópia na hora (antes de uma mudança grande, por exemplo). As fotos não entram aqui (veja abaixo).</p>
+      ${u ? `<div class="${d > 7 ? 'warnbox' : 'okbox'}">Último backup: <b>${fDH(u.em)}</b> (${d === 0 ? 'hoje' : d === 1 ? 'ontem' : `há ${d} dias`}) por ${esc(u.por || '—')} · ${(u.linhas || 0).toLocaleString('pt-BR')} registros · ${fMB(u.bytes || 0)}</div>` : ua && da <= 8 ? '<p class="muted small" style="margin:0">Opcional enquanto o automático estiver em dia.</p>' : '<div class="warnbox">Nenhum backup feito ainda.</div>'}
       <button type="button" class="btn pri" id="bkGerar">Baixar backup completo (.zip)</button><div class="muted small" id="bkProg"></div>
       ${L.length > 1 ? `<h3>Anteriores</h3><div class="list">${L.slice(1, 8).map(b => `<div class="item" style="cursor:default"><span class="tx"><b>${fDH(b.em)}</b><span>${esc(b.por || '')} · ${(b.linhas || 0).toLocaleString('pt-BR')} registros · ${fMB(b.bytes || 0)}${b.falhas ? ` · ${b.falhas} tabela(s) com erro` : ''}</span></span></div>`).join('')}</div>` : ''}`;
-    $('#bkGerar').onclick = gerarBackup; };
+    $('#bkGerar').onclick = gerarBackup;
+    $$('[data-bkauto]').forEach(b => b.onclick = async () => { b.disabled = true; try { const { data, error } = await Nuvem.sb.storage.from('backups').download(b.dataset.bkauto); if (error) throw error; baixar(new File([data], 'Backup_auto_TecnicoPlus_' + b.dataset.bkauto, { type: 'application/gzip' })); toast('Backup baixado (.json.gz). Guarde no Google Drive ou OneDrive.', 6000); } catch (e) { toast('Não foi possível baixar: ' + (e.message || e), 6000); } b.disabled = false; }); };
   try { S.cfg = await Nuvem.cfgLer(); } catch (e) {}
   pinta();
   async function gerarBackup() {

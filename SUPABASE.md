@@ -441,6 +441,109 @@ A corretiva Claro continua sem cabos, fusões e mapa.
 **Para atualizar:** só subir os arquivos. Não precisa rodar SQL de novo.
 
 
+## Conjunta de site: Multivale x provedor parceiro (v61)
+
+Atividade própria (não fica dentro da preventiva), com foco no site do backbone. Pode ser iniciada pelo técnico ou despachada pelo supervisor.
+
+- **Técnico:** na tela inicial escolhe **Conjunta de site** (ao lado de Preventiva, Corretiva, Implantação e Vistoria) e inicia. Aparece para quem tem o serviço "Preventiva" ou o novo "Conjunta de site (parceiro)" liberado na ficha. Chegando, toca em "Cheguei no site".
+- **Ticket interno automático:** preventiva `PREV-ROTA-AAMMDD-INICIAIS-001` e conjunta `CONJ-ROTA-AAMMDD-INICIAIS-001` (ROTA = siglas das pontas, ex.: `PDAxTBT`; sem rota escolhida, fica sem esse trecho). A corretiva continua `COR-…`. Quando o supervisor despacha sem ticket: `PREV-ROTA-AAMMDD-001` e `CONJ-SITE-AAMMDD-001`. O ticket aparece na tela, no painel e nos PDFs.
+- **Tickets do parceiro:** preventiva e conjunta aceitam até 2 tickets do parceiro (opcionais), no início da atividade, no despacho do supervisor e na própria ficha; saem no PDF e no painel.
+- **Despacho:** o supervisor cria a O.S. de **Conjunta de site** (sigla e nome do site, provedor parceiro, tickets do parceiro) ou de **Preventiva** no painel, como as demais. O técnico recebe com alarme ("CONJUNTA DE SITE"), e a ficha do site já vem preenchida. O despacho automático do backlog também envia conjuntas para quem tem Preventiva ou Conjunta liberada (função `alertas` v4, já publicada).
+- **Etapas:** Check-in e site (sigla, nome, DGO, tickets do parceiro, local e o técnico do parceiro que acompanhou: nome, provedor, função, telefone, documento) → Fibras (origem x destino com **potência TX e RX obrigatórias**, bobina e eventos do OTDR) → OTDR no mapa → Fotos → Finalizar.
+- **Check-in no site (obrigatório):** ao chegar, o técnico toca em "Fazer check-in no site". O app grava hora e GPS e, se a O.S. tem local marcado, a distância até ele; acima de 300 m pede justificativa. Sem check-in as etapas ficam travadas. A O.S. passa para "no local" e o check-in sai no painel e no PDF.
+- **Bobina de lançamento:** em cada fibra, "Usou bobina de lançamento" + tamanho (m); o app lembra o último tamanho. É descontada da distância dos eventos.
+- **OTDR no mapa:** em cada fibra o técnico lança os eventos com problema (distância no OTDR, perda, tipo). Na etapa "OTDR no mapa" escolhe a rota (KMZ cadastrado ou importa na hora), de onde o OTDR foi disparado (ponta A, ponta B ou site no meio da rota pelo GPS) e a correção (padrão 15%, de 0 a 15%). Cálculo: (distância no OTDR − bobina) × (1 − correção), medido ao longo do traçado a partir do site. Ex.: 10.000 m com bobina de 1.000 m e 15% → alfinete a 7.650 m. O mapa mostra o alfinete e a faixa de busca (até a distância sem correção). Botão "Baixar KMZ da rota com os alfinetes" (também no painel).
+- **Possível ponto crítico:** se houver caixa a até 500 m do alfinete (caixas cadastradas nas inspeções ou pontos do KMZ), ela aparece como referência para o técnico verificar e sai no relatório, no painel e no KMZ.
+- **Fotos obrigatórias:** porta do site, estado de conservação do site, DGO, power meter TX, power meter RX, OTDR TX e OTDR RX.
+- **Trava:** não conclui sem sigla do site, técnico do parceiro, fibras com origem x destino e as potências TX e RX de todas as fibras.
+- **Supervisor:** ao concluir, a conjunta aparece no painel em verde, "aguardando as curvas do OTDR". O botão "Inserir curvas" abre a conjunta; anexe a curva TX e a RX (PDF, imagem ou o arquivo .sor do OTDR). O aviso some quando as duas estão anexadas.
+- **Relatório:** o PDF traz ticket, site, técnico do parceiro, tabela de fibras com as potências, situação das curvas, as fotos e, se a curva for imagem, uma página para cada curva.
+- **Banco:** a conjunta é uma ronda `tipo = 'site'` e cada site fica na tabela `eventos` (`dados.tipo = 'site'`); as curvas vão para o Storage em `org/curvas/...` e a referência para `dados.site.curvas`. Se o técnico sincronizar de novo, as curvas não se perdem.
+- **SQL:** `supabase-v61.sql` libera PDF e .sor no bucket de fotos. **Já foi aplicado no projeto**; só rode de novo se recriar o banco.
+
+## Cores do field service da Claro (v59)
+
+- A Aparência agora tem só os **2 temas da Claro**. O padrão é **Vermelho e azul**: cabeçalho #E3260E, fundo #FAFAFA e botões #0572CE. O outro é **Vermelho**: cabeçalho e botões #DA291C, fundo #FEFEFE.
+- Os dois funcionam no modo claro e no escuro. Quem tinha escolhido azul ou laranja passa para o padrão, e quem tinha o vermelho antigo passa para o Vermelho.
+- O portal do parceiro segue o tema padrão.
+- Não precisa rodar nada no Supabase.
+
+## Review completo: voz, backup automático, banco mais rápido e senhas (v58)
+
+**O que fazer (uma vez):** SQL Editor > New query > cole o arquivo **`supabase-v58.sql`** inteiro > **Run**. (Ou cole o `supabase.sql` inteiro; a v58 está no final dele.)
+
+- Ele guarda antes uma cópia das políticas atuais na tabela `bkp.policies_v58`. Essa tabela fica fora do alcance do app.
+- Depois troca as políticas de segurança por versões mais rápidas, com as **mesmas regras de acesso**:
+  - `auth.uid()` passa a ser calculado uma vez por consulta, não uma vez por linha.
+  - Políticas duplicadas para o mesmo comando viram uma só.
+- Por fim, tira das funções internas (agendamentos e gatilhos) a permissão de serem chamadas pelo app.
+
+**Já feito direto no projeto (não precisa repetir):**
+- **Função `manutencao`** (Verify JWT desligado; ela confere o `x-cron-secret`). Roda todo dia às 03:20 pelo agendamento `manutencao-diaria`:
+  - **Telegram:** registra de novo o webhook do bot com o segredo atual. Não é mais preciso clicar em "Conectar Telegram" depois de trocar o segredo.
+  - **Backup automático:** uma vez por semana grava todas as tabelas em `backups/AAAA-MM-DD-HH-MM.json.gz`, num armazenamento privado, e guarda as 8 últimas. O painel mostra os backups em **Backup e armazenamento**, com botão **Baixar**. O lembrete do login passa a pedir só uma cópia por mês no Drive.
+- **Função `geocode`** publicada. Sem chave cadastrada, ela usa o OpenStreetMap pelo servidor. Com `GEOAPIFY_KEY` (grátis, sem cartão) o número da casa fica mais preciso.
+- **Função `acesso`:** na ativação do convite, recusa senha fraca ou que já apareceu em vazamentos (consulta anônima ao Have I Been Pwned). O plano grátis do Supabase não tem essa proteção, então ela foi feita no app. A senha nova do painel, criada pelo link do e-mail, também é conferida.
+
+**No app:**
+- **Lançamento por voz na Produção (LPU):** o técnico toca em 🎤 e fala o que fez, por exemplo "fiz quatro fusões, abri uma caixa de emenda e lancei cento e cinquenta metros de cabo".
+  - O app separa cada serviço e reconhece números falados por extenso.
+  - Escolhe o item da LPU mais provável e mostra alternativas. O técnico confere e toca em **Lançar selecionados**.
+  - Funciona sem internet, porque a interpretação é feita no próprio celular. Também dá para digitar no lugar de falar.
+- **Aviso de NR/ASO** vencido ou vencendo em até 30 dias, na tela inicial do técnico.
+- **Fila do painel:** mostra quais técnicos estão sem mini cluster na ficha, porque esses não recebem O.S. do despacho automático. O link leva direto às fichas.
+- Os textos do odômetro foram corrigidos: agora ele é pedido só no início e no fim do expediente.
+
+## Odômetro só no início e no fim do expediente (v57)
+
+- Ao **iniciar o expediente**, o app pede a placa do veículo e o odômetro.
+- Ao **encerrar o expediente**, pede o odômetro final, que não pode ser menor que o do início.
+- As O.S. não pedem mais odômetro: o técnico só confirma o recebimento e inicia o deslocamento.
+- No painel:
+  - o roteiro do dia mostra o odômetro do início e do fim e os km rodados no dia;
+  - o km da operação (fechamento) usa o odômetro do expediente.
+- **Para voltar a pedir em cada O.S.** no futuro, coloque esta linha no `supabase-config.js`:
+  ```js
+  window.ODOMETRO = 'os';
+  ```
+
+## Despacho automático do backlog, pausa de atividade e expediente sem exigência de casa (v56)
+
+A função `alertas` já foi atualizada direto no seu Supabase. Não precisa rodar SQL.
+
+**Despacho automático do backlog**
+- A cada minuto, dentro da jornada, a função procura técnico livre e manda para ele a O.S. não emergencial (preventiva ou implantação) **mais antiga** do backlog do **mesmo mini cluster**.
+  - Se o técnico ou a O.S. não tiver mini cluster, vale o mesmo cluster.
+  - Entre dois livres, vai para o mais perto.
+- **Técnico livre** é quem tem:
+  - expediente aberto;
+  - nenhuma refeição em andamento;
+  - nenhuma ronda em andamento;
+  - nenhuma O.S. aberta;
+  - o serviço liberado na ficha;
+  - posição enviada nos últimos 15 minutos.
+- Fiscal de campo não recebe.
+- **Quem tiver O.S. pausada** recebe de volta primeiro a pausada **mais antiga**, antes de qualquer O.S. nova.
+- **Ligar e desligar:** no Painel, em cima da fila, no botão **Despacho automático do backlog**. Vem ligado.
+- **Para funcionar:** cada técnico precisa do **mini cluster** na ficha (Calendário de recursos > nome > ficha) e cada O.S. precisa da cidade ou do endereço (o app calcula o mini cluster) ou do cluster escolhido.
+- Cada envio automático fica registrado no histórico da O.S. como "Despacho automático".
+
+**Pausa (quando cai uma emergencial)**
+- Se o técnico está numa preventiva ou implantação e chega uma emergencial, o aviso da O.S. mostra **Pausar a atual e atender a emergencial**.
+- A atividade pausada continua com ele, com as fotos, o checklist, as fusões e a produção já lançados. Ela aparece em **Minhas atividades** como **⏸ Pausada**.
+- **Para continuar:** ele toca nela > **Retomar** > informa o odômetro. A O.S. volta com tudo o que já tinha sido feito, para completar e concluir.
+- No painel a O.S. aparece como **Pausada (continua depois)**, com o motivo no histórico.
+
+**Expediente:** o local da residência ficou opcional e não existe mais a regra de distância de casa para iniciar o expediente. Se a casa estiver marcada, o relatório de jornada só mostra a distância.
+
+## Serviços do técnico definidos pelo supervisor (v55)
+
+- O banco já foi atualizado direto no seu Supabase (coluna `recursos.servicos`). Também está no `supabase.sql`.
+- **Quem define agora é o supervisor:** Calendário de recursos > toque no nome do técnico > ficha > **Serviços que ele executa**. Só os marcados aparecem para o técnico iniciar no app.
+- O.S. enviadas pelo supervisor chegam sempre, de qualquer tipo.
+- Ficha sem nada definido = todos os serviços liberados.
+- No **Meu perfil** do técnico os serviços aparecem só para leitura ("Serviços liberados para você").
+
 ## Código em módulos, backup do banco, uso do plano e limite de tentativas de login (v54)
 
 **Já feito direto no seu Supabase (12/10/2026):**
@@ -999,5 +1102,9 @@ Quando as fotos se aproximarem de 1 GB, há dois caminhos: apagar as fotos antig
 
 ## Segurança
 
-- O login anônimo deixa qualquer pessoa com o link do app usar o app. Pelas regras, mesmo assim ela só grava em nome próprio e não vê as rondas dos outros. Serve bem para começar.
-- Para restringir, mais tarde dá para trocar para login por telefone (SMS) ou e-mail, com uma lista de técnicos autorizados.
+- Não existe acesso anônimo. Técnico entra com matrícula e senha, criadas pelo convite. Painel, almoxarife, NOC, despacho e parceiros entram com e-mail e senha.
+- Cada técnico vê só o que é dele. Ele não vê dados de RH, nem o fiber book com dados de clientes, nem O.S. de outros técnicos. O almoxarife vê só o estoque.
+- Nenhuma chave privada fica no site. O `supabase-config.js` tem só a chave pública (anon). Os segredos (VAPID, CRON_SECRET, Telegram, Geoapify) ficam em Edge Functions > Secrets.
+- Ativação, situação do login e "esqueci a senha" têm limite de 30 tentativas a cada 10 minutos por rede.
+- Senha fraca ou vazada é recusada na ativação.
+- Backup automático semanal no armazenamento privado `backups`, que só o painel lê.

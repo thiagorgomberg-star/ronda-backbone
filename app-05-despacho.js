@@ -70,14 +70,16 @@ function geoInfoHtml(a) {
   return `<div class="warnbox small">⚠️ Localizado só pelo OpenStreetMap (sem o validador configurado): ${esc((g.formatado || '').slice(0, 120))}. Confira no mapa.</div>`;
 }
 function stAtv(a) { return a && a.status === 'recebida' ? (a.vistaEm ? 'Vista pelo técnico' : 'Entregue · aguardando ciente') : ATV_ST[a && a.status] || (a && a.status) || ''; }
-const ATV_ST = { vista: 'Vista pelo técnico', pendente: 'Aguardando', recebida: 'Recebida', em_deslocamento: 'Em deslocamento', no_local: 'No local', concluida: 'Concluída', cancelada: 'Cancelada' };
+const ATV_ST = { vista: 'Vista pelo técnico', pendente: 'Aguardando', recebida: 'Recebida', em_deslocamento: 'Em deslocamento', no_local: 'No local', pausada: 'Pausada (continua depois)', concluida: 'Concluída', cancelada: 'Cancelada' };
 const atvAberta = a => a && !['concluida', 'cancelada'].includes(a.status);
 const atvEmerg = a => a && a.tipo === 'emergencial';
 const atvImpl = a => a && a.tipo === 'implantacao';
+const atvConj = a => a && a.tipo === 'conjunta';
+const atvSiteTxt = a => [a.siteSigla, a.siteNome].filter(Boolean).join(' · ');
 function logTag(n) { n = +n || 0; if (!n) return ''; return `<span class="tlog l${Math.min(n, 4)}" title="${n >= 4 ? 'Escalonar ao gerente' : n > 1 ? 'Reincidência na semana' : 'Primeiro acionamento na semana'}">LOG ${n}${n >= 4 ? ' · GERENTE' : ''}</span>`; }
 function logTxt(n) { return n >= 4 ? `LOG ${n} · ESCALONADO AO GERENTE` : n > 1 ? `LOG ${n} · REINCIDÊNCIA` : 'LOG 1 · 1º ACIONAMENTO'; }
 function atvRef(a) { return refTxt({ info: { rotaId: a.rotaId || '', refSentido: a.refSentido || '', refKm: a.refKm || '', refLocal: a.refLocal || '' } }); }
-function atvTitulo(a) { return (atvEmerg(a) ? 'Emergencial' : atvImpl(a) ? 'Implantação · ' + (IMPL_SERV[a.servico] || '') : 'Preventiva') + (a.ticket ? ' · ' + a.ticket : '') + (atvImpl(a) && a.designacao ? ' · ' + a.designacao : ''); }
+function atvTitulo(a) { return (atvEmerg(a) ? 'Emergencial' : atvImpl(a) ? 'Implantação · ' + (IMPL_SERV[a.servico] || '') : atvConj(a) ? 'Conjunta de site' + (a.siteSigla ? ' · ' + a.siteSigla : '') : 'Preventiva') + (a.ticket ? ' · ' + a.ticket : '') + (atvImpl(a) && a.designacao ? ' · ' + a.designacao : ''); }
 function atvSub(a) { const rt = a.rotaId ? rotaById(a.rotaId) : null; return [a.ocorrencia, atvRef(a) || (rt ? rt.codigo : ''), a.endereco].filter(Boolean).join(' · ') || 'Sem referência'; }
 function gpsUrl(a, app) {
   if (a.lat != null && a.lon != null) return app === 'waze' ? `https://waze.com/ul?ll=${a.lat},${a.lon}&navigate=yes` : `https://www.google.com/maps/dir/?api=1&destination=${a.lat},${a.lon}&travelmode=driving`;
@@ -149,7 +151,7 @@ async function recebeAtv(a, inicial) {
     if (a.statusPrincipal === 'concluida' && !emCampo && !['em_deslocamento', 'no_local'].includes(stA)) a.status = 'concluida';
   }
   if ((!meu && !a._apoio) || a.status === 'cancelada' || (a._apoio && a.status === 'concluida')) { const tinha = S.atvs.has(a.id); await esqueceAtv(a.id); if (tinha && a.status === 'cancelada') toast(`Atividade ${a.ticket || ''} cancelada pelo supervisor.`, 5000); if (S.alertaId === a.id) fechaAlerta(); Alarme.revisa(); if (S.view === 'home') render(); return; }
-  const loc = S.atvs.get(a.id); if (loc && (loc.atualizado || 0) > (a.atualizado || 0)) { if (loc.status !== a.status) a = { ...a, status: loc.status }; } if (loc && loc.vistaEm && !a.vistaEm) a = { ...a, vistaEm: loc.vistaEm, atualizacoes: loc.atualizacoes || a.atualizacoes };
+  const loc = S.atvs.get(a.id); if (loc && (loc.atualizado || 0) > (a.atualizado || 0)) { if (loc.status !== a.status) a = { ...a, status: loc.status }; } if (loc && loc.vistaEm && !a.vistaEm && !(a.retomarEm && a.retomarEm > loc.vistaEm)) a = { ...a, vistaEm: loc.vistaEm, atualizacoes: loc.atualizacoes || a.atualizacoes };
   const nova = !loc;
   await guardaAtv(a);
   if (S.ronda && S.ronda.atividadeId === a.id && a.log && S.ronda.atvLog !== a.log) { S.ronda.atvLog = a.log; saveRonda(true); }
@@ -168,19 +170,21 @@ function mostraAlerta(a) {
   const ocupado = !!S.ronda && S.ronda.atividadeId !== a.id; const em = atvEmerg(a); const g = gpsUrl(a), w = gpsUrl(a, 'waze');
   const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>` : '';
   const rt = a.rotaId ? rotaById(a.rotaId) : null; const pend = a.status === 'pendente' || a.status === 'recebida';
-  el.innerHTML = `<div class="box" role="alertdialog" aria-modal="true" aria-labelledby="alT"><div class="topo ${em ? '' : 'prev'} ${Alarme.ativo ? 'toca' : ''}"><small>${a._apoio ? '🤝 APOIO · ' : ''}${pend && !a.vistaEm ? 'NOVA ATIVIDADE' : 'ATIVIDADE'} · ${em ? 'EMERGENCIAL' : atvImpl(a) ? 'IMPLANTAÇÃO · ' + esc((IMPL_SERV[a.servico] || '').toUpperCase()) : 'PREVENTIVA'}</small><b id="alT">${esc(a.ticket || 'Sem ticket')}</b><span>Enviada às ${fHora(a.criado)}${a.criadoPorNome ? ' por ' + esc(a.criadoPorNome) : ''} · ${esc(stAtv(a))}</span></div>
+  el.innerHTML = `<div class="box" role="alertdialog" aria-modal="true" aria-labelledby="alT"><div class="topo ${em ? '' : 'prev'} ${Alarme.ativo ? 'toca' : ''}"><small>${a._apoio ? '🤝 APOIO · ' : ''}${pend && !a.vistaEm ? 'NOVA ATIVIDADE' : 'ATIVIDADE'} · ${em ? 'EMERGENCIAL' : atvImpl(a) ? 'IMPLANTAÇÃO · ' + esc((IMPL_SERV[a.servico] || '').toUpperCase()) : atvConj(a) ? 'CONJUNTA DE SITE' : 'PREVENTIVA'}</small><b id="alT">${esc(a.ticket || 'Sem ticket')}</b><span>Enviada às ${fHora(a.criado)}${a.criadoPorNome ? ' por ' + esc(a.criadoPorNome) : ''} · ${esc(stAtv(a))}</span></div>
     <div class="corpo">${a._apoio ? `<div class="okbox small"><b>Você é apoio nesta O.S.</b> O técnico principal é <b>${esc(a.tecnicoNome || '—')}</b>: ele lança a produção. Registre seu deslocamento e chegada normalmente.</div>` : (a.apoioNomes || []).length ? `<div class="okbox small">Equipe de apoio: <b>${esc(a.apoioNomes.join(', '))}</b></div>` : ''}${logTag(a.log)}${atvImpl(a) ? kv('Designação', a.designacao) + kv('Projeto', a.projeto) + kv('Sites', [a.siteA, a.siteB].filter(Boolean).join(' ⇄ ')) : ''}${a.cliente === 'Claro' ? kv('Cliente', 'Claro' + (a.programada ? ' · programada' : ' · emergencial')) + kv('Node', a.node) + kv('Rede', a.rede) + kv('Solicitante', a.solicitante) : a.cliente ? kv('Cliente', a.cliente) + kv('Chamado', [a.ticket, a.tsk].filter(Boolean).join(' / ')) + kv('Trecho', a.trecho) + kv('Ponta A', a.pontaA) + kv('Ponta B', a.pontaB) + kv('Designação', a.designacao) + kv('Equipamento', a.equipamento) + kv('Horário da falha', a.dataAcionamento) : ''}${kv('Faturamento', CENTROS[a.centro])}${kv('Ocorrência', a.ocorrencia)}${kv('Referência', atvRef(a))}${kv('Rota', rt ? rotaLb(rt) : '')}${kv('Endereço', a.endereco)}${kv('Descrição', a.descricao)}
       ${ticketAcionHtml(a)}
       ${distOSHtml(a)}
       ${pend && !a._apoio ? (() => { const pr = (S.pedRem || new Map()).get(a.id); return `<div class="kv"><span>Agendada para</span><b>${esc(fDiaCurto(agendaDe(a)))}</b></div>${pr && pr.status === 'pedido' ? `<div class="warnbox small">Remanejamento para <b>${esc(fDiaCurto(pr.dados.para))}</b> aguardando o gestor.</div>` : `<details><summary class="small" style="cursor:pointer;min-height:36px;display:flex;align-items:center;color:var(--accent);font-weight:600">Pedir para remanejar para outro dia</summary><div class="grid2"><div class="field"><label class="lb" for="remDia">Novo dia</label><input type="date" id="remDia" min="${isoDate(Date.now())}" value="${isoDate(Date.now() + 86400000)}"></div><div class="field"><label class="lb" for="remMot">Motivo</label><input type="text" id="remMot" placeholder="Ex.: sem acesso hoje"></div></div><button type="button" class="btn block" id="bRemPede">Enviar pedido ao gestor</button></details>`}`; })() : ''}
       ${g ? `<div class="row"><a class="btn pri" href="${esc(g)}" target="_blank" rel="noopener">${ICON.pin}Abrir no GPS</a>${w ? `<a class="btn" href="${esc(w)}" target="_blank" rel="noopener">Waze</a>` : ''}</div>` : '<p class="muted small" style="margin:0">Sem endereço ou localização. Use a referência da rota.</p>'}
-      ${pend && !a.vistaEm ? `<button type="button" class="btn go block" id="alVista">${ICON.check}O.S. recebida</button><p class="muted small" style="margin:0">Avisa o supervisor que você viu a O.S. e para o alarme. Em seguida você informa o odômetro para liberar o deslocamento.</p><button type="button" class="btn block" id="alMin">Minimizar (o alarme continua até confirmar)</button>`
-        : pend ? `<div class="okbox small">Você confirmou o recebimento às ${fHora(a.vistaEm)}.</div>${ocupado ? `<p class="muted small" style="margin:0">Encerre a atividade atual para iniciar o deslocamento desta.</p><button type="button" class="btn block" id="alMin">Fechar</button>` : `<button type="button" class="btn go block" id="alIniciar">${ICON.play}Informar odômetro e iniciar deslocamento</button><button type="button" class="btn block" id="alMin">Fechar</button>`}`
+      ${pend && !a.vistaEm ? `<button type="button" class="btn go block" id="alVista">${ICON.check}O.S. recebida</button><p class="muted small" style="margin:0">Avisa o supervisor que você viu a O.S. e para o alarme. ${ODO_POR === 'os' ? 'Em seguida você informa o odômetro para liberar o deslocamento.' : 'Em seguida é só iniciar o deslocamento.'}</p><button type="button" class="btn block" id="alMin">Minimizar (o alarme continua até confirmar)</button>`
+        : pend ? `<div class="okbox small">Você confirmou o recebimento às ${fHora(a.vistaEm)}.</div>${ocupado ? (em && podePausar() ? `<p class="muted small" style="margin:0">Você está em <b>${esc(atvTitulo(atvEmCurso()))}</b>. Pause e atenda a emergencial: fotos e serviços já feitos ficam salvos para você continuar depois.</p><button type="button" class="btn go block" id="alPausar">${ICON.play}Pausar a atual e atender a emergencial</button><button type="button" class="btn block" id="alMin">Fechar</button>` : `<p class="muted small" style="margin:0">Encerre a atividade atual para iniciar o deslocamento desta.</p><button type="button" class="btn block" id="alMin">Fechar</button>`) : `<button type="button" class="btn go block" id="alIniciar">${ICON.play}${ODO_POR === 'os' ? 'Informar odômetro e iniciar deslocamento' : 'Iniciar deslocamento'}</button><button type="button" class="btn block" id="alMin">Fechar</button>`}`
+        : a.status === 'pausada' ? `<div class="okbox small">Pausada às ${fHora(a.pausadaEm || a.atualizado)}${(a.pausas || []).slice(-1)[0] && (a.pausas || []).slice(-1)[0].motivo ? ' · ' + esc(a.pausas.slice(-1)[0].motivo) : ''}. As fotos e os serviços já feitos continuam salvos.</div>${ocupado ? `<p class="muted small" style="margin:0">Encerre a atividade atual para retomar esta.</p><button type="button" class="btn block" id="alMin">Fechar</button>` : `<button type="button" class="btn go block" id="alIniciar">${ICON.play}${ODO_POR === 'os' ? 'Retomar: informar odômetro e iniciar deslocamento' : 'Retomar: iniciar deslocamento'}</button><button type="button" class="btn block" id="alMin">Fechar</button>`}`
         : `<button type="button" class="btn block" id="alMin">Fechar</button>`}
     </div></div>`;
   el.hidden = false; const bn = $('#atvBanner'); if (bn) bn.hidden = true; try { posLeve(); } catch (e) {} pintaAnexos(el);
   $('#alIniciar') && ($('#alIniciar').onclick = () => atenderAtv(a));
-  $('#alVista') && ($('#alVista').onclick = async () => { await confirmaVista(a); Alarme.revisa(); if (S.ronda && S.ronda.atividadeId !== a.id) { fechaAlerta(); toast('Recebimento enviado ao supervisor. Encerre a atividade atual para iniciar esta.', 6000); if (S.view === 'home') render(); return; } toast('Recebimento enviado ao supervisor. Agora informe o odômetro.', 5000); atenderAtv(a); });
+  $('#alPausar') && ($('#alPausar').onclick = () => atenderAtv(a, true));
+  $('#alVista') && ($('#alVista').onclick = async () => { await confirmaVista(a); Alarme.revisa(); if (S.ronda && S.ronda.atividadeId !== a.id) { if (atvEmerg(a) && podePausar()) { mostraAlerta(a); return; } fechaAlerta(); toast('Recebimento enviado ao supervisor. Encerre a atividade atual para iniciar esta.', 6000); if (S.view === 'home') render(); return; } toast(ODO_POR === 'os' ? 'Recebimento enviado ao supervisor. Agora informe o odômetro.' : 'Recebimento enviado ao supervisor. Confira os dados e inicie o deslocamento.', 5000); atenderAtv(a); });
   $('#alMin') && ($('#alMin').onclick = () => { fechaAlerta(); Alarme.revisa(); });
   $('#bRemPede') && ($('#bRemPede').onclick = async () => { const para = $('#remDia').value, mot = $('#remMot').value.trim(); if (!para) { toast('Escolha o dia.'); return; } if (para === agendaDe(a)) { toast('Escolha um dia diferente.'); return; } if (!mot) { toast('Escreva o motivo.'); $('#remMot').focus(); return; } if (!Nuvem.on) { toast('Sem internet: conecte para pedir.'); return; }
     const pd = { id: 'rem_' + a.id + '_' + Date.now(), org: Nuvem.org(), tipo: 'remanejar', ref_id: a.id, tecnico_uid: Nuvem.user.id, tecnico_nome: S.perfil.nome, dados: { titulo: atvTitulo(a), de: agendaDe(a), para, deTxt: fDiaCurto(agendaDe(a)), paraTxt: fDiaCurto(para), motivo: mot }, status: 'pedido', criado: Date.now() };
@@ -226,10 +230,27 @@ async function confirmaVista(a) {
   await atvStatus(a, a.status === 'pendente' ? 'recebida' : a.status, { vistaEm: now, recebidaEm: a.recebidaEm || now, distVista: d != null ? Math.round(d) : null, tempoVista: rt ? Math.round(rt.s) : null, atualizacoes: [...(a.atualizacoes || []), u].slice(-60) });
 }
 function fechaAlerta() { const el = $('#atvAlerta'); if (el) { el.hidden = true; el.innerHTML = ''; el.dataset.est = ''; } S.alertaId = null; if (S.view === 'home') { const bn = $('#atvBanner'); if (bn) bn.hidden = !Alarme.ativo; } }
-function atenderAtv(a) {
+// pausa: a atividade não emergencial em andamento fica com o técnico (status "pausada") com as fotos e o que já foi feito
+const podePausar = () => { const c = atvEmCurso(); return !!(c && !atvEmerg(c) && !c._apoio); };
+async function pausarAtual(motivo) {
+  const r = S.ronda; const a = atvEmCurso(); if (!r || !a || atvEmerg(a) || a._apoio) return false;
+  const agora = Date.now(); const g = S.gps && S.gps.last;
+  const rasc = [...new Set([...(r.eventos || []).filter(e => e.tipo === 'chegada').map(e => e.inspId), ...(r.retomadas || [])])].filter(id => { const i = S.inspCache.get(id); return i && i.status !== 'concluida'; });
+  r.fim = agora; r.pausada = true; r.eventos.push({ tipo: 'fim', ts: agora, lat: g && g.lat, lon: g && g.lon, pausa: true });
+  await DB.put('rondas', r); await DB.put('meta', { id: 'ativa', rondaId: null });
+  const u = { ts: agora, sit: 'pausada', txt: motivo || 'Atividade pausada pelo técnico.', prev: '', por: S.perfil.nome };
+  await atvStatus(a, 'pausada', { pausadaEm: agora, pausas: [...(a.pausas || []), { ts: agora, rondaId: r.id, insps: rasc, motivo: motivo || '' }], atualizacoes: [...(a.atualizacoes || []), u].slice(-60) });
+  gpsStop(); S.ronda = null; S.insp = null; S.ciente.clear(); Nuvem.aoVivo(true); Alarme.revisa();
+  return true;
+}
+async function atenderAtv(a, pausar) {
   if (!a.vistaEm) { mostraAlerta(a); return; }
-  if (S.ronda) { fechaAlerta(); Alarme.revisa(); toast('Encerre a atividade atual para iniciar esta.', 6000); go('home'); return; }
-  S.atvPend = a.id; S.modo = atvEmerg(a) ? 'corretiva' : atvImpl(a) ? 'implantacao' : 'preventiva';
+  if (S.ronda && pausar && atvEmerg(a) && podePausar()) {
+    const c = atvEmCurso(); if (!confirm(`Pausar "${atvTitulo(c)}" e atender a emergencial ${a.ticket || ''}?\n\nAs fotos e os serviços já feitos ficam salvos. A atividade continua com você para concluir depois.`)) return;
+    await pausarAtual(`Pausada para atender a emergencial ${a.ticket || ''}`.trim()); toast('Atividade pausada. Ela fica em "Minhas atividades" para você continuar depois.', 6000);
+  }
+  if (S.ronda) { fechaAlerta(); Alarme.revisa(); toast(atvEmerg(a) && podePausar() ? 'Use "Pausar a atual e atender a emergencial" no aviso da O.S.' : 'Encerre a atividade atual para iniciar esta.', 6000); go('home'); return; }
+  S.atvPend = a.id; S.modo = atvEmerg(a) ? 'corretiva' : atvImpl(a) ? 'implantacao' : atvConj(a) ? 'conjunta' : 'preventiva';
   if (a.cliente) { S.perfil.ultDono = 'parceiro'; S.perfil.ultParc = a.cliente; DB.put('meta', S.perfil); }
   if (atvImpl(a)) S.im = { designacao: a.designacao || a.ticket || '', servico: a.servico || 'roteamento', projeto: a.projeto || '', siteA: a.siteA || '', siteB: a.siteB || '' };
   S.cr = { cliente: a.cliente || '', ticket: a.ticket || '', ocorrencia: a.ocorrencia || '', descricao: a.descricao || '', refKm: a.refKm || '', refLocal: a.refLocal || '', refSentido: a.refSentido || '' };
@@ -241,9 +262,13 @@ function atenderAtv(a) {
 async function vinculaAtividade(r, now) {
   if (S.atvPend && S.atvs.get(S.atvPend)) {
     const a = S.atvs.get(S.atvPend); r.atividadeId = a.id; r.atvLog = a.log || null; S.atvPend = null; S.ciente.delete(a.id);
+    if (Array.isArray(a.tkParc) && !r.tkParc) r.tkParc = a.tkParc;
+    if (atvConj(a)) { r.siteSigla = a.siteSigla || ''; r.siteNome = a.siteNome || ''; r.siteParceiro = a.parceiroEmp || ''; }
     if (a.wfc) r.wfc = a.wfc; if (a.wf2) r.wf2 = a.wf2; if (a.centro) r.centro = a.centro; if (a.projeto) r.projeto = a.projeto; if (a.rede) r.rede = a.rede; if (a.cliente && !a._apoio) r.clienteAtv = a.cliente;
     if (a._apoio) { r.apoio = true; r.apoioDe = a.tecnicoNome || ''; } else if ((a.apoioNomes || []).length) r.apoioNomes = a.apoioNomes;
-    await atvStatus(a, 'em_deslocamento', { iniciadaEm: now, rondaId: r.id });
+    const pend = (a.pausas || []).filter(p => !p.retomadaEm);
+    if (pend.length) { const ids = [...new Set(pend.flatMap(p => p.insps || []))]; r.retomadas = []; for (const id of ids) { const i = S.inspCache.get(id) || await DB.get('inspecoes', id); if (!i || i.status === 'concluida') continue; i.retomadaDe = i.retomadaDe || i.rondaId; i.rondaId = r.id; await DB.put('inspecoes', i); S.inspCache.set(i.id, i); r.retomadas.push(i.id); } a.pausas = (a.pausas || []).map(p => p.retomadaEm ? p : { ...p, retomadaEm: now }); }
+    await atvStatus(a, 'em_deslocamento', { iniciadaEm: a.iniciadaEm || now, retomadaEm: pend.length ? now : a.retomadaEm || null, rondaId: r.id, pausas: a.pausas || [] });
   } else if (isCorr(r)) {
     const a = { id: 'atv-' + r.id, criado: now, origem: 'tecnico', tipo: 'emergencial', status: 'em_deslocamento', tecnicoUid: Nuvem.user ? Nuvem.user.id : null, tecnicoNome: r.tecnico, ticket: r.ticket, ocorrencia: r.ocorrencia, descricao: r.descricao, rotaId: r.rotaId || '', refSentido: r.refSentido, refKm: r.refKm, refLocal: r.refLocal, iniciadaEm: now, rondaId: r.id };
     r.atividadeId = a.id; await atvStatus(a, 'em_deslocamento');
@@ -276,11 +301,32 @@ function posLeve() {
     () => { posLeveBusy = false; }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 30000 });
 }
 setInterval(posLeve, 60000); document.addEventListener('visibilitychange', () => { if (!document.hidden) posLeve(); });
+// odômetro: por enquanto só no início e no fim do expediente ('expediente'); 'os' volta a pedir em cada O.S.
+const ODO_POR = window.ODOMETRO === 'os' ? 'os' : 'expediente';
+// janela simples para digitar o odômetro (e o veículo) no início ou no fim do expediente
+function pedeOdometro(titulo, min) {
+  return new Promise(res => {
+    const el = $('#atvAlerta'); if (!el) { res(null); return; } const ant = S.alertaId; S.alertaId = 'aviso:odo';
+    const veic = S.perfil.veiculoTxt || S.perfil.placa || ''; const fim = v => { el.hidden = true; el.innerHTML = ''; S.alertaId = ant && ant !== 'aviso:odo' ? ant : null; res(v); };
+    el.innerHTML = `<div class="box" role="dialog" aria-modal="true" aria-labelledby="odoT"><div class="topo prev"><small>VEÍCULO</small><b id="odoT">${esc(titulo)}</b><span>${min != null ? 'Início do dia: ' + fOdo(min) : 'Confira no painel do veículo'}</span></div><div class="corpo">
+      <div class="field"><label class="lb" for="odVeic">Veículo (placa)</label><input type="text" id="odVeic" value="${esc(veic)}" autocapitalize="characters" placeholder="Ex.: ABC1D23"></div>
+      <div class="field"><label class="lb" for="odKm">Odômetro (km) <span class="req">*</span></label><input type="text" inputmode="numeric" id="odKm" placeholder="Ex.: 48210"></div>
+      <button type="button" class="btn go block" id="odOk">${ICON.check}Confirmar</button><button type="button" class="btn block" id="odCanc">Cancelar</button></div></div>`;
+    el.hidden = false; setTimeout(() => { const i = $('#odKm'); i && i.focus(); }, 80);
+    $('#odCanc').onclick = () => fim(null);
+    $('#odOk').onclick = () => { const km = kmNum($('#odKm').value); const v = $('#odVeic').value.trim().toUpperCase();
+      if (km == null) { toast('Informe o odômetro.'); $('#odKm').focus(); return; }
+      if (min != null && km < min) { toast(`O odômetro está menor que o do início do dia (${fOdo(min)}). Confira.`, 6000); $('#odKm').focus(); return; }
+      if (v && v !== (S.perfil.veiculoTxt || '')) { S.perfil.veiculoTxt = v; DB.put('meta', S.perfil); }
+      fim({ km, veiculo: v }); };
+  });
+}
 async function iniciarExpediente(auto, jaChecou) {
   if (S.exp) return; Alarme.destrava();
   if (!S.perfil.nome.trim()) { toast('Crie seu perfil antes.'); go('perfil'); return; }
   if (!jaChecou && !(await checaCasa())) return;
-  S.exp = { id: uid(), inicio: Date.now(), tecnico: S.perfil.nome, matricula: S.perfil.matricula, distCasa: S.distCasa ?? null };
+  let odo = null; if (ODO_POR === 'expediente') { odo = await pedeOdometro('Odômetro no início do expediente'); if (!odo) { toast('Para iniciar o expediente, informe o odômetro.'); return; } if (S.exp) return; }
+  S.exp = { id: uid(), inicio: Date.now(), tecnico: S.perfil.nome, matricula: S.perfil.matricula, distCasa: S.distCasa ?? null, ...(odo ? { odoIni: odo.km, veiculo: odo.veiculo || null } : {}) };
   await DB.putRaw('meta', { id: 'expAtual', exp: S.exp }); await DB.putRaw('meta', { ...S.exp, id: 'exp:' + S.exp.id }); Nuvem.enfileira('exp', 'exp:' + S.exp.id);
   ativarAlertas(true);
   wakeOn(); Nuvem.aoVivo(true); setTimeout(posLeve, 1500); if (NATIVO) Nativo.fundo(); if (!auto) { toast(NATIVO ? 'Expediente iniciado. Pode minimizar o app: as O.S. e os alarmes continuam chegando.' : 'Expediente iniciado. Mantenha o app aberto para receber as atividades.', 5000); render(); }
@@ -288,7 +334,8 @@ async function iniciarExpediente(auto, jaChecou) {
 async function encerrarExpediente() {
   if (!S.exp) return; if (S.ronda) { toast('Encerre a atividade em andamento antes.'); return; }
   if (!confirm('Encerrar o expediente? Você deixa de receber atividades.')) return;
-  const e = { ...S.exp, fim: Date.now() }; await DB.putRaw('meta', { ...e, id: 'exp:' + e.id }); Nuvem.enfileira('exp', 'exp:' + e.id);
+  let odoF = null; if (ODO_POR === 'expediente') { odoF = await pedeOdometro('Odômetro no fim do expediente', kmNum(S.exp.odoIni)); if (!odoF) { toast('Para encerrar o expediente, informe o odômetro.'); return; } }
+  const e = { ...S.exp, fim: Date.now(), ...(odoF ? { odoFim: odoF.km } : {}) }; await DB.putRaw('meta', { ...e, id: 'exp:' + e.id }); Nuvem.enfileira('exp', 'exp:' + e.id);
   if (refAtiva()) e.refeicao.fim = e.fim; if (S.escada && S.escada.ativo) escadaDesativar(); S.exp = null; S.expFimDia = hojeIso(); await DB.putRaw('meta', { id: 'expAtual', exp: null, fimDia: S.expFimDia }); wakeOff(); Alarme.parar(); if (NATIVO) Nativo.fundo(); Nuvem.aoVivo(true); toast('Expediente encerrado às ' + fHora(e.fim) + '.'); render();
 }
 function expBarHtml(comFim) {
@@ -299,8 +346,8 @@ function expBarHtml(comFim) {
 function minhasAtvHtml() {
   const l = [...S.atvs.values()].filter(atvAberta).filter(a => !(S.ronda && S.ronda.atividadeId === a.id)).sort((x, y) => (atvFutura(x) - atvFutura(y)) || agendaDe(x).localeCompare(agendaDe(y)) || (atvEmerg(y) - atvEmerg(x)) || (atvImpl(x) - atvImpl(y)) || x.criado - y.criado);
   if (!l.length) return '';
-  return `<section class="acts"><div class="ah"><span>Minhas atividades</span><span class="muted small" style="font-weight:500">${l.filter(atvEmerg).length} emerg. · ${l.filter(a => a.tipo === 'preventiva').length} prev. · ${l.filter(atvImpl).length} impl.</span></div>
-    ${l.map(a => `<button type="button" class="act ${atvEmerg(a) ? 'nc' : atvImpl(a) ? 'done' : 'pend'}" data-atv="${a.id}"><span class="st"></span><span class="tm">${fHora(a.criado)}<span>${atvEmerg(a) ? 'Emerg.' : atvImpl(a) ? 'Impl.' : 'Prev.'}</span></span><span class="bd"><b>${a._apoio ? '🤝 Apoio · ' : ''}${esc(atvTitulo(a))}</b><span>${a._apoio ? 'Principal: ' + esc(a.tecnicoNome || '—') + ' · ' : (a.apoioNomes || []).length ? 'Apoio: ' + esc(a.apoioNomes.join(', ')) + ' · ' : ''}${esc(atvSub(a))}</span></span><span class="ic">${logTag(a.log)}${atvFutura(a) ? `<span class="pill">📅 ${esc(fDiaCurto(a.agendaDia))}</span>` : `<span class="pill ${a.status === 'recebida' || a.status === 'pendente' ? 'bad' : 'ok'}">${stAtv(a)}</span>`}${ICON.next}</span></button>`).join('')}</section>`;
+  return `<section class="acts"><div class="ah"><span>Minhas atividades</span><span class="muted small" style="font-weight:500">${l.filter(atvEmerg).length} emerg. · ${l.filter(a => a.tipo === 'preventiva').length} prev. · ${l.filter(atvConj).length ? l.filter(atvConj).length + ' conj. · ' : ''}${l.filter(atvImpl).length} impl.</span></div>
+    ${l.map(a => `<button type="button" class="act ${atvEmerg(a) ? 'nc' : atvImpl(a) ? 'done' : 'pend'}" data-atv="${a.id}"><span class="st"></span><span class="tm">${fHora(a.criado)}<span>${atvEmerg(a) ? 'Emerg.' : atvImpl(a) ? 'Impl.' : atvConj(a) ? 'Conj.' : 'Prev.'}</span></span><span class="bd"><b>${a.status === 'pausada' ? '⏸ Pausada · ' : ''}${a._apoio ? '🤝 Apoio · ' : ''}${esc(atvTitulo(a))}</b><span>${a._apoio ? 'Principal: ' + esc(a.tecnicoNome || '—') + ' · ' : (a.apoioNomes || []).length ? 'Apoio: ' + esc(a.apoioNomes.join(', ')) + ' · ' : ''}${esc(atvSub(a))}</span></span><span class="ic">${logTag(a.log)}${atvFutura(a) ? `<span class="pill">📅 ${esc(fDiaCurto(a.agendaDia))}</span>` : `<span class="pill ${a.status === 'recebida' || a.status === 'pendente' ? 'bad' : 'ok'}">${stAtv(a)}</span>`}${ICON.next}</span></button>`).join('')}</section>`;
 }
 
 
@@ -434,6 +481,9 @@ function stepLpu(i) {
     ${centroTravado(i) ? `<div class="field"><span class="lb">Centro de custo / faturamento</span><b>${esc(CENTROS[centroOS(i)] || 'A definir pelo supervisor')}</b><span class="muted small">Definido por quem cadastrou a atividade${isCorr(i) ? ' (corretiva)' : ''}.</span></div>` : `<div class="field"><span class="lb">Centro de custo / faturamento</span><div class="seg" role="group" aria-label="Centro de custo">${Object.entries(CENTROS).map(([k, l]) => `<button type="button" data-centro="${k}" aria-pressed="${centroOS(i) === k}">${l.replace(' (preço fechado)', '').replace(' (LPU)', '')}</button>`).join('')}</div></div>`}
     ${centroOS(i) === 'backbone' ? `<div class="warnbox small"><b>Manutenção backbone (preço fechado):</b> o atendimento já está pago pelo contrato. Só o <b>lançamento de cabo acima de ${FRANQUIA_BB} m</b> nesta O.S. é cobrado pela LPU. Material conta como consumo de estoque.</div>` : ''}
     ${claroCorr(i) ? '<div class="warnbox small"><b>Corretiva Claro:</b> só os <b>serviços</b> entram no valor da O.S. Material lançado aqui conta apenas como <b>consumo de estoque</b>.</div>' : ''}
+    <div class="vozlpu" id="vozLpu"><div class="row" style="justify-content:space-between;gap:8px"><b>🎤 Lançar por voz</b><span class="muted small">Fale o que fez. Ex.: "fiz 4 fusões, abri uma caixa de emenda e lancei 150 metros de cabo"</span></div>
+      <textarea id="lpuVozTxt" rows="2" placeholder="Toque em 🎤 Falar e diga os serviços, ou digite aqui" aria-label="Serviços falados">${esc(S.lpuVoz || '')}</textarea>
+      <div id="lpuVozRes" aria-live="polite"></div></div>
     <div class="field"><label class="lb" for="lpuBusca">Buscar na LPU</label><input type="search" id="lpuBusca" value="${esc(S.lpuBusca || '')}" placeholder="Código ou descrição (ex.: emenda, 2.11, cordoalha)" autocomplete="off"></div>
     <div class="seg" role="group" aria-label="Tipo de item"><button type="button" data-lputab="S" aria-pressed="${(S.lpuTab || 'S') === 'S'}">Serviços</button><button type="button" data-lputab="M" aria-pressed="${S.lpuTab === 'M'}">Materiais</button><button type="button" data-lputab="T" aria-pressed="${S.lpuTab === 'T'}">Todos</button></div>
     <div class="list" id="lpuRes">${lpuResultados(i)}</div></section>
@@ -461,7 +511,94 @@ function afterLpu(i) {
   };
   let t; $('#lpuBusca').addEventListener('input', e => { S.lpuBusca = e.target.value; clearTimeout(t); t = setTimeout(pintaRes, 150); });
   $$('[data-lputab]').forEach(b => b.onclick = () => { S.lpuTab = b.dataset.lputab; $$('[data-lputab]').forEach(x => x.setAttribute('aria-pressed', x === b)); pintaRes(); });
-  bindRes(); bindSel();
+  // lançamento por voz: interpreta o texto falado e mostra para conferência antes de lançar
+  let vozItens = [];
+  const pintaVoz = () => { const box = $('#lpuVozRes'); if (!box) return; vozItens = vozLpuInterpreta(S.lpuVoz || '', i); box.innerHTML = vozLpuHtml(vozItens); bindVoz(); };
+  const bindVoz = () => {
+    $$('[data-vzsel]').forEach(el => el.onchange = () => { const v = vozItens[+el.dataset.vzsel]; v.esc = el.value; const x = LPUI.get(v.esc); const u = el.closest('.vzlin').querySelector('.vzun'); if (u && x) u.textContent = x.u || ''; });
+    $$('[data-vzq]').forEach(el => el.onchange = () => { const v = kmNum(el.value); if (v != null && v > 0) vozItens[+el.dataset.vzq].q = v; else el.value = fQtd(vozItens[+el.dataset.vzq].q); });
+    $$('[data-vzok]').forEach(el => el.onchange = () => { vozItens[+el.dataset.vzok].ok = el.checked; });
+    $('#bVozLanca') && ($('#bVozLanca').onclick = () => { const sel = vozItens.filter(v => v.ok && v.esc && LPUI.get(v.esc)); if (!sel.length) { toast('Marque ao menos um serviço.'); return; }
+      sel.forEach(v => { const x = LPUI.get(v.esc); const ja = i.lpu.find(l => l.c === x.c); if (ja) ja.q = +(+ja.q + v.q).toFixed(2); else i.lpu.push({ c: x.c, d: x.d, u: x.u, v: x.v, t: x.t, q: +(+v.q).toFixed(2), voz: true }); S.perfil.lpuUso = { ...(S.perfil.lpuUso || {}), [x.c]: ((S.perfil.lpuUso || {})[x.c] || 0) + 1 }; });
+      DB.put('meta', S.perfil); S.lpuVoz = ''; $('#lpuVozTxt').value = ''; salva(); pintaSel(); pintaRes(); pintaVoz(); toast(`${sel.length} item(ns) lançado(s) por voz. Confira as quantidades abaixo.`, 4000); });
+    $('#bVozLimpa') && ($('#bVozLimpa').onclick = () => { S.lpuVoz = ''; $('#lpuVozTxt').value = ''; pintaVoz(); });
+  };
+  let tv; $('#lpuVozTxt').addEventListener('input', e => { S.lpuVoz = e.target.value; clearTimeout(tv); tv = setTimeout(pintaVoz, 350); });
+  bindRes(); bindSel(); pintaVoz();
+}
+/* ---------- interpretação da fala em itens da LPU (roda no celular, sem internet) ---------- */
+const VZ_NUM = { zero: 0, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100, cento: 100, duzentos: 200, duzentas: 200, trezentos: 300, trezentas: 300, quatrocentos: 400, quinhentos: 500, seiscentos: 600, setecentos: 700, oitocentos: 800, novecentos: 900, mil: 1000, meia: 0.5, meio: 0.5 };
+// palavras da rua → termos da LPU
+const VZ_SIN = [
+  [/\bfus(ao|oes|ionei|ionar|ionamos|ionado)\b|\bemend(a|as|ei|amos)\b/, 'emenda optica fusao'],
+  [/\b(abri|abertura|fechei|fechamento|desci|descida)\b.*\bcaixa\b|\bcaixa\b.*\b(abert|fech|descid)/, 'descida abertura fechamento caixa emenda'],
+  [/\bved(ei|acao|ar|amos)\b|termo.?contratil/, 'vedacao termo contratil'],
+  [/\blan(cei|camos|camento|car)\b|\bpux(ei|amos)\b.*\bcabo\b/, 'lancamento'],
+  [/\blan\w*\b(?!.*\b(coax|ade\b|espin)).*\bcabo/, 'opticos auto sustentavel'],
+  [/\bretir\w*\b(?!.*\b(coax|ade\b|espin)).*\bcabo/, 'opticos'],
+  [/\bespin(ei|amos|amento|ar)\b/, 'espinamento'],
+  [/\bpod(ei|amos|a)\b|\bgalho/, 'poda galhos'],
+  [/\bcapin/, 'capina'],
+  [/\bro[cç]ad/, 'rocada'],
+  [/\baterr/, 'aterramento'],
+  [/\bsobra/, 'sobras tecnicas'],
+  [/\bidentifi|\bplaquet/, 'identificacao cabos'],
+  [/\bcertifi|\botdr\b|\bteste|\bmedi(cao|ções|coes)\b/, 'testes homologacao'],
+  [/\bapru/, 'aprumar poste'],
+  [/\bcordoalh/, 'cordoalha'],
+  [/\bnap\b|\bcto\b/, 'nap'],
+  [/\bdrop\b/, 'drop'],
+  [/\bdio\b|\bdgo\b/, 'dio dgo'],
+  [/\bderiva|\bbloqueio\b/, 'bloqueio derivacao'],
+  [/\bretir(ei|ada|amos|ar)\b/, 'retirada'],
+  [/\bsubterr|\bduto|\bcaixa subterr/, 'subterraneo'],
+  [/\bacompanh/, 'acompanhamento']
+];
+const VZ_STOP = new Set('de da do das dos a o as os e em no na nos nas com para pra pro por fiz feito feita fizemos foi foram tambem mais um uma uns umas que ja la aqui ali hoje entao depois ai tipo mais metro metros m unidade unidades unid hora horas km quilometro quilometros'.split(' '));
+const VZ_VERBOS = 'fiz|fizemos|abri|abrimos|fechei|desci|lancei|lancamos|instalei|instalamos|troquei|trocamos|vedei|retirei|retiramos|puxei|espinei|podei|capinei|identifiquei|emendei|fusionei|testei|certifiquei|aterrei|aprumei|substitui|coloquei|realizei|executei|acomodei|adequei';
+const vzRaiz = w => w.replace(/(oes|aes)$/, 'ao').replace(/ais$/, 'al').replace(/(eis)$/, 'el').replace(/s$/, '').slice(0, 7);
+function vzNumeros(t) {
+  // "cento e cinquenta" → 150; "um e meio" → 1.5; "1,5" → 1.5
+  const w = t.split(/\s+/); const out = []; let acc = null;
+  const fecha = () => { if (acc != null) { out.push(String(acc)); acc = null; } };
+  for (let k = 0; k < w.length; k++) {
+    const p = w[k]; const n = VZ_NUM[p];
+    if (n != null && !(p === 'uma' || p === 'um') ) { acc = acc == null ? n : (n === 1000 ? acc * 1000 : acc + n); continue; }
+    if ((p === 'um' || p === 'uma') && acc == null) { const nx = w[k + 1]; if (nx === 'e' && (w[k + 2] === 'meio' || w[k + 2] === 'meia')) { acc = 1.5; k += 2; continue; } acc = 1; continue; }
+    if (p === 'e' && acc != null && VZ_NUM[w[k + 1]] != null && w[k + 1] !== 'um' && w[k + 1] !== 'uma') continue;
+    fecha(); out.push(p);
+  }
+  fecha(); return out.join(' ');
+}
+function vozLpuInterpreta(txt, i) {
+  let t = normLocal(txt).replace(/(\d),(\d)/g, '$1.$2').replace(/[^a-z0-9.,;\s]/g, ' ').replace(/([,;])/g, ' , ').replace(/\s+/g, ' ').trim(); if (!t) return [];
+  t = vzNumeros(t);
+  t = t.replace(new RegExp('\\s(?=(' + VZ_VERBOS + ')\\b)', 'g'), ' , ');
+  const partes = t.split(/\s(?:e|mais|tambem|depois|alem disso)\s|\.\s|\s\.|\s?,\s?/).map(x => x.replace(/^(e|mais|tambem|depois)\s/, '').trim()).filter(x => x.length > 2);
+  const uso = S.perfil.lpuUso || {}; const itens = [...LPUI.values()];
+  const res = [];
+  partes.forEach(p0 => { let p = p0;
+    const cod = p.match(/\bcodigo\s+(\d+)\s*(?:ponto|\.)\s*(\d+)/); const porCod = cod && LPUI.get(cod[1] + '.' + cod[2]); if (cod) p = p.replace(cod[0], ' ');
+    const mq = p.match(/(\d+(?:\.\d+)?)/); const q = mq ? +mq[1] : 1;
+    let termos = p.replace(/\d+(?:\.\d+)?/g, ' ');
+    VZ_SIN.forEach(([re, add]) => { if (re.test(termos)) termos += ' ' + add; });
+    const ws = [...new Set(termos.split(/\s+/).filter(w => w.length > 2 && !VZ_STOP.has(w)).map(vzRaiz))]; if (!ws.length && !porCod) return;
+    const material = /\bmateria|\bgastei|\busei|\bconsum/.test(p);
+    const sc = itens.map(x => { const xw = x.vw || (x.vw = x.n.split(/[^a-z0-9.]+/).filter(Boolean).map(vzRaiz)); let s = 0; ws.forEach(w => { if (xw.includes(w)) s += 2; else if (w.length >= 4 && xw.some(z => z.startsWith(w.slice(0, 5)))) s += 1; });
+      if (!s) return [x, 0]; s += (x.t === (material ? 'M' : 'S')) ? 1.5 : 0; s += Math.min(uso[x.c] || 0, 5) * 0.2; if (/aereo/.test(x.n) && !/subterr/.test(p)) s += 0.1; s -= xw.filter(z => z.length >= 4 && !/^\d/.test(z) && !ws.some(w => z.startsWith(w.slice(0, 5)) || w.startsWith(z.slice(0, 5)))).length * 0.15; return [x, s]; })
+      .filter(([, s]) => s >= 2.5).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([x]) => x);
+    const alts = porCod ? [porCod, ...sc.filter(x => x !== porCod)].slice(0, 4) : sc;
+    res.push({ fala: p0, q, alts, esc: alts[0] ? alts[0].c : '', ok: !!alts[0] });
+  });
+  return res;
+}
+function vozLpuHtml(v) {
+  if (!v.length) return '';
+  return `<div class="list" style="margin-top:6px">${v.map((x, k) => `<div class="item vzlin" style="cursor:default;flex-wrap:wrap;gap:6px;padding:8px 2px">
+    <label class="row" style="gap:6px;flex:1 1 100%;min-width:0"><input type="checkbox" data-vzok="${k}" ${x.ok ? 'checked' : ''} ${x.alts.length ? '' : 'disabled'} style="width:22px;height:22px"><span class="muted small" style="white-space:normal">“${esc(x.fala)}”</span></label>
+    ${x.alts.length ? `<select data-vzsel="${k}" aria-label="Item da LPU" style="flex:1 1 200px;min-height:44px">${x.alts.map(a => `<option value="${esc(a.c)}" ${a.c === x.esc ? 'selected' : ''}>${esc(a.c)} · ${esc(a.d.length > 60 ? a.d.slice(0, 58) + '…' : a.d)}</option>`).join('')}</select>
+    <span class="row" style="gap:4px;flex-wrap:nowrap"><input type="text" inputmode="decimal" data-vzq="${k}" value="${fQtd(x.q)}" aria-label="Quantidade" style="width:76px;min-height:44px;text-align:center"><span class="muted small vzun">${esc((LPUI.get(x.esc) || {}).u || '')}</span></span>` : '<span class="fo-warn" style="flex:1 1 100%">Não reconheci este serviço. Busque abaixo na LPU.</span>'}</div>`).join('')}</div>
+    <div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn go" id="bVozLanca">${ICON.check}Lançar selecionados</button><button type="button" class="btn" id="bVozLimpa">Limpar</button></div>`;
 }
 
 
@@ -503,8 +640,10 @@ function operacaoPorTec() {
   const nomeDe = uid => (A.tecnicos.find(t => t.uid === uid) || {}).nome;
   const get = (uid, nome) => { const k = uid || nome; if (!m.has(k)) m.set(k, { uid, nome: nomeDe(uid) || nome || '—', dias: new Set(), kmOdo: 0, kmGps: 0, rondas: 0, semOdo: 0, prod: 0, S: 0, M: 0, ativ: new Set() }); return m.get(k); };
   const a0 = diaIni(A.de), a1 = diaFim(A.ate);
-  [...DB.mem.rondas.values()].forEach(r => { if (A.tec && r._uid !== A.tec) return; const o = get(r._uid, r.tecnico); o.rondas++; o.dias.add(isoDate(r.inicio)); const g = totais(r).t.km; o.kmGps += g; const od = odoInfo(r); if (od && od.odo >= 0) o.kmOdo += od.odo; else { o.kmOdo += g; o.semOdo++; } });
+  const kmDia = new Map(); (S.exps || []).forEach(e => { if (e.inicio < a0 || e.inicio > a1 || (A.tec && e.uid !== A.tec)) return; const ki = kmNum(e.odoIni), kf = kmNum(e.odoFim); if (ki != null && kf != null && kf >= ki) kmDia.set(e.uid + '|' + isoDate(e.inicio), (kmDia.get(e.uid + '|' + isoDate(e.inicio)) || 0) + (kf - ki)); });
+  [...DB.mem.rondas.values()].forEach(r => { if (A.tec && r._uid !== A.tec) return; const o = get(r._uid, r.tecnico); o.rondas++; o.dias.add(isoDate(r.inicio)); const g = totais(r).t.km; o.kmGps += g; const od = odoInfo(r); if (od && od.odo >= 0) o.kmOdo += od.odo; else if (!kmDia.has(r._uid + '|' + isoDate(r.inicio))) { o.kmOdo += g; o.semOdo++; } });
   (S.exps || []).forEach(e => { if (e.inicio < a0 || e.inicio > a1 || (A.tec && e.uid !== A.tec)) return; get(e.uid, e.tecnico).dias.add(isoDate(e.inicio)); });
+  kmDia.forEach((km, k) => { const [u] = k.split('|'); const o = get(u, ''); o.kmOdo += km; });
   biLinhas().forEach(r => { const o = get(r.uid, r.tec); o.prod += r.total; o[r.t] += r.total; o.ativ.add(r.inspId); });
   return [...m.values()].map(o => { const dp = duplaDe(o.uid); return { ...o, dupla: dp ? dp.nome : '', nDias: o.dias.size, prodKm: o.kmOdo > 0 ? o.prod / o.kmOdo : null }; }).sort((a, b) => b.prod - a.prod || a.nome.localeCompare(b.nome));
 }
@@ -591,7 +730,7 @@ function afterFechamento() {
 function roteiroDia(uid, dia) {
   const d0 = diaIni(dia), d1 = d0 + 86400000; const linhas = []; const T = { kmGps: 0, kmOdo: 0, desl: 0, local: 0, ref: 0, prod: 0, ativ: 0 };
   const exps = (S.exps || []).filter(e => e.uid === uid && e.inicio < d1 && (e.fim || Date.now()) > d0);
-  exps.forEach(e => { linhas.push({ ts: e.inicio, tipo: 'exp', txt: 'Início do expediente', det: e.distCasa != null ? `a ${fDist(e.distCasa)} da residência` : '' }); if (e.fim) linhas.push({ ts: e.fim, tipo: 'exp', txt: 'Fim do expediente', det: fDur(e.fim - e.inicio) + ' de expediente' }); (e.refeicoes || []).forEach(r => { linhas.push({ ts: r.ini, tipo: 'ref', txt: 'Refeição', det: r.fim ? `${fHora(r.ini)}–${fHora(r.fim)} · ${fDur(r.fim - r.ini)}` : 'em andamento' }); if (r.fim) T.ref += r.fim - r.ini; }); });
+  exps.forEach(e => { linhas.push({ ts: e.inicio, tipo: 'exp', txt: 'Início do expediente', det: [e.odoIni != null ? 'odômetro ' + fOdo(kmNum(e.odoIni)) + (e.veiculo ? ' · ' + e.veiculo : '') : '', e.distCasa != null ? `a ${fDist(e.distCasa)} da residência` : ''].filter(Boolean).join(' · ') }); if (e.fim) linhas.push({ ts: e.fim, tipo: 'exp', txt: 'Fim do expediente', det: [fDur(e.fim - e.inicio) + ' de expediente', e.odoFim != null ? 'odômetro ' + fOdo(kmNum(e.odoFim)) + (e.odoIni != null ? ` (${fKm(kmNum(e.odoFim) - kmNum(e.odoIni))} no dia)` : '') : ''].filter(Boolean).join(' · ') }); (e.refeicoes || []).forEach(r => { linhas.push({ ts: r.ini, tipo: 'ref', txt: 'Refeição', det: r.fim ? `${fHora(r.ini)}–${fHora(r.fim)} · ${fDur(r.fim - r.ini)}` : 'em andamento' }); if (r.fim) T.ref += r.fim - r.ini; }); });
   const rs = [...DB.mem.rondas.values()].filter(r => r._uid === uid && r.inicio >= d0 && r.inicio < d1).sort((a, b) => a.inicio - b.inicio);
   rs.forEach(r => {
     T.ativ++; const od = odoInfo(r); if (od && od.odo >= 0) T.kmOdo += od.odo;
@@ -1016,7 +1155,7 @@ function situacaoTec(uid) {
   if (v && v.expediente && agora - (v.ts || 0) < 3 * 3600000) return { cls: 'ok', txt: 'Disponível · expediente desde ' + fHora(v.expIni) + (v.distCasa != null ? ` (a ${fDist(v.distCasa)} de casa)` : '') };
   if (pl) return { cls: 'ok', txt: 'De plantão até ' + fHora(pl.fim) };
   if (fg) return { cls: '', txt: 'De folga' };
-  if (emJornada()) return { cls: 'bad', txt: 'Expediente não iniciado' + (v && v.casaOk === false ? ' · residência não cadastrada' : '') };
+  if (emJornada()) return { cls: 'bad', txt: 'Expediente não iniciado' };
   return { cls: '', txt: 'Fora do expediente' };
 }
 function filaHtml() {
@@ -1025,15 +1164,24 @@ function filaHtml() {
   const chipsClu = `<div class="chips" role="group" aria-label="Cluster da O.S." style="margin-bottom:8px">${[['', 'Todos os clusters'], ...(meusClusters().length ? [['meus', 'Meus clusters (+ sem cluster)']] : []), ...Object.entries(CLUSTERS), ['sem', 'Sem cluster']].map(([k, n]) => `<button type="button" role="radio" data-filaclu="${k}" aria-checked="${fc === k}">${esc(n)}</button>`).join('')}</div>`;
   const hoje0 = diaIni(isoDate(Date.now())); const concl = l.filter(a => a.status === 'concluida' && (a.concluidaEm || a.atualizado || 0) >= hoje0).length;
   const ha = ts => { const m = Math.round((Date.now() - ts) / 60000); return m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.floor(m / 60)}h${pad2(m % 60)}` : `há ${Math.floor(m / 1440)} d`; };
-  const linha = a => `<button type="button" class="act ${atvEmerg(a) ? 'nc' : atvImpl(a) ? 'done' : 'pend'}" data-atvadm="${a.id}"><span class="st"></span><span class="tm">${fHora(a.criado)}<span>${ha(a.criado)}</span></span><span class="bd"><b>${clusterOS(a) ? `<span class="pill" style="font-size:11px;margin-right:4px">${esc(CLUSTERS[clusterOS(a)].replace('Cluster ', ''))}</span>` : ''}${esc(a.ticket || 'Sem ticket')}${atvImpl(a) ? ' · ' + esc(IMPL_SERV[a.servico] || '') + (a.designacao ? ' · ' + esc(a.designacao) : '') : a.ocorrencia ? ' · ' + esc(a.ocorrencia) : ''}</b><span>${a.tecnicoNome ? esc(a.tecnicoNome) : '<b style="color:var(--bad)">Sem técnico</b>'}${(a.apoioUids || []).length ? ` <b>+ ${a.apoioUids.length} apoio</b>` : ''} · ${esc(stAtv(a))}${slaTag(a)}${(a.status === 'em_deslocamento' || a.status === 'no_local') ? (() => { const m = (Date.now() - (a.ultAtualiz || a.iniciadaEm || a.atualizado || a.criado)) / 60000; return ` · <b style="color:${m >= ATUALIZA_ADM_MIN ? 'var(--bad)' : 'inherit'}">atualizada há ${fHm(m)}</b>`; })() : ''}${atvRef(a) ? ' · ' + esc(atvRef(a)) : a.endereco ? ' · ' + esc(a.endereco) : ''}</span></span><span class="ic">${logTag(a.log)}${ICON.next}</span></button>`;
+  const linha = a => `<button type="button" class="act ${atvEmerg(a) ? 'nc' : atvImpl(a) ? 'done' : 'pend'}" data-atvadm="${a.id}"><span class="st"></span><span class="tm">${fHora(a.criado)}<span>${ha(a.criado)}</span></span><span class="bd"><b>${clusterOS(a) ? `<span class="pill" style="font-size:11px;margin-right:4px">${esc(CLUSTERS[clusterOS(a)].replace('Cluster ', ''))}</span>` : ''}${esc(a.ticket || 'Sem ticket')}${tkParcTxt(a) ? ' (parc. ' + esc(tkParcTxt(a)) + ')' : ''}${atvImpl(a) ? ' · ' + esc(IMPL_SERV[a.servico] || '') + (a.designacao ? ' · ' + esc(a.designacao) : '') : atvConj(a) ? ' · Conjunta de site' + (atvSiteTxt(a) ? ' · ' + esc(atvSiteTxt(a)) : '') + (a.parceiroEmp ? ' · com ' + esc(a.parceiroEmp) : '') : a.ocorrencia ? ' · ' + esc(a.ocorrencia) : ''}</b><span>${a.tecnicoNome ? esc(a.tecnicoNome) : '<b style="color:var(--bad)">Sem técnico</b>'}${(a.apoioUids || []).length ? ` <b>+ ${a.apoioUids.length} apoio</b>` : ''} · ${esc(stAtv(a))}${slaTag(a)}${(a.status === 'em_deslocamento' || a.status === 'no_local') ? (() => { const m = (Date.now() - (a.ultAtualiz || a.iniciadaEm || a.atualizado || a.criado)) / 60000; return ` · <b style="color:${m >= ATUALIZA_ADM_MIN ? 'var(--bad)' : 'inherit'}">atualizada há ${fHm(m)}</b>`; })() : ''}${atvRef(a) ? ' · ' + esc(atvRef(a)) : a.endereco ? ' · ' + esc(a.endereco) : ''}</span></span><span class="ic">${logTag(a.log)}${ICON.next}</span></button>`;
   const col = (tit, arr) => `<div><h3><span>${tit}</span><span>${arr.length}</span></h3>${arr.map(linha).join('') || '<p class="empty">Fila vazia.</p>'}</div>`;
-  return chipsClu + `<div class="fila2">${col('Emergenciais', abertas.filter(atvEmerg))}${col('Preventivas', abertas.filter(a => a.tipo === 'preventiva'))}${col('Implantação', abertas.filter(atvImpl))}</div><p class="muted small" style="margin:0">${concl} concluída(s) hoje.</p>`;
+  const auto = !(S.cfg && S.cfg.despachoAuto === false);
+  const autoHtml = `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><div class="chips" role="group" aria-label="Despacho automático"><button type="button" role="checkbox" id="bDespAuto" aria-checked="${auto}">Despacho automático do backlog: ${auto ? 'ligado' : 'desligado'}</button></div><span class="muted small">${auto ? 'Preventivas e implantações sem técnico vão sozinhas para quem estiver livre no mesmo mini cluster, da mais antiga para a mais nova. Quem tem O.S. pausada recebe primeiro a pausada mais antiga.' : 'As O.S. do backlog ficam esperando você enviar.'}</span></div>${auto ? despSemFichaHtml() : ''}`;
+  return autoHtml + chipsClu + `<div class="fila2">${col('Emergenciais', abertas.filter(atvEmerg))}${col('Preventivas e conjuntas', abertas.filter(a => a.tipo === 'preventiva' || atvConj(a)))}${col('Implantação', abertas.filter(atvImpl))}</div><p class="muted small" style="margin:0">${concl} concluída(s) hoje.</p>`;
+}
+// despacho automático só envia para quem tem mini cluster ou cluster na ficha: lista quem está fora
+function despSemFichaHtml() {
+  if (!S.recursos) return '';
+  const L = (S.adm.tecnicos || []).filter(t => t.funcao !== 'fiscal' && !(r => r && ((r.regiao && r.regiao !== 'todas') || r.cluster))(S.recursos.get(t.uid)));
+  if (!L.length) return '';
+  return `<div class="warnbox small" style="margin-bottom:8px"><b>${L.length} técnico(s) sem mini cluster na ficha</b> não recebem O.S. do despacho automático: ${L.slice(0, 8).map(t => esc(t.nome)).join(', ')}${L.length > 8 ? '…' : ''}. <button type="button" class="lnk" id="bDespFichas">Preencher fichas</button></div>`;
 }
 function escAlertaHtml() {
   const l = [...(S.atvsAdm || new Map()).values()].filter(a => (a.log || 0) >= 4 && !a.escalonadoEm && a.status !== 'cancelada');
   return l.map(a => `<div class="banner"><span>${esc(a.ticket || 'Atividade')} chegou ao LOG ${a.log}: escalonar ao gerente</span><button type="button" class="btn" data-escalona="${a.id}">Escalonar agora</button></div>`).join('');
 }
-function pintaFila() { const f = $('#fila'); if (f) { f.innerHTML = filaHtml(); $$('[data-atvadm]', f).forEach(b => b.onclick = () => abrirAtvAdm(b.dataset.atvadm)); $$('[data-filaclu]', f).forEach(b => b.onclick = () => { S.filaClu = b.dataset.filaclu; pintaFila(); }); } const e = $('#escAlerta'); if (e) { e.innerHTML = escAlertaHtml(); $$('[data-escalona]', e).forEach(b => b.onclick = () => escalonar(S.atvsAdm.get(b.dataset.escalona))); } }
+function pintaFila() { const f = $('#fila'); if (f) { if (!S.recursos && !S.recCarregando && !S.recFalhou && Nuvem.on) { S.recCarregando = true; Nuvem.recursosLista().then(l => { S.recursos = new Map(l.map(r => [r.uid, r])); pintaFila(); }).catch(() => { S.recFalhou = true; }).finally(() => { S.recCarregando = false; }); } f.innerHTML = filaHtml(); $('#bDespFichas', f) && ($('#bDespFichas', f).onclick = () => go('admEquipe')); $('#bDespAuto', f) && ($('#bDespAuto', f).onclick = async () => { const liga = S.cfg && S.cfg.despachoAuto === false; if (!liga && !confirm('Desligar o despacho automático? O backlog passa a esperar você enviar cada O.S.')) return; try { S.cfg = { ...(S.cfg || {}), despachoAuto: liga }; await Nuvem.cfgSalvar(S.cfg); toast(liga ? 'Despacho automático ligado.' : 'Despacho automático desligado.'); } catch (e) { toast('Erro: ' + (e.message || e), 6000); } pintaFila(); }); $$('[data-atvadm]', f).forEach(b => b.onclick = () => abrirAtvAdm(b.dataset.atvadm)); $$('[data-filaclu]', f).forEach(b => b.onclick = () => { S.filaClu = b.dataset.filaclu; pintaFila(); }); } const e = $('#escAlerta'); if (e) { e.innerHTML = escAlertaHtml(); $$('[data-escalona]', e).forEach(b => b.onclick = () => escalonar(S.atvsAdm.get(b.dataset.escalona))); } }
 function ouvirAtvAdm() {
   if (S.unAtv) return;
   S.unAtv = Nuvem.ouvirAtv((tipo, a) => { if (!a || !a.id) return; S.atvsAdm = S.atvsAdm || new Map(); const ant = S.atvsAdm.get(a.id); if (tipo !== 'DELETE' && a.vistaEm && ant && !ant.vistaEm) { toast(`${a.tecnicoNome || 'Técnico'} confirmou o recebimento da O.S. ${a.ticket || ''}.`, 6000); try { if ('Notification' in window && Notification.permission === 'granted') new Notification(`O.S. ${a.ticket || ''} recebida`, { body: `${a.tecnicoNome || 'Técnico'} viu a O.S. às ${fHora(a.vistaEm)}`, tag: 'vista-' + a.id }); } catch (e) {} } if (tipo === 'DELETE') S.atvsAdm.delete(a.id); else S.atvsAdm.set(a.id, a); pintaFila(); if (S.view === 'admAtv' && S.atvEdit && S.atvEdit.id === a.id && tipo !== 'DELETE') { const st = $('#atStatus'); if (st) st.textContent = stAtv(a); } });
@@ -1042,7 +1190,8 @@ function abrirAtvAdm(id) {
   const a = id ? { ...S.atvsAdm.get(id) } : { _novo: true, id: 'atv-' + uid(), tipo: 'emergencial', status: 'pendente', ticket: '', ocorrencia: '', rotaId: '', refSentido: '', refKm: '', refLocal: '', endereco: '', lat: null, lon: null, mapsUrl: '', descricao: '', tecnicoUid: '', tecnicoNome: '' };
   S.atvEdit = a; go('admAtv');
 }
-async function proximoTicketOS() { const d = new Date(), p = `OS-${String(d.getFullYear()).slice(2)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-`; const n = [...(S.atvsAdm || new Map()).values()].filter(a => String(a.ticket || '').startsWith(p)).length; return p + String(n + 1).padStart(3, '0'); }
+// ticket automático da O.S.: preventiva PREV-ROTA-AAMMDD-NNN, conjunta CONJ-SITE-AAMMDD-NNN, demais OS-AAMMDD-NNN
+async function proximoTicketOS(tipo, a) { const rt = a && a.rotaId ? rotaById(a.rotaId) : null; const meio = tipo === 'conjunta' ? String((a && a.siteSigla) || tkRota(rt)).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) : tipo === 'preventiva' ? tkRota(rt) : ''; const d = new Date(), p = `${tipo === 'preventiva' ? 'PREV' : tipo === 'conjunta' ? 'CONJ' : 'OS'}-${meio ? meio + '-' : ''}${String(d.getFullYear()).slice(2)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-`; const n = [...(S.atvsAdm || new Map()).values()].filter(a => String(a.ticket || '').startsWith(p)).length; return p + String(n + 1).padStart(3, '0'); }
 function viewAdmAtv(a) {
   const rt = a.rotaId ? rotaById(a.rotaId) : null; const em = a.tipo === 'emergencial'; const novo = !!a._novo;
   const locTxt = a.lat != null ? `Ponto definido: ${a.lat.toFixed(5)}, ${a.lon.toFixed(5)}` : a.mapsUrl ? 'Link do Google guardado: o técnico abre direto no GPS.' : 'Nenhum ponto definido.';
@@ -1061,11 +1210,13 @@ function viewAdmAtv(a) {
     <div class="field"><label class="lb" for="at_clu">Cluster da O.S.</label><select id="at_clu"><option value="">Automático pela cidade${(() => { const r = regiaoDeTexto(a.cidade, a.geo && a.geo.formatado, a.endereco); return r ? ` (${esc(CLUSTERS[r.cluster])}${r.mini && MINI[r.mini] ? ' · ' + esc(MINI[r.mini][0]) : ''})` : ' (cidade não reconhecida)'; })()}</option>${Object.entries(CLUSTERS).map(([k, l]) => `<option value="${k}" ${a.clusterManual && a.cluster === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
     ${projAtivos().length ? `<div class="field"><label class="lb" for="at_proj">Projeto <span class="req">*</span></label><select id="at_proj" data-atf="projeto">${projOpts(a.projeto || projSugerido(a))}</select><span class="muted small">Separa a O.S. na medição, no faturamento e no BI.</span></div>` : ''}
     <div class="field"><label class="lb" for="at_centro">Centro de custo / faturamento</label><select id="at_centro" data-atf="centro"><option value="">Não definido</option>${Object.entries(CENTROS).map(([k, l]) => `<option value="${k}" ${a.centro === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-    <div class="seg" role="group" aria-label="Tipo"><button type="button" data-attipo="emergencial" aria-pressed="${em}">Emergencial</button><button type="button" data-attipo="preventiva" aria-pressed="${a.tipo === 'preventiva'}">Preventiva</button><button type="button" data-attipo="implantacao" aria-pressed="${a.tipo === 'implantacao'}">Implantação</button></div>
+    <div class="seg" role="group" aria-label="Tipo"><button type="button" data-attipo="emergencial" aria-pressed="${em}">Emergencial</button><button type="button" data-attipo="preventiva" aria-pressed="${a.tipo === 'preventiva'}">Preventiva</button><button type="button" data-attipo="conjunta" aria-pressed="${a.tipo === 'conjunta'}">Conjunta de site</button><button type="button" data-attipo="implantacao" aria-pressed="${a.tipo === 'implantacao'}">Implantação</button></div>
+    ${a.tipo === 'conjunta' ? `<div class="grid2"><div class="field"><label class="lb" for="at_ssig">Sigla do site <span class="req">*</span></label><input type="text" id="at_ssig" data-atf="siteSigla" value="${esc(a.siteSigla || '')}" placeholder="Ex.: PDA" autocapitalize="characters"></div><div class="field"><label class="lb" for="at_snome">Nome do site</label><input type="text" id="at_snome" data-atf="siteNome" value="${esc(a.siteNome || '')}" placeholder="Ex.: Estação Pindamonhangaba"></div><div class="field full"><label class="lb" for="at_pemp">Provedor parceiro</label><input type="text" id="at_pemp" data-atf="parceiroEmp" value="${esc(a.parceiroEmp || '')}" placeholder="Ex.: Master"></div></div><p class="muted small" style="margin:0">Conjunta Multivale x técnico do provedor no site do backbone. O técnico registra as fibras (origem x destino) com as potências TX e RX, as fotos e quem acompanhou; depois você anexa as curvas do OTDR.</p>` : ''}
     ${a.tipo === 'implantacao' ? `<div class="grid2"><div class="field"><label class="lb" for="at_serv">Serviço</label><select id="at_serv" data-atf="servico">${Object.entries(IMPL_SERV).map(([k, l]) => `<option value="${k}" ${(a.servico || 'roteamento') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div><div class="field"><label class="lb" for="at_des">Designação</label><input type="text" id="at_des" data-atf="designacao" value="${esc(a.designacao || '')}" autocapitalize="characters"></div>
       <div class="field"><label class="lb" for="at_proj">Projeto</label><select id="at_proj" data-atf="projeto"><option value="">Selecione…</option>${LISTAS_PADRAO.projetoImpl.map(o => `<option ${a.projeto === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div><div class="field"><span class="lb">Sites</span><div class="row" style="flex-wrap:nowrap;gap:6px"><input type="text" id="at_sa" data-atf="siteA" value="${esc(a.siteA || '')}" placeholder="Site A" aria-label="Site A" style="min-width:0"><input type="text" id="at_sb" data-atf="siteB" value="${esc(a.siteB || '')}" placeholder="Site B" aria-label="Site B" style="min-width:0"></div></div></div>` : ''}
     <div class="grid2"><div class="field"><label class="lb" for="at_wfc">WFC</label><input type="text" id="at_wfc" data-atf="wfc" value="${esc(a.wfc || '')}" placeholder="Ticket WFC (faturamento)" autocapitalize="characters"></div><div class="field"><label class="lb" for="at_wf2">WF2</label><input type="text" id="at_wf2" data-atf="wf2" value="${esc(a.wf2 || '')}" placeholder="Ticket WF2 (faturamento)" autocapitalize="characters"></div></div>
-    <div class="grid2"><div class="field"><label class="lb" for="at_ticket">Ticket</label><input type="text" id="at_ticket" data-atf="ticket" value="${esc(a.ticket)}" placeholder="Em branco = automático" autocapitalize="characters"></div>
+    ${a.tipo === 'preventiva' || a.tipo === 'conjunta' ? `<div class="grid2"><div class="field"><label class="lb" for="at_tp1">Ticket do parceiro 1</label><input type="text" id="at_tp1" data-attp="0" value="${esc((a.tkParc || [])[0] || '')}" placeholder="Opcional" autocapitalize="characters"></div><div class="field"><label class="lb" for="at_tp2">Ticket do parceiro 2</label><input type="text" id="at_tp2" data-attp="1" value="${esc((a.tkParc || [])[1] || '')}" placeholder="Opcional" autocapitalize="characters"></div></div>` : ''}
+    <div class="grid2"><div class="field"><label class="lb" for="at_ticket">${a.tipo === 'preventiva' || a.tipo === 'conjunta' ? 'Ticket interno' : 'Ticket'}</label><input type="text" id="at_ticket" data-atf="ticket" value="${esc(a.ticket)}" placeholder="Em branco = automático" autocapitalize="characters"></div>
     ${em ? `<div class="field"><label class="lb" for="at_ocorr">Ocorrência</label><select id="at_ocorr" data-atf="ocorrencia"><option value="">Selecione…</option>${[...OCORR, ...(a.ocorrencia && !OCORR.includes(a.ocorrencia) ? [a.ocorrencia] : [])].map(o => `<option ${a.ocorrencia === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>` : '<div></div>'}</div>
     <div class="field"><label class="lb" for="at_rota">Rota do cabo</label><select id="at_rota">${rotaOpts(a.rotaId, 'Sem rota')}</select></div>
     ${rt ? `<div class="field">${refRotaHtml(rt, a.refSentido, a.refKm, 'at')}</div>` : `<div class="field"><span class="lb">Referência (opcional)</span><div class="row" style="flex-wrap:nowrap;gap:8px;align-items:center"><input type="text" inputmode="decimal" id="at_refKm" data-atf="refKm" value="${esc(a.refKm)}" placeholder="km" style="width:84px;text-align:right" aria-label="km"><span style="font-weight:600;white-space:nowrap">km de</span><input type="text" id="at_cidade" data-atf="refLocal" value="${esc(a.refLocal)}" placeholder="Cidade" style="flex:1;min-width:0" aria-label="Cidade"></div></div>`}
@@ -1085,6 +1236,7 @@ function viewAdmAtv(a) {
 function afterAdmAtv() {
   const a = S.atvEdit; const re = () => { const y = window.scrollY; render(); window.scrollTo(0, y); };
   $$('[data-atf]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { a[el.dataset.atf] = el.value; }));
+  $$('[data-attp]').forEach(el => el.addEventListener('input', () => { a.tkParc = [...(a.tkParc || ['', ''])]; a.tkParc[+el.dataset.attp] = el.value.trim().toUpperCase(); }));
   $('#at_clu') && ($('#at_clu').onchange = e => { if (e.target.value) { a.cluster = e.target.value; a.mini = ''; a.clusterManual = true; } else { a.clusterManual = false; } });
   bindAnexos(a, () => { const y = window.scrollY; render(); window.scrollTo(0, y); });
   $$('[data-attipo]').forEach(b => b.onclick = () => { a.tipo = b.dataset.attipo; if (a.tipo === 'implantacao' && !a.servico) a.servico = 'roteamento'; re(); });
@@ -1113,7 +1265,9 @@ function afterAdmAtv() {
     const bt = $('#bAtSalvar'); bt.disabled = true;
     try {
       if (!a.projeto) a.projeto = ($('#at_proj') && $('#at_proj').value) || projSugerido(a); if (projAtivos().length && !a.projeto) { toast('Escolha o projeto da O.S.'); bt.disabled = false; $('#at_proj') && $('#at_proj').focus(); return; }
-      if (!String(a.ticket || '').trim()) a.ticket = await proximoTicketOS(); a.ticket = a.ticket.trim().toUpperCase();
+      if (a.tipo === 'conjunta' && !String(a.siteSigla || '').trim()) { toast('Informe a sigla do site da conjunta.'); bt.disabled = false; $('#at_ssig') && $('#at_ssig').focus(); return; }
+      if (a.tipo === 'conjunta') a.siteSigla = String(a.siteSigla).trim().toUpperCase();
+      if (!String(a.ticket || '').trim()) a.ticket = await proximoTicketOS(a.tipo, a); a.ticket = a.ticket.trim().toUpperCase();
       if (a.tipo === 'implantacao' && !String(a.designacao || '').trim()) { toast('Informe a designação.'); bt.disabled = false; return; }
       if (!a.rotaId && !a.endereco && a.lat == null && !a.mapsUrl && !a.refLocal) { toast('Informe a rota, o endereço ou a localização.'); bt.disabled = false; return; }
       const novo = a._novo; delete a._novo; const ant = novo ? null : S.atvsAdm.get(a.id);
@@ -1234,7 +1388,7 @@ async function listarEventos() {
     if (rt) { if (e.info.rotaId !== F.rota) return null; if (qa != null) { const pa = posA(e); if (pa == null) return null; dk = Math.abs(pa - qa); if (dk > raio) return null; } }
     else if (cid) { const mesma = normLocal(e.info.refLocal) === cid; if (!mesma && !normLocal(e.info.cidade).includes(cid)) return null; if (km != null) { const ek = kmNum(e.info.refKm); if (!mesma || ek == null) return null; dk = Math.abs(ek - km); if (dk > raio) return null; } }
     if (F.tipo === 'corr' && !isCorr(e)) return null; if (F.tipo === 'prev' && isCorr(e)) return null;
-    if (q) { const txt = normLocal([e.corr && e.corr.ticket, e.info.tag, e.corr && e.corr.ocorrencia, e.corr && e.corr.problema, e.info.endereco, e.info.cidade, e._tecnico, e.info.tecnico, refTxt(e)].filter(Boolean).join(' ')); if (!txt.includes(q)) return null; }
+    if (q) { const txt = normLocal([e.corr && e.corr.ticket, e.info.tag, e.corr && e.corr.ocorrencia, e.corr && e.corr.problema, e.info.endereco, e.info.cidade, e._tecnico, e.info.tecnico, refTxt(e), e.site && e.site.sigla, e.site && e.site.nome, e.site && e.site.parc && e.site.parc.empresa].filter(Boolean).join(' ')); if (!txt.includes(q)) return null; }
     return { e, dk };
   }).filter(Boolean).sort((a, b) => (porLocal ? (a.dk ?? 99) - (b.dk ?? 99) : 0) || (b.e.chegada || 0) - (a.e.chegada || 0));
   $('#evCount').textContent = res.length > 200 ? `${res.length} (mostrando 200)` : `${res.length}`;
@@ -1261,19 +1415,19 @@ function viewEvento(e) {
   const mats = [...MATERIAIS.filter(([k]) => +String((e.mat || {})[k] || '').replace(',', '.') > 0).map(([k, l, u]) => `${l}: ${e.mat[k]} ${u}`), ...(e.matExtra || []).filter(m => m.nome).map(m => `${m.nome}: ${m.qtd || ''} ${m.un || ''}`)];
   const ncs = CHECK.filter(([k]) => (e.check || {})[k] === 'NC').map(x => x[1]);
   const end = [e.info.endereco, e.info.bairro, e.info.cidade].filter(Boolean).join(', ');
-  return `<section class="rhead"><div class="rh1"><span class="av" style="background:${corr ? 'var(--st-corr)' : 'var(--st-done)'};color:#fff">${corr ? 'C' : 'P'}</span><span class="tx"><b>${esc(corr ? 'Corretiva · Ticket ' + (c.ticket || '—') : 'Preventiva · Caixa ' + (e.info.tag || '—'))}</b><span>${fDH(e.chegada)} · ${esc(e.info.tecnico || e._tecnico || '—')}</span></span><span class="pill ${e.status === 'concluida' ? 'done' : 'draft'}">${e.status === 'concluida' ? (c.pendente ? 'Com pendência' : 'Concluída') : 'Em aberto'}</span></div></section>
+  return `<section class="rhead"><div class="rh1"><span class="av" style="background:${corr ? 'var(--st-corr)' : 'var(--st-done)'};color:#fff">${corr ? 'C' : isSite(e) ? 'S' : 'P'}</span><span class="tx"><b>${esc(isSite(e) ? siteTitulo(e) : corr ? 'Corretiva · Ticket ' + (c.ticket || '—') : 'Preventiva · Caixa ' + (e.info.tag || '—'))}</b><span>${fDH(e.chegada)} · ${esc(e.info.tecnico || e._tecnico || '—')}</span></span><span class="pill ${e.status === 'concluida' ? 'done' : 'draft'}">${e.status === 'concluida' ? (c.pendente ? 'Com pendência' : 'Concluída') : 'Em aberto'}</span></div></section>
   <section class="card"><h2>Onde foi</h2>${kv('Referência', refTxt(e))}${kv('Rota', rt ? rotaLb(rt) : '')}${kv('Endereço', end)}${kv('Poste / CV', e.info.poste)}
     ${e.loc ? `<a class="btn" href="https://maps.google.com/?q=${e.loc.lat},${e.loc.lon}" target="_blank" rel="noopener">${ICON.pin}Abrir no mapa</a>` : ''}
     ${refTxt(e) && !ADMIN ? `<button type="button" class="btn" id="bUsaRefEv">${ICON.plus}Abrir corretiva neste ponto</button>` : ''}${ADMIN ? `<button type="button" class="btn" id="bEvPdf">${ICON.pdf}PDF da O.S.</button>${e.rondaId && DB.mem.rondas.get(e.rondaId) ? '<button type="button" class="btn" id="bEvRonda">Ver deslocamento e rota</button>' : ''}` : ''}</section>
-  ${ADMIN ? `<section class="card"><h2>Dados da O.S.</h2>${kv('Técnico', e.info.tecnico || e._tecnico)}${kv('Data', fDH(e.chegada || e.criado))}${kv('Rede', redeDe(e) === 'fibra' ? 'Fibra' : 'Coaxial')}${kv('Faturamento', CENTROS[centroOS(e)])}${kv('WFC', e.wfc)}${kv('WF2', e.wf2)}${kv('Valor da O.S.', (e.lpu || []).length ? fBRL(valorOS(e)) : '')}${kv('Itens da LPU', (e.lpu || []).map(x => `${x.c} ${x.d} — ${fQtd(x.q)} ${x.u}`).join('\n'))}${kv('Situação na medição', (S.meds && S.meds.get(e.id) && SIT_LB[S.meds.get(e.id).status]) || '')}</section>` : ''}
+  ${ADMIN ? `<section class="card"><h2>Dados da O.S.</h2>${isSite(e) ? '' : kv('Ticket interno', e.ticketAtv) + kv('Ticket(s) do parceiro', tkParcTxt(e))}${kv('Técnico', e.info.tecnico || e._tecnico)}${kv('Data', fDH(e.chegada || e.criado))}${kv('Rede', redeDe(e) === 'fibra' ? 'Fibra' : 'Coaxial')}${kv('Faturamento', CENTROS[centroOS(e)])}${kv('WFC', e.wfc)}${kv('WF2', e.wf2)}${kv('Valor da O.S.', (e.lpu || []).length ? fBRL(valorOS(e)) : '')}${kv('Itens da LPU', (e.lpu || []).map(x => `${x.c} ${x.d} — ${fQtd(x.q)} ${x.u}`).join('\n'))}${kv('Situação na medição', (S.meds && S.meds.get(e.id) && SIT_LB[S.meds.get(e.id).status]) || '')}</section>` : ''}
   ${corr ? `<section class="card"><h2>O que aconteceu</h2>${kv('Ocorrência', c.ocorrencia)}${kv('Causa provável', c.causa)}${kv('Problema encontrado', c.problema)}${kv('Fibras afetadas', c.fibrasAfetadas)}${kv('Serviço executado', c.servico)}${kv('Acionamento', c.acionamento)}${kv('Normalizado às', c.normalizacao)}
     ${mats.length ? `<div class="kv"><span>Materiais usados</span><b>${mats.map(esc).join('\n')}</b></div>` : ''}</section>`
-  : `<section class="card"><h2>Inspeção</h2>${kv('Caixa', [e.info.fabricante, e.info.modelo].filter(Boolean).join(' '))}${kv('Itens não conformes', ncs.join('\n') || 'Nenhum')}${kv('Observações', e.obs)}</section>`}
+  : isSite(e) ? siteEventoHtml(e) + (e.obs ? `<section class="card"><h2>Observações</h2>${kv('Observações', e.obs)}</section>` : '') : `<section class="card"><h2>Inspeção</h2>${kv('Caixa', [e.info.fabricante, e.info.modelo].filter(Boolean).join(' '))}${kv('Itens não conformes', ncs.join('\n') || 'Nenhum')}${kv('Observações', e.obs)}</section>`}
   <section class="card"><h2>Fotos</h2>${(e.fotos || []).length ? `<div class="photos" id="evFotos">${e.fotos.map((p, k) => `<div class="ph"><img data-evph="${k}" alt="${esc(p.cat || 'Foto')}"><span class="tag">${esc(p.cat || 'Foto')}</span>${p.desc ? `<div class="pb small">${esc(p.desc)}</div>` : ''}</div>`).join('')}</div>` : '<p class="muted" style="margin:0">Sem fotos.</p>'}</section>
   ${meu ? `<button class="btn block" data-open="${e.id}">Abrir ficha completa</button>` : ''}`;
 }
 function afterEvento() {
-  const e = S.evView; bindOpen();
+  const e = S.evView; bindOpen(); if (isSite(e)) afterSiteEvento(e);
   $('#bEvPdf') && ($('#bEvPdf').onclick = async () => { const f = await gerarPdfInsp(e); if (f) baixar(f); });
   $('#bEvRonda') && ($('#bEvRonda').onclick = async () => { const r = DB.mem.rondas.get(e.rondaId); if (!r) return; S.rondaView = r; await cacheInspRonda(r); go('ronda'); });
   $$('[data-evph]').forEach(img => { const p = e.fotos[+img.dataset.evph]; fotoBlob(p).then(bl => { if (bl) { img.src = URL.createObjectURL(bl); img.onload = () => URL.revokeObjectURL(img.src); } else img.alt = 'Foto ainda não disponível (sincroniza quando o técnico tiver internet)'; }); });

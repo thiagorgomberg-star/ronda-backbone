@@ -3,6 +3,7 @@
 // Serviço usado (a chave fica só aqui, nos segredos da função, nunca no site):
 //   GEOAPIFY_KEY     → Geoapify (grátis, sem cartão: 3.000 consultas/dia) — recomendado
 //   GOOGLE_MAPS_KEY  → Google Geocoding (exige conta de faturamento) — opcional
+//   sem nenhuma chave → OpenStreetMap (Nominatim), menos preciso no número da casa
 // Quem pode chamar: supervisor/gestor (admins) e despachantes. Resposta:
 //   { ok, lat, lon, formatado, preciso, nivel, parcial, candidatos[] }  ou  { ok:false, motivo }
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -35,9 +36,20 @@ export async function geocodificar(endereco: string, key: string, f: typeof fetc
   return { ok: true, fonte: "google", lat: m.lat, lon: m.lon, formatado: m.formatado, preciso: (m.tipo === "ROOFTOP" || m.tipo === "RANGE_INTERPOLATED") && !m.parcial, nivel: NIVEL[m.tipo] || m.tipo, parcial: m.parcial, candidatos: c.slice(0, 4) };
 }
 
+// sem chave cadastrada: usa o OpenStreetMap (Nominatim) pelo servidor, puxando o resultado para a área de atendimento
+export async function geocodificarOSM(endereco: string, f: typeof fetch = fetch) {
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=4&countrycodes=br&addressdetails=0&viewbox=-46.90,-21.20,-44.00,-24.40&q=${encodeURIComponent(endereco)}`;
+  const r = await f(url, { headers: { "User-Agent": "TecnicoPlus-Multivale/1.0 (geocodificacao de acionamentos)", "Accept-Language": "pt-BR" } });
+  if (!r.ok) return { ok: false, motivo: "osm", detalhe: String(r.status) };
+  const res = await r.json(); if (!Array.isArray(res) || !res.length) return { ok: false, motivo: "nao_encontrado" };
+  const conv = (x: any) => { const exato = ["house", "building"].includes(x.addresstype || x.type); return { lat: +x.lat, lon: +x.lon, formatado: x.display_name, tipo: exato ? "ROOFTOP" : (x.addresstype === "road" ? "GEOMETRIC_CENTER" : "APPROXIMATE"), nivel: exato ? "número exato" : x.addresstype === "road" ? "rua (sem o número)" : (x.addresstype || "aproximado") }; };
+  const c = res.map(conv); const m = c[0];
+  return { ok: true, fonte: "osm", lat: m.lat, lon: m.lon, formatado: m.formatado, preciso: m.tipo === "ROOFTOP", nivel: m.nivel, candidatos: c };
+}
+
 async function handler(req: Request) {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  const geoKey = env("GEOAPIFY_KEY"), gKey = env("GOOGLE_MAPS_KEY"); if (!geoKey && !gKey) return json({ ok: false, motivo: "sem_chave" }, 503);
+  const geoKey = env("GEOAPIFY_KEY"), gKey = env("GOOGLE_MAPS_KEY");
   const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
   const tok = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, ""); let ok = false;
   if (tok) { const { data } = await sb.auth.getUser(tok); const u = data && data.user; if (u) {
@@ -46,6 +58,6 @@ async function handler(req: Request) {
   if (!ok) return json({ ok: false, motivo: "nao_autorizado" }, 401);
   const body = await req.json().catch(() => ({})); const end = String(body.endereco || "").trim().slice(0, 300);
   if (!end) return json({ ok: false, motivo: "sem_endereco" }, 400);
-  try { return json(geoKey ? await geocodificarGeoapify(end, geoKey) : await geocodificar(end, gKey)); } catch (e) { return json({ ok: false, motivo: "erro", detalhe: String(e) }, 500); }
+  try { return json(geoKey ? await geocodificarGeoapify(end, geoKey) : gKey ? await geocodificar(end, gKey) : await geocodificarOSM(end)); } catch (e) { return json({ ok: false, motivo: "erro", detalhe: String(e) }, 500); }
 }
 if (!(globalThis as any).__TESTE_GEOCODE__) Deno.serve(handler);
