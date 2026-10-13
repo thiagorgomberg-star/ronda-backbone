@@ -1,4 +1,4 @@
-const V = 'ronda-backbone-v76';
+const V = 'ronda-backbone-v77';
 const SHELL = ['./', 'index.html', 'admin.html', 'acionamento.html', 'noc.html', 'parceiro.html', 'manifest.webmanifest', 'supabase-config.js', 'supabase.min.js', 'lpu.js', 'jsqr.min.js', 'qrcode.min.js', 'logo.png', 'logo-pdf.jpg', 'icon-192.png', 'icon-512.png',
   'leaflet.js', 'leaflet-heat.js', 'leaflet.css', 'jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js',
   // código do app em módulos (v54): o ?v= muda a cada versão, igual ao index.html

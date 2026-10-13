@@ -171,6 +171,23 @@ export async function handler(req: Request, sbFab = () => createClient(env("SUPA
       await sb.auth.admin.updateUserById(alvo, { ban_duration: "876000h" });
       return json({ ok: true });
     }
+    // excluir técnico: apaga o cadastro, a ficha, o RH, a posição ao vivo e o login; o que ele já executou (O.S., fichas, rondas) fica no histórico
+    if (acao === "remover_tecnico") {
+      if (!adm) return json({ ok: false, motivo: "Só o supervisor ou o gestor excluem técnicos." }, 403);
+      const cadId = String(b.cad_id || ""); let c: any = null;
+      if (cadId) { const r = await sb.from("cadastros").select("id, uid, nome").eq("id", cadId).eq("org", ORG).maybeSingle(); c = r.data; }
+      let alvo = (c && c.uid) || String(b.uid || "");
+      if (alvo && !c) { const { data: t } = await sb.from("tecnicos").select("uid").eq("uid", alvo).eq("org", ORG).maybeSingle(); if (!t) alvo = ""; }
+      if (!c && !alvo) return json({ ok: false, motivo: "Técnico não encontrado." }, 404);
+      if (alvo) { if (alvo === q.u.id) return json({ ok: false, motivo: "Você não pode excluir o seu próprio acesso." }, 400); const { data: ad } = await sb.from("admins").select("uid").eq("uid", alvo).maybeSingle(); if (ad) return json({ ok: false, motivo: "Este usuário tem acesso ao painel: remova em Acessos do painel." }, 409); }
+      if (c) { await sb.from("rh_dados").delete().eq("cad_id", c.id); const { error } = await sb.from("cadastros").delete().eq("id", c.id); if (error) throw error; }
+      if (alvo) {
+        for (const t of ["recursos", "tecnicos", "aovivo", "push_subs", "escada"]) await sb.from(t).delete().eq("uid", alvo);
+        await sb.from("atividades").update({ tecnico_uid: null, tecnico_nome: null, status: "pendente" }).eq("tecnico_uid", alvo).in("status", ["pendente", "recebida", "pausada"]);
+        const { error: e4 } = await sb.auth.admin.deleteUser(alvo); if (e4) await sb.auth.admin.updateUserById(alvo, { ban_duration: "876000h" });
+      }
+      return json({ ok: true });
+    }
     if (acao === "senha_temp") {
       if (!adm) return json({ ok: false, motivo: "Só o painel pode gerar senha." }, 403);
       const { data: c } = await sb.from("cadastros").select("*").eq("id", String(b.cad_id || "")).eq("org", ORG).maybeSingle();

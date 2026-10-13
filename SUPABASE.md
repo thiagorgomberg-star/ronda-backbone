@@ -441,6 +441,12 @@ A corretiva Claro continua sem cabos, fusões e mapa.
 **Para atualizar:** só subir os arquivos. Não precisa rodar SQL de novo.
 
 
+## Excluir técnico e O.S. (v61)
+
+- **Técnico:** em Equipe e cadastros, botão **Excluir** em cada linha (pede para digitar EXCLUIR). Apaga o cadastro, a ficha, o RH, a posição ao vivo e o login (função `acesso` v4, ação `remover_tecnico`, já publicada). O que ele já executou fica no histórico; O.S. que estavam com ele voltam para a fila.
+- **O.S.:** a fila do despacho ganhou a lista **Concluídas e canceladas**. Toque na O.S. (aberta, em andamento ou concluída) e use **Excluir O.S. do sistema** no fim da tela.
+- **Reset do banco:** cópia de segurança de todas as tabelas em `bkp.reset20261012_*`; o script `reset-banco-tecnico-plus.sql` apaga tudo menos o acesso do supervisor e as configurações.
+
 ## Conjunta de site: Multivale x provedor parceiro (v61)
 
 Atividade própria (não fica dentro da preventiva), com foco no site do backbone. Pode ser iniciada pelo técnico ou despachada pelo supervisor.
