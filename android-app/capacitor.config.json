@@ -1,0 +1,14 @@
+{
+  "appId": "br.com.multivale.tecnicoplus",
+  "appName": "Técnico Plus",
+  "webDir": "www",
+  "server": {
+    "url": "https://thiagorgomberg-star.github.io/ronda-backbone/",
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0E2A3B"
+  }
+}

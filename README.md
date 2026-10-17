@@ -23,4 +23,4 @@ Os dados ficam salvos no próprio celular do técnico e, com a nuvem configurada
   - `app-11-fusao.js`: mapa de fusão e diagrama linear.
   - `app-12-projetos-inicio.js`: projeto de cada O.S. e início do app.
 - A cada versão, o número em `sw.js` (`ronda-backbone-vNN`) e o `?v=NN` dos arquivos no `index.html` mudam juntos, para o celular baixar o código novo.
-- Funções do Supabase: `supabase/functions/*/index.ts`. As cópias `*-index.ts` na raiz servem para colar no editor do Supabase.
+- Funções do Supabase: `supabase/functions/*/index.ts`. Para atualizar uma função pelo editor do Supabase, cole o `index.ts` da pasta dela.

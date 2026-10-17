@@ -124,7 +124,7 @@ As chaves vêm num arquivo separado, `CHAVES-ALERTAS-NAO-ENVIAR-AO-GITHUB.txt`. 
 
 1. **Criar a função:** no Supabase, **Edge Functions** > **Deploy a new function** > **Via Editor**.
    - Nome: `alertas`.
-   - Apague o exemplo e cole todo o conteúdo do arquivo `alertas-index.ts`.
+   - Apague o exemplo e cole todo o conteúdo do arquivo `supabase/functions/alertas/index.ts`.
    - Clique em **Deploy function**.
 2. **Desligar a verificação de JWT:** abra a função `alertas` > **Details** (ou **Settings**) e desligue **Enforce JWT verification** (Verify JWT). A função tem a própria proteção.
 3. **Segredos:** em **Edge Functions** > **Secrets**, cadastre `VAPID_PUBLIC`, `VAPID_PRIVATE`, `VAPID_SUBJECT` e `CRON_SECRET` com os valores do arquivo de chaves.
@@ -161,7 +161,7 @@ As chaves vêm num arquivo separado, `CHAVES-ALERTAS-NAO-ENVIAR-AO-GITHUB.txt`. 
   - Com **Ativar alertas neste computador**, o supervisor ou gestor recebe a notificação mesmo com o painel fechado (pela função `alertas`).
   - No extrato de horas, dias acima de 10 h ficam destacados.
 - **Mapa de calor:** além do calor, pinos por local na cor da rede (fibra azul, coaxial laranja; contorno vermelho quando há atividade aberta). Ao tocar no pino, abre a lista das O.S. do local, e cada uma abre com os dados, os itens da LPU, as fotos e o PDF.
-- **Para ativar:** rode de novo o `supabase.sql` e publique de novo as funções `telegram` e `alertas` com os novos `telegram-index.ts` e `alertas-index.ts`.
+- **Para ativar:** rode de novo o `supabase.sql` e publique de novo as funções `telegram` e `alertas` com os novos `supabase/functions/telegram/index.ts` e `supabase/functions/alertas/index.ts`.
 
 ## Atualização da O.S. de hora em hora
 
@@ -172,13 +172,13 @@ As chaves vêm num arquivo separado, `CHAVES-ALERTAS-NAO-ENVIAR-AO-GITHUB.txt`. 
   O alarme só para depois do envio. O botão **Atualizar O.S.**, na barra de baixo, permite atualizar antes. Com o app fechado, chega a notificação.
 - **Supervisor e gestor:** O.S. em andamento há mais de 60 minutos sem atualização aparecem em amarelo no topo do painel, com o botão Ver O.S. A fila mostra "atualizada há…". Com os alertas ativados no computador, chega uma notificação a cada hora sem atualização.
 - No cadastro da atividade fica o histórico de todas as atualizações do técnico.
-- **Para ativar:** publique de novo a função `alertas` com o novo `alertas-index.ts`.
+- **Para ativar:** publique de novo a função `alertas` com o novo `supabase/functions/alertas/index.ts`.
 
 ## Fotos com carimbo e envio ao Telegram
 
 - Toda foto tirada pelo app sai com o carimbo padrão Multivale: hora em destaque, data e dia da semana, endereço do local (pelo GPS), latitude e longitude com a precisão, a categoria e a O.S. no alto e, na faixa branca de baixo, o nome e a função do técnico com o logo da Multivale.
 - Ao enviar para medição, cada O.S. vai para o tópico dela no Telegram com a mensagem e o botão O.S MEDIDA, **as fotos soltas** (em álbuns de até 10) e **o PDF do relatório de serviço**, que também traz as fotos. O painel gera os PDFs e deixa na pasta `relatorios` do Storage.
-- **Para ativar:** publique de novo a função `telegram` com o novo `telegram-index.ts`.
+- **Para ativar:** publique de novo a função `telegram` com o novo `supabase/functions/telegram/index.ts`.
 
 ## Menu do painel
 
@@ -223,7 +223,7 @@ Nesse link a pessoa só faz uma coisa: colar o texto do acionamento da Claro.
   - A produção da LPU fica só na O.S. do técnico principal. Na ficha do apoio, a etapa Produção fica bloqueada.
   - No painel, a atividade mostra "+ N apoio" e a situação de cada apoio (recebida, em deslocamento, no local, concluída).
 - **Mapa ao vivo:** mostra também quem está de expediente sem atividade (verde, "Disponível") ou em refeição (amarelo). Durante o expediente o celular manda a posição a cada minuto.
-- **Para ativar:** rode de novo o `supabase.sql` e publique de novo a função `alertas` com o novo `alertas-index.ts`.
+- **Para ativar:** rode de novo o `supabase.sql` e publique de novo a função `alertas` com o novo `supabase/functions/alertas/index.ts`.
 
 ## Produção (LPU), BI e fechamento
 
@@ -285,7 +285,7 @@ O botão **Planilha (Excel)** baixa as O.S. da etapa (ou só as selecionadas), c
    - Adicione o bot como **administrador**, com permissão de **gerenciar tópicos**.
 3. **Função:** no Supabase, **Edge Functions** > **Deploy a new function** > **Via Editor**.
    - Nome: `telegram`.
-   - Cole todo o conteúdo do arquivo `telegram-index.ts` e clique em **Deploy function**.
+   - Cole todo o conteúdo do arquivo `supabase/functions/telegram/index.ts` e clique em **Deploy function**.
    - Em **Details**, desligue **Enforce JWT verification**. A função confere sozinha quem chama.
 4. **Segredos:** em **Edge Functions** > **Secrets**, cadastre:
    - `TELEGRAM_BOT_TOKEN`: o token do BotFather.
@@ -327,7 +327,7 @@ Cada O.S. passa a ter o seu cluster, tirado da cidade do endereço (DDD local), 
 
 **Ajustes:** em **Calendário de recursos** > **Cidades por cluster**, mande uma cidade para outro cluster ou mini cluster. A lista padrão completa também está lá.
 
-**Para atualizar:** suba os arquivos e atualize a função **acesso** colando o `acesso-index.ts` novo. Não precisa rodar SQL.
+**Para atualizar:** suba os arquivos e atualize a função **acesso** colando o `supabase/functions/acesso/index.ts` novo. Não precisa rodar SQL.
 
 
 ## Mapa de fusão da caixa de emenda (v42)
@@ -473,7 +473,7 @@ Atividade própria (não fica dentro da preventiva), com foco no site do backbon
 - **Supervisor:** ao concluir, a conjunta aparece no painel em verde, "aguardando as curvas do OTDR". O botão "Inserir curvas" abre a conjunta; anexe a curva TX e a RX (PDF, imagem ou o arquivo .sor do OTDR). O aviso some quando as duas estão anexadas.
 - **Relatório:** o PDF traz ticket, site, técnico do parceiro, tabela de fibras com as potências, situação das curvas, as fotos e, se a curva for imagem, uma página para cada curva.
 - **Banco:** a conjunta é uma ronda `tipo = 'site'` e cada site fica na tabela `eventos` (`dados.tipo = 'site'`); as curvas vão para o Storage em `org/curvas/...` e a referência para `dados.site.curvas`. Se o técnico sincronizar de novo, as curvas não se perdem.
-- **SQL:** `supabase-v61.sql` libera PDF e .sor no bucket de fotos. **Já foi aplicado no projeto**; só rode de novo se recriar o banco.
+- **SQL:** a liberação de PDF e .sor no bucket de fotos já está no `supabase.sql` e **já foi aplicada no projeto**.
 
 ## Cores do field service da Claro (v59)
 
@@ -484,7 +484,7 @@ Atividade própria (não fica dentro da preventiva), com foco no site do backbon
 
 ## Review completo: voz, backup automático, banco mais rápido e senhas (v58)
 
-**O que fazer (uma vez):** SQL Editor > New query > cole o arquivo **`supabase-v58.sql`** inteiro > **Run**. (Ou cole o `supabase.sql` inteiro; a v58 está no final dele.)
+**O que fazer (uma vez):** SQL Editor > New query > cole o `supabase.sql` inteiro > **Run** (já aplicado no projeto; a v58 está no final dele.)
 
 - Ele guarda antes uma cópia das políticas atuais na tabela `bkp.policies_v58`. Essa tabela fica fora do alcance do app.
 - Depois troca as políticas de segurança por versões mais rápidas, com as **mesmas regras de acesso**:
@@ -572,7 +572,7 @@ A função `alertas` já foi atualizada direto no seu Supabase. Não precisa rod
 3. **Sem acesso anônimo:** Authentication > Sign In / Providers > desligue **Allow anonymous sign-ins**. O app não usa mais login anônimo.
    - Na mesma área, em **Password security**, ligue **Leaked password protection**. Ela recusa senhas que já vazaram na internet.
 4. **Limpeza:** Edge Functions > apague as funções **super-worker** e **bright-handler**. São cópias antigas da telegram, criadas na primeira tentativa.
-5. **(Opcional) Endereço preciso no mapa:** crie a chave grátis no Geoapify, cadastre o segredo `GEOAPIFY_KEY` e publique a função `geocode` (arquivo `geocode-index.ts`).
+5. **(Opcional) Endereço preciso no mapa:** crie a chave grátis no Geoapify, cadastre o segredo `GEOAPIFY_KEY` e publique a função `geocode` (arquivo `supabase/functions/geocode/index.ts`).
 
 **O que mudou no app**
 - **Código em módulos:** o `index.html` virou uma página pequena. O código está em `app.css` e em 12 arquivos `app-01-base.js` … `app-12-projetos-inicio.js`, na **mesma pasta** (sem subpasta).
@@ -607,7 +607,7 @@ A função `alertas` já foi atualizada direto no seu Supabase. Não precisa rod
 
 **O que fazer nesta versão (2 passos):**
 1. **SQL Editor** > cole o `supabase.sql` inteiro de novo e clique em **Run**. Cria as tabelas `equipamentos` e `equip_mov`, a função `equip_aceite` e a coluna `admins.email`.
-2. **Edge Functions** > função **acesso** > **Code** > cole o conteúdo novo de `acesso-index.ts` > **Deploy**. Sem isso o botão "Criar acesso do painel" responde "Ação desconhecida".
+2. **Edge Functions** > função **acesso** > **Code** > cole o conteúdo novo de `supabase/functions/acesso/index.ts` > **Deploy**. Sem isso o botão "Criar acesso do painel" responde "Ação desconhecida".
 
 **Acessos do painel sem abrir o Supabase**
 - Em **Equipe e cadastros** > **Acessos do painel**: informe nome, e-mail e papel e clique em **Criar acesso do painel**. O app mostra uma senha provisória para enviar à pessoa.
@@ -679,7 +679,7 @@ Não precisa rodar SQL nesta versão.
 
 **Para atualizar:**
 1. Rode o `supabase.sql`, que cria as colunas de projeto e os índices.
-2. Publique de novo as funções **telegram** e **alertas** com os novos `telegram-index.ts` e `alertas-index.ts`.
+2. Publique de novo as funções **telegram** e **alertas** com os novos `supabase/functions/telegram/index.ts` e `supabase/functions/alertas/index.ts`.
 3. Suba os arquivos.
 4. Em **Centro de custo**, confira se cada projeto tem o vínculo e, se for o caso, o faturamento.
 
@@ -710,7 +710,7 @@ Não precisa rodar SQL nesta versão.
 
 **Para atualizar:**
 1. Rode o `supabase.sql`, que cria a coluna `senha_pedida`.
-2. Publique de novo a função **acesso** com o novo `acesso-index.ts`.
+2. Publique de novo a função **acesso** com o novo `supabase/functions/acesso/index.ts`.
 3. Suba os arquivos.
 
 ## Plano de fusão interativo com fotos, cabos de 12 a 288 FO, KMZ da rota (v46)
@@ -762,7 +762,7 @@ Não precisa rodar SQL nesta versão.
 
 1. **Banco:** rode o **supabase.sql inteiro** no SQL Editor.
 2. **Função `acesso`:**
-   - Em **Edge Functions**, crie a função com o nome **acesso**, cole o arquivo `acesso-index.ts` e faça o deploy.
+   - Em **Edge Functions**, crie a função com o nome **acesso**, cole o arquivo `supabase/functions/acesso/index.ts` e faça o deploy.
    - **Importante:** na função, **desligue "Verify JWT"** (Enforce JWT verification). O primeiro acesso do técnico chega sem login; a própria função confere quem está chamando.
    - Não precisa de chave nova: ela usa a chave de serviço que o Supabase já entrega para a função.
 3. **Técnicos:** em **Equipe e cadastros**, cadastre cada técnico (de preferência com a matrícula) e envie o convite pelo WhatsApp.
@@ -939,7 +939,7 @@ A busca dá preferência à região de atendimento (Vale, Litoral e Sul de Minas
 1. **Conta:** acesse https://www.geoapify.com e clique em **Get started / Sign up**. Entre com e-mail ou conta Google; não pede cartão.
 2. **Projeto:** no painel (My Projects), crie um projeto, por exemplo "Técnico Plus". A chave de API aparece pronta; copie-a.
 3. **Secret no Supabase:** em Edge Functions > Secrets, crie `GEOAPIFY_KEY` com a chave.
-4. **Função:** em Edge Functions, crie a função **geocode** (ou atualize, se já criou), cole o arquivo `geocode-index.ts` e faça o deploy.
+4. **Função:** em Edge Functions, crie a função **geocode** (ou atualize, se já criou), cole o arquivo `supabase/functions/geocode/index.ts` e faça o deploy.
 
 Se você já tinha criado o secret `GOOGLE_MAPS_KEY`, pode apagá-lo: com o `GEOAPIFY_KEY` configurado, a função usa o Geoapify. A chave fica só no Supabase e nunca vai para o site nem para o GitHub. Só o supervisor, o gestor e os despachantes conseguem usar a validação.
 
@@ -979,7 +979,7 @@ Se você já tinha criado o secret `GOOGLE_MAPS_KEY`, pode apagá-lo: com o `GEO
 
 **No Supabase:**
 1. Rode de novo o **supabase.sql**. Ele cria a tabela `pedidos`.
-2. Atualize a função **alertas** com o novo `alertas-index.ts`. Com ela, o técnico só recebe aviso quando o supervisor cobra.
+2. Atualize a função **alertas** com o novo `supabase/functions/alertas/index.ts`. Com ela, o técnico só recebe aviso quando o supervisor cobra.
 
 ## Centro de custo por projeto (v28)
 
@@ -1014,7 +1014,7 @@ Fica no menu do painel: **Centro de custo (projetos)**.
 
 **No Supabase (uma vez):**
 1. SQL Editor → rode de novo o **supabase.sql** inteiro (é seguro repetir). Ele atualiza a função `apoio_status`, que passa a aceitar o ciente da equipe de apoio.
-2. Edge Functions → **alertas** → cole o novo **alertas-index.ts** e faça o deploy (os push de O.S. param depois do ciente).
+2. Edge Functions → **alertas** → cole o novo **supabase/functions/alertas/index.ts** e faça o deploy (os push de O.S. param depois do ciente).
 
 ## Almoxarifado (WMS) e serviços do técnico (v27)
 

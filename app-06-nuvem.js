@@ -150,7 +150,7 @@ const Nuvem = {
     const nome = String(file.name || 'curva').replace(/[^\w.\- ]+/g, '_').slice(0, 80); const ext = (nome.match(/\.([a-z0-9]{1,5})$/i) || [, ''])[1].toLowerCase();
     const mime = /^image\/(jpeg|png|webp)$/.test(file.type) ? file.type : ext === 'pdf' || file.type === 'application/pdf' ? 'application/pdf' : 'application/octet-stream';
     const path = `${this.org()}/curvas/${id}/${lado}_${Date.now()}${ext ? '.' + ext : ''}`;
-    const up = await this.sb.storage.from(this.BUCKET).upload(path, file, { contentType: mime, upsert: true }); if (up.error) throw new Error(/mime|type/i.test(up.error.message || '') ? 'O servidor ainda não aceita esse tipo de arquivo. Rode o supabase-v61.sql ou envie a curva como imagem (PNG/JPG).' : up.error.message);
+    const up = await this.sb.storage.from(this.BUCKET).upload(path, file, { contentType: mime, upsert: true }); if (up.error) throw new Error(/mime|type/i.test(up.error.message || '') ? 'O servidor ainda não aceita esse tipo de arquivo. Rode o supabase.sql ou envie a curva como imagem (PNG/JPG).' : up.error.message);
     const d = { ...r.dados }; d.site = { ...(d.site || {}) }; d.site.curvas = { ...(d.site.curvas || {}), [lado]: { path, nome, mime, por: (this.admin || {}).nome || 'Supervisor', em: Date.now() } };
     if (d.site.curvas.tx && d.site.curvas.rx) d.site.curvasOk = Date.now();
     this.ok(await this.tab('eventos').update({ dados: d }).eq('id', id)); return d; },
