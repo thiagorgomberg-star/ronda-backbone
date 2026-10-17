@@ -4,7 +4,7 @@
 /* ============================ navegação e render ============================ */
 function go(v) { if (ADMIN && typeof ehAlmox === 'function' && ehAlmox() && !['admMat', 'admLogin'].includes(v)) v = 'admMat'; S.view = v; window.scrollTo(0, 0); render(); }
 const TOPO = ['home', 'eventos', 'producao', 'veiculo', 'materiais', 'relatorios', 'rotas', 'perfil'];
-const ADM_TOPO = ['adm', 'admMed', 'admOsBi', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj', 'admCal', 'admSla', 'admAtivo', 'admFusao'];
+const ADM_TOPO = ['adm', 'admMed', 'admOsBi', 'admRemanejar', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj', 'admCal', 'admSla', 'admAtivo', 'admFusao'];
 function menu(abrir) {
   $('#drawer').hidden = !abrir; $('#scrim').hidden = !abrir; $('#btnMenu').setAttribute('aria-expanded', abrir);
   if (!abrir) return;
@@ -44,6 +44,7 @@ function render() {
   if (S.view === 'admMat') { app.innerHTML = viewAdmMat(); setBar(''); $('#topTitle').textContent = 'Almoxarifado'; $('#topSub').textContent = 'Materiais, saídas e saldos dos técnicos'; afterAdmMat(); pintaLimites(); return; }
   if (S.view === 'admLote') { app.innerHTML = viewAdmLote(); setBar(''); $('#topTitle').textContent = 'Importar O.S. em lote'; $('#topSub').textContent = 'O.S. pendentes de execução'; afterAdmLote(); return; }
   if (S.view === 'admMed') { app.innerHTML = viewAdmMed(); setBar(''); $('#topTitle').textContent = 'Medição'; $('#topSub').textContent = `${Nuvem.admin.nome || ''} · ${fDM(S.adm.de)} a ${fDM(S.adm.ate)}`; afterAdmMed(); pintaLimites(); return; }
+  if (S.view === 'admRemanejar') { app.innerHTML = viewAdmRemanejar(); setBar(''); $('#topTitle').textContent = 'Remanejar O.S.'; $('#topSub').textContent = 'Trocar o técnico ou o dia da O.S.'; afterAdmRemanejar(); pintaLimites(); return; }
   if (S.view === 'admOsBi') { app.innerHTML = viewAdmOsBi(); setBar(''); $('#topTitle').textContent = 'BI das O.S.'; $('#topSub').textContent = `${fDM(S.adm.de)} a ${fDM(S.adm.ate)}`; afterAdmOsBi(); pintaLimites(); return; }
   if (S.view === 'admBi') { app.innerHTML = viewAdmBi(); setBar(''); $('#topTitle').textContent = 'Produção (BI)'; $('#topSub').textContent = `${S.perfil.nome} · ${S.adm.de.split('-').reverse().join('/')} a ${S.adm.ate.split('-').reverse().join('/')}`; afterAdmBi(); return; }
   if (S.view === 'admAtv') { app.innerHTML = viewAdmAtv(S.atvEdit); setBar(''); $('#topTitle').textContent = S.atvEdit._novo ? 'Nova atividade' : 'Atividade ' + (S.atvEdit.ticket || ''); $('#topSub').textContent = 'Despacho para o técnico'; afterAdmAtv(); return; }

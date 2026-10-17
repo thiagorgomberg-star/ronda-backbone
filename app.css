@@ -413,3 +413,4 @@ img.marca.m-escuro{display:none}
 .evg .ph .pb input{min-height:40px}
 .ph .seg{min-height:38px}.ph .seg button{font-size:13px;padding:0 4px}
 @media (min-width:760px){.evg{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.navsec{padding:14px 20px 4px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line);margin-top:6px}

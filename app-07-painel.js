@@ -508,7 +508,7 @@ function afterAcion() {
 }
 /* ---------- medição (gestor): pipeline das O.S., validação, envio ao Telegram ---------- */
 const ehAlmox = () => ((Nuvem.admin || {}).papel === 'almoxarife');
-const admInicio = () => NOC ? 'noc' : ACION ? 'acion' : ehAlmox() ? 'admMat' : (Nuvem.admin && Nuvem.admin.papel === 'gestor') ? 'admMed' : 'adm';
+const admInicio = () => NOC ? 'noc' : ACION ? 'acion' : ehAlmox() ? 'admMat' : 'adm'; // painel e despacho é a tela principal de supervisor e gestor
 function admPeriodoPapel() { if (Nuvem.admin && Nuvem.admin.papel === 'gestor') { const [c0, c1] = cicloDe(); S.adm.de = c0; S.adm.ate = c1; } }
 const MED_ETAPAS = [['pendente', 'Pendentes', 'var(--muted)'], ['rota', 'Em rota', 'var(--st-trav, #0b5f99)'], ['finalizada', 'Finalizadas', 'var(--accent)'], ['validada', 'Validadas', '#d9a400'], ['enviada', 'Enviadas p/ medição', '#7a3fa0'], ['medida', 'Medidas', 'var(--ok)']];
 const MED_LB = Object.fromEntries(MED_ETAPAS.map(([k, l]) => [k, l]));
@@ -937,4 +937,37 @@ async function biosPdf() {
     didParseCell: d => { if (d.section === 'body' && d.column.index === 8 && d.cell.raw === 'fora do SLA') d.cell.styles.textColor = [190, 30, 30]; } });
   const tot = L.reduce((t, x) => t + (+x.valor || 0), 0); doc.setFontSize(9); doc.setTextColor(20); doc.text(`${L.length} O.S. · valor total ${fBRL(tot)}`, 12, doc.lastAutoTable.finalY + 6);
   baixar(new File([doc.output('blob')], `BI_OS_${A.de}_a_${A.ate}${S.biosEt ? '_' + S.biosEt : ''}.pdf`, { type: 'application/pdf' }));
+}
+/* ---------- Configurações › Remanejar O.S.: trocar o técnico e/ou o dia das O.S. que ainda não começaram ---------- */
+const remAbertas = () => [...((S.atvsAdm || new Map()).values())].filter(a => ['pendente', 'recebida', 'pausada'].includes(a.status)).sort((x, y) => agendaDe(x).localeCompare(agendaDe(y)) || x.criado - y.criado);
+function viewAdmRemanejar() {
+  const tecs = (S.adm.tecnicos || []).slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome))); const q = normLocal(S.remBusca || ''); const ft = S.remTec || '';
+  const L = remAbertas().filter(a => (!ft || (ft === '__sem' ? !a.tecnicoUid : a.tecnicoUid === ft)) && (!q || normLocal(`${a.ticket} ${a.tecnicoNome} ${atvTitulo(a)} ${a.endereco || ''} ${a.refLocal || ''}`).includes(q)));
+  const opt = a => `<option value="">Sem técnico (fila)</option>${tecs.map(t => `<option value="${esc(t.uid)}" ${a.tecnicoUid === t.uid ? 'selected' : ''}>${esc(t.nome)}</option>`).join('')}`;
+  return `<section class="card"><h2>Remanejar O.S.</h2><p class="muted small" style="margin:0">Troque o técnico e/ou o dia das O.S. que ainda não começaram (pendentes, entregues ou pausadas). Trocando o técnico, o novo recebe a O.S. com alarme e o anterior deixa de vê-la. Os pedidos de remanejamento feitos pelos técnicos continuam chegando no aviso do painel.</p>
+    <div class="grid2"><div class="field"><label class="lb" for="remBusca">Buscar</label><input type="search" id="remBusca" value="${esc(S.remBusca || '')}" placeholder="Ticket, técnico ou endereço"></div>
+    <div class="field"><label class="lb" for="remTec">Técnico atual</label><select id="remTec"><option value="">Todos</option><option value="__sem" ${ft === '__sem' ? 'selected' : ''}>Sem técnico (fila)</option>${tecs.map(t => `<option value="${esc(t.uid)}" ${ft === t.uid ? 'selected' : ''}>${esc(t.nome)}</option>`).join('')}</select></div></div></section>
+  ${L.length ? L.map(a => `<section class="card" data-rem="${esc(a.id)}" style="gap:8px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><b>${esc(a.ticket || 'Sem ticket')} · ${esc(tipoAtvLb(a))}</b><span class="pill ${a.status === 'pausada' ? 'draft' : 'ok'}">${esc(stAtv(a))}</span></div>
+    <span class="muted small">${esc(a.tecnicoNome || 'Sem técnico')} · agendada para ${esc(fDiaCurto(agendaDe(a)))}${a.endereco || a.refLocal ? ' · ' + esc(a.endereco || a.refLocal) : ''}${(a.remanejos || []).length ? ` · já remanejada ${a.remanejos.length}x` : ''}</span>
+    <div class="grid3" style="align-items:end"><div class="field"><label class="lb" for="rt_${esc(a.id)}">Novo técnico</label><select id="rt_${esc(a.id)}" data-remtec>${opt(a)}</select></div><div class="field"><label class="lb" for="rd_${esc(a.id)}">Novo dia</label><input type="date" id="rd_${esc(a.id)}" data-remdia value="${esc(agendaDe(a))}"></div><button type="button" class="btn pri" data-remok="${esc(a.id)}">Remanejar</button></div></section>`).join('') : '<section class="card"><p class="empty">Nenhuma O.S. para remanejar.</p></section>'}`;
+}
+function afterAdmRemanejar() {
+  const re = () => { const y = window.scrollY; render(); window.scrollTo(0, y); };
+  let t; $('#remBusca').addEventListener('input', e => { S.remBusca = e.target.value; clearTimeout(t); t = setTimeout(() => { re(); const i = $('#remBusca'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 300); });
+  $('#remTec').onchange = e => { S.remTec = e.target.value; re(); };
+  $$('[data-remok]').forEach(b => b.onclick = async () => {
+    const a = (S.atvsAdm || new Map()).get(b.dataset.remok); if (!a) { toast('O.S. não encontrada (atualize o painel).'); return; }
+    const box = b.closest('[data-rem]'); const uid = $('[data-remtec]', box).value, dia = $('[data-remdia]', box).value;
+    const novoTec = uid !== (a.tecnicoUid || ''), novoDia = dia && dia !== agendaDe(a);
+    if (!novoTec && !novoDia) { toast('Escolha outro técnico ou outro dia.'); return; }
+    const t = (S.adm.tecnicos || []).find(x => x.uid === uid); const quem = (Nuvem.admin || {}).nome || 'Supervisor';
+    const txt = [novoTec ? `técnico: ${a.tecnicoNome || 'sem técnico'} → ${t ? t.nome : 'sem técnico (fila)'}` : '', novoDia ? `dia: ${fDiaCurto(agendaDe(a))} → ${fDiaCurto(dia)}` : ''].filter(Boolean).join('\n');
+    if (!confirm(`Remanejar a O.S. ${a.ticket || ''}?\n\n${txt}`)) return;
+    const nv = { ...a };
+    if (novoTec) { nv.tecnicoUid = uid || null; nv.tecnicoNome = t ? t.nome : ''; nv.status = 'pendente'; nv.recebidaEm = null; nv.vistaEm = null; nv.atualizacoes = [...(a.atualizacoes || []), { ts: Date.now(), sit: 'remanejo', txt: `Remanejada de ${a.tecnicoNome || 'sem técnico'} para ${t ? t.nome : 'a fila'}`, por: quem }].slice(-60); }
+    if (novoDia) { nv.agendaDia = dia; nv.remanejos = [...(a.remanejos || []), { de: agendaDe(a), para: dia, por: quem, em: Date.now() }].slice(-20); }
+    b.disabled = true; b.textContent = 'Salvando…';
+    try { const r = await Nuvem.atvSalvar(nv); if (r) S.atvsAdm.set(r.id, r); Nuvem.avisaFuncao(); toast(`O.S. ${a.ticket || ''} remanejada${novoTec ? ' para ' + (t ? t.nome : 'a fila') : ''}${novoDia ? ' · ' + fDiaCurto(dia) : ''}.`, 5000); re(); }
+    catch (e) { toast('Erro ao remanejar: ' + (e.message || e), 6000); b.disabled = false; b.textContent = 'Remanejar'; }
+  });
 }
