@@ -4,7 +4,7 @@
 /* ============================ navegação e render ============================ */
 function go(v) { if (ADMIN && typeof ehAlmox === 'function' && ehAlmox() && !['admMat', 'admLogin'].includes(v)) v = 'admMat'; S.view = v; window.scrollTo(0, 0); render(); }
 const TOPO = ['home', 'eventos', 'producao', 'veiculo', 'materiais', 'relatorios', 'rotas', 'perfil'];
-const ADM_TOPO = ['adm', 'admMed', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj', 'admCal', 'admSla', 'admAtivo', 'admFusao'];
+const ADM_TOPO = ['adm', 'admMed', 'admOsBi', 'admBi', 'admCalor', 'admEquipe', 'admLote', 'admMat', 'admPrev', 'admProj', 'admCal', 'admSla', 'admAtivo', 'admFusao'];
 function menu(abrir) {
   $('#drawer').hidden = !abrir; $('#scrim').hidden = !abrir; $('#btnMenu').setAttribute('aria-expanded', abrir);
   if (!abrir) return;
@@ -44,6 +44,7 @@ function render() {
   if (S.view === 'admMat') { app.innerHTML = viewAdmMat(); setBar(''); $('#topTitle').textContent = 'Almoxarifado'; $('#topSub').textContent = 'Materiais, saídas e saldos dos técnicos'; afterAdmMat(); pintaLimites(); return; }
   if (S.view === 'admLote') { app.innerHTML = viewAdmLote(); setBar(''); $('#topTitle').textContent = 'Importar O.S. em lote'; $('#topSub').textContent = 'O.S. pendentes de execução'; afterAdmLote(); return; }
   if (S.view === 'admMed') { app.innerHTML = viewAdmMed(); setBar(''); $('#topTitle').textContent = 'Medição'; $('#topSub').textContent = `${Nuvem.admin.nome || ''} · ${fDM(S.adm.de)} a ${fDM(S.adm.ate)}`; afterAdmMed(); pintaLimites(); return; }
+  if (S.view === 'admOsBi') { app.innerHTML = viewAdmOsBi(); setBar(''); $('#topTitle').textContent = 'BI das O.S.'; $('#topSub').textContent = `${fDM(S.adm.de)} a ${fDM(S.adm.ate)}`; afterAdmOsBi(); pintaLimites(); return; }
   if (S.view === 'admBi') { app.innerHTML = viewAdmBi(); setBar(''); $('#topTitle').textContent = 'Produção (BI)'; $('#topSub').textContent = `${S.perfil.nome} · ${S.adm.de.split('-').reverse().join('/')} a ${S.adm.ate.split('-').reverse().join('/')}`; afterAdmBi(); return; }
   if (S.view === 'admAtv') { app.innerHTML = viewAdmAtv(S.atvEdit); setBar(''); $('#topTitle').textContent = S.atvEdit._novo ? 'Nova atividade' : 'Atividade ' + (S.atvEdit.ticket || ''); $('#topSub').textContent = 'Despacho para o técnico'; afterAdmAtv(); return; }
   if (S.view === 'adm') { app.innerHTML = viewAdm(); setBar(''); $('#topTitle').textContent = 'Painel do supervisor'; $('#topSub').textContent = `${S.perfil.nome} · ${S.adm.de.split('-').reverse().join('/')} a ${S.adm.ate.split('-').reverse().join('/')}`; afterAdm(); return; }
@@ -104,7 +105,7 @@ function viewHome() {
       <div class="field full" ${S.modo === 'corretiva' ? 'hidden' : ''}><label class="lb" for="pf_rota">Rota</label><select id="pf_rota">${rotaOpts(S.perfil.rotaId, S.rotas && S.rotas.length ? 'Sem rota definida' : 'Nenhuma rota cadastrada')}</select></div></div>
       <div class="grid2">${selAdd('st_veic', 'veiculo', S.perfil.veiculoTxt || '', 'Veículo', 'data-pf="veiculoTxt"', true, true)}
       ${ap && ODO_POR === 'os' ? `<div class="field"><label class="lb" for="odoIni">Odômetro inicial (km) <span class="req">*</span></label><input type="text" inputmode="numeric" id="odoIni" value="${esc(S.odoIni || '')}" placeholder="Ex.: 48210"></div>
-      <div class="field" style="justify-content:flex-end"><button type="button" class="btn" id="bFotoOdoIni" style="min-height:48px">${ICON.cam}${S.odoFotoIni ? 'Foto ✓' : 'Foto do painel'}</button></div>` : `<p class="muted small field full" style="margin:0">${ODO_POR === 'expediente' ? 'O odômetro é informado só no início e no fim do expediente.' : 'O odômetro é pedido quando você recebe uma O.S. e inicia o deslocamento até ela.'}</p>`}</div>
+      <div class="field" style="justify-content:flex-end"><button type="button" class="btn" id="bFotoOdoIni" style="min-height:48px">${ICON.cam}${S.odoFotoIni ? 'Foto ✓' : 'Foto do painel'}</button></div>` : `<p class="muted small field full" style="margin:0">${ODO_POR === 'expediente' ? 'O odômetro é informado só no início e no fim do expediente.' : ODO_POR === 'os' ? 'O odômetro é pedido quando você recebe uma O.S. e inicia o deslocamento até ela.' : ''}</p>`}</div>
       <button class="btn go block" id="bIniciar" ${ap && ODO_POR === 'os' && kmNum(S.odoIni) == null ? 'disabled' : ''}>${ICON.play}${ap ? 'Iniciar deslocamento' : TIT[M]}</button>
       ${M === 'preventiva' && livre && !ap ? `<button class="btn block" id="bAvulsa">${ICON.plus}Inspeção avulsa (sem rota)</button>` : ''}</section>`;
     h += `<section class="acts"><div class="ah"><span>Concluídas hoje</span><button type="button" class="lnk" id="bVerRel">Ver anteriores</button></div><div id="hist"><p class="empty">Carregando…</p></div></section>`;

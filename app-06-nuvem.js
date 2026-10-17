@@ -34,6 +34,7 @@ const Nuvem = {
   async histLista() { return this.ok(await this.tab('acionamentos_historico').select('mes, qtd, gerado_em, exportado_em, exportado_por').eq('org', this.org()).order('mes', { ascending: false })) || []; },
   async histMes(mes) { const d = this.ok(await this.tab('acionamentos_historico').select('dados').eq('org', this.org()).eq('mes', mes).maybeSingle()); return (d && d.dados) || []; },
   async histMarcar(mes, por) { this.ok(await this.tab('acionamentos_historico').update({ exportado_em: new Date().toISOString(), exportado_por: por }).eq('org', this.org()).eq('mes', mes)); },
+  async osmPeriodo(a, b) { return await this.todos(() => this.tab('os_medidas').select('id,uid,tecnico,os,tipo,cliente,data_os,valor,lote,medido_em').eq('org', this.org()).gte('data_os', new Date(a).toISOString()).lte('data_os', new Date(b).toISOString()).order('data_os')); },
   async osmCiclo(ciclo) { return await this.todos(() => this.tab('os_medidas').select('*').eq('org', this.org()).eq('ciclo', ciclo).order('data_os')); },
   async medGravar(row) { return this.ok(await this.tab('medicoes').upsert({ org: this.org(), atualizado: Date.now(), ...row }).select().maybeSingle()); },
   async medApagar(id) { this.ok(await this.tab('medicoes').delete().eq('id', id)); },

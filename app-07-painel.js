@@ -833,3 +833,108 @@ async function afterAdm() {
   $('#admTec2 tbody').innerHTML = [...porTec.values()].sort((a, b) => a.n.localeCompare(b.n)).map(x => `<tr><td>${esc(x.n)}</td><td class="r">${x.at}</td><td class="r">${x.cx}</td><td class="r">${x.co}</td><td class="r">${fKm(x.km)}</td><td class="r" style="${x.dv ? 'color:var(--bad);font-weight:700' : ''}">${x.dv}</td><td class="r" style="${x.ex ? 'color:var(--bad);font-weight:700' : ''}">${x.ex}</td><td class="r" style="${x.od ? 'color:var(--bad);font-weight:700' : ''}">${x.od}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">—</td></tr>';
 }
 const SVG = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+/* ---------- BI das O.S.: pendente → alocada → em execução → finalizada → medida → arquivada, com o tempo de SLA ---------- */
+const BIOS_ET = [['pendente', 'Pendentes', '#6b6b6b', 'Sem técnico'], ['alocada', 'Alocadas ao técnico', '#0b5f99', 'Aguardando o técnico iniciar'], ['execucao', 'Em execução', '#d97a00', 'Em deslocamento, no local ou pausada'], ['finalizada', 'Finalizadas', '#0572ce', 'Concluídas, ainda não medidas'], ['medida', 'Medidas', '#2e7d32', 'Medidas pela equipe de medição'], ['arquivada', 'Arquivadas', '#7a3fa0', 'Medidas e já arquivadas no ciclo']];
+const BIOS_LB = Object.fromEntries(BIOS_ET.map(x => [x[0], x[1]]));
+const tipoAtvLb = a => atvEmerg(a) ? (/claro/i.test(a.cliente || '') ? 'Corretiva Claro' : 'Corretiva / emergencial') : atvImpl(a) ? 'Implantação' : atvConj(a) ? 'Conjunta de site' : atvVist(a) ? 'Vistoria' : 'Preventiva';
+function biosLinhas() {
+  const A = S.adm, de = diaIni(A.de), ate = diaFim(A.ate), agora = Date.now();
+  const atvs = [...((S.atvsAdm || new Map()).values())].filter(a => a.status !== 'cancelada' && (!A.tec || a.tecnicoUid === A.tec || (a.apoioUids || []).includes(A.tec)));
+  const meds = S.meds || new Map(); const arq = S.biosArq || new Map();
+  // ficha (inspeção) → atividade, pela ronda
+  const porAtv = new Map(), soltas = [];
+  [...DB.mem.inspecoes.values()].filter(i => !i.apoio && (!A.tec || i._uid === A.tec)).forEach(i => { const r = i.rondaId ? DB.mem.rondas.get(i.rondaId) : null; const aid = (r && r.atividadeId) || i.atividadeId; if (aid) (porAtv.get(aid) || porAtv.set(aid, []).get(aid)).push(i); else soltas.push(i); });
+  const etapaFicha = l => { if (l.some(i => arq.has(i.id) || (meds.get(i.id) || {})._arq)) return ['arquivada', '']; const m = l.map(i => meds.get(i.id)).find(Boolean); if (m && m.status === 'medida') return ['medida', '']; if (m && m.status === 'enviada') return ['finalizada', 'Na medição']; if (m && m.status === 'validada') return ['finalizada', 'Validada']; return ['finalizada', 'Aguardando validação']; };
+  const out = [], usadas = new Set();
+  for (const a of atvs) {
+    const l = porAtv.get(a.id) || []; l.forEach(i => usadas.add(i.id));
+    let et, sub = '';
+    if (a.status === 'pendente' || a.status === 'recebida') { et = a.tecnicoUid ? 'alocada' : 'pendente'; sub = a.tecnicoUid ? (a.vistaEm ? 'Técnico ciente' : a.status === 'recebida' ? 'Entregue' : 'Enviada') : 'Sem técnico'; }
+    else if (a.status === 'em_deslocamento' || a.status === 'no_local' || a.status === 'pausada') { et = 'execucao'; sub = a.status === 'no_local' ? 'No local' : a.status === 'pausada' ? 'Pausada' : 'Em deslocamento'; }
+    else if (a.status === 'concluida') [et, sub] = etapaFicha(l); else continue;
+    const fim = et === 'pendente' || et === 'alocada' || et === 'execucao' ? null : +(a.concluidaEm || Math.max(0, ...l.map(i => i.saida || 0)) || a.atualizado) || null;
+    if (fim && (fim < de || fim > ate)) continue;
+    const s = slaDe(a, agora); const ini = +a.criado || null;
+    out.push({ id: a.id, atv: a, i: l[0] || null, os: a.ticket || (l[0] ? osRef(l[0]) : '—'), tipo: tipoAtvLb(a), tec: a.tecnicoNome || '—', clu: CLUSTERS[a.cluster] || '', et, sub, ini, fim, min: ini ? ((fim || agora) - ini) / 60000 : null, lim: s ? s.rep.lim : null, estourou: s ? s.rep.estourou : false, valor: l.reduce((t, i) => t + (meds.get(i.id) && ['enviada', 'medida'].includes(meds.get(i.id).status) ? +meds.get(i.id).valor || 0 : valorOS(i)), 0) || (arq.get(a.id) || {}).valor || 0 });
+  }
+  // fichas sem atividade (corretiva aberta em campo, antes do despacho só pelo supervisor)
+  for (const i of soltas) {
+    if (isVist(i) && !i.lpu) continue; const m = meds.get(i.id);
+    const [et, sub] = i.status !== 'concluida' && !m ? ['execucao', 'Ficha aberta em campo'] : etapaFicha([i]);
+    const ini = +(i.chegada || i.criado) || null, fim = et === 'execucao' ? null : +(i.saida || i.chegada) || null;
+    if (fim && (fim < de || fim > ate)) continue;
+    out.push({ id: i.id, atv: null, i, os: osRef(i), tipo: tipoLb(i), tec: i.info.tecnico || i._tecnico || '—', clu: '', et, sub, ini, fim, min: ini ? ((fim || agora) - ini) / 60000 : null, lim: null, estourou: false, valor: m && ['enviada', 'medida'].includes(m.status) ? +m.valor || 0 : valorOS(i) });
+    usadas.add(i.id);
+  }
+  // arquivadas que não estão mais carregadas
+  for (const [id, o] of arq) { if (usadas.has(id) || out.some(x => x.i && x.i.id === id)) continue; if (A.tec && o.uid !== A.tec) continue; const t = o.data_os ? Date.parse(o.data_os) : null;
+    out.push({ id, atv: null, i: null, os: o.os || '—', tipo: o.tipo || '—', tec: o.tecnico || '—', clu: '', et: 'arquivada', sub: o.lote ? 'Lote ' + o.lote : '', ini: t, fim: +o.medido_em || null, min: null, lim: null, estourou: false, valor: +o.valor || 0 }); }
+  return out.sort((a, b) => (b.ini || 0) - (a.ini || 0));
+}
+function viewAdmOsBi() {
+  const A = S.adm, L = biosLinhas(), f = S.biosEt || ''; const tecs = A.tecnicos || []; const q = normLocal(S.biosBusca || '');
+  const lista = L.filter(x => (!f || x.et === f) && (!q || normLocal(`${x.os} ${x.tec} ${x.tipo} ${x.sub}`).includes(q)));
+  const fin = L.filter(x => x.fim && x.min != null && ['finalizada', 'medida', 'arquivada'].includes(x.et)); const med = fin.length ? fin.reduce((t, x) => t + x.min, 0) / fin.length : null;
+  const comMeta = L.filter(x => x.lim != null && x.fim); const dentro = comMeta.filter(x => !x.estourou).length;
+  const abertasEst = L.filter(x => x.lim != null && !x.fim && x.estourou).length;
+  const tempo = x => x.min == null ? '—' : `${fHm(x.min)}${x.fim ? '' : ' <span class="muted small">(em curso)</span>'}${x.lim != null ? ` <span class="pill ${x.estourou ? 'bad' : 'ok'}" title="Meta de reparo ${fHm(x.lim)}">${x.estourou ? 'fora do SLA' : 'no SLA'}</span>` : ''}`;
+  return `<section class="card"><div class="row" style="justify-content:space-between"><h2>BI das O.S.</h2><span class="muted small">${esc(Nuvem.admin.nome || '')}</span></div>
+    <div class="chips" role="group" aria-label="Período">${ciclosAtalhos(true).map(([l, d, a]) => `<button type="button" data-bper="${d}|${a}" aria-checked="${A.de === d && A.ate === a}">${l}</button>`).join('')}</div>
+    <div class="grid3"><div class="field"><label class="lb" for="bDe">De</label><input type="date" id="bDe" value="${A.de}"></div><div class="field"><label class="lb" for="bAte">Até</label><input type="date" id="bAte" value="${A.ate}"></div>
+    <div class="field"><label class="lb" for="bTec">Técnico</label><select id="bTec"><option value="">Todos os técnicos</option>${tecs.map(t => `<option value="${t.uid}" ${A.tec === t.uid ? 'selected' : ''}>${esc(t.nome)}</option>`).join('')}</select></div></div>
+    <div class="row" style="flex-wrap:wrap"><button type="button" class="btn pri" id="bBiAplica">Atualizar</button><button type="button" class="btn" id="bBiXlsx">Exportar Excel</button><button type="button" class="btn" id="bBiPdf">${ICON.pdf}Exportar PDF</button></div>
+    <p class="muted small" style="margin:0">Pendentes, alocadas e em execução mostram a situação de agora. Finalizadas, medidas e arquivadas são as concluídas no período. O tempo de SLA vai da criação da O.S. até a finalização (ou até agora, se ainda aberta).</p></section>
+  <section class="card"><div class="pipe" role="group" aria-label="Situação das O.S.">${BIOS_ET.map(([k, l, c, d]) => { const n = L.filter(x => x.et === k); return `<button type="button" class="pst" data-bet="${k}" aria-pressed="${f === k}" style="--c:${c}" title="${esc(d)}"><span>${l}</span><b>${n.length}</b><small>${n.some(x => x.valor) ? fBRL(n.reduce((t, x) => t + x.valor, 0)) : esc(d)}</small></button>`; }).join('')}</div>
+    <div class="stats"><div class="stat"><b>${L.length}</b><span>O.S. no painel</span></div><div class="stat"><b>${med != null ? fHm(med) : '—'}</b><span>Tempo médio criação → finalização</span></div><div class="stat"><b>${comMeta.length ? Math.round(dentro / comMeta.length * 100) + '%' : '—'}</b><span>Corretivas no SLA de reparo (${dentro}/${comMeta.length})</span></div><div class="stat"><b style="color:${abertasEst ? 'var(--bad)' : 'inherit'}">${abertasEst}</b><span>Abertas fora do SLA</span></div></div></section>
+  <section class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h2 style="margin:0">${f ? esc(BIOS_LB[f]) : 'Todas as O.S.'} <span class="muted small">(${lista.length})</span></h2>${f ? '<button type="button" class="lnk" data-bet="">Ver todas</button>' : ''}</div>
+    <input type="search" id="bBusca" value="${esc(S.biosBusca || '')}" placeholder="Buscar por O.S., técnico ou tipo" aria-label="Buscar O.S.">
+    <p class="muted small" style="margin:0">Toque numa O.S. para abrir a ficha completa: fotos, produção (LPU), horários e o PDF da O.S. As exportações seguem o filtro escolhido.</p>
+    ${lista.length ? `<div class="tw"><table class="t"><thead><tr><th>Criada</th><th>O.S.</th><th>Tipo</th><th>Técnico</th><th>Situação</th><th>Finalizada</th><th>Tempo (SLA)</th><th>Valor</th></tr></thead><tbody>${lista.slice(0, 400).map(x => `<tr data-bios="${esc(x.id)}" style="cursor:pointer"><td>${x.ini ? fDH(x.ini) : '—'}</td><td><b>${esc(x.os)}</b>${x.clu ? `<br><span class="muted small">${esc(x.clu)}</span>` : ''}</td><td>${esc(x.tipo)}</td><td>${esc(x.tec)}</td><td><span class="pill" style="background:color-mix(in srgb, ${BIOS_ET.find(e => e[0] === x.et)[2]} 15%, transparent);color:${BIOS_ET.find(e => e[0] === x.et)[2]}">${esc(BIOS_LB[x.et])}</span>${x.sub ? `<br><span class="muted small">${esc(x.sub)}</span>` : ''}</td><td>${x.fim ? fDH(x.fim) : '—'}</td><td>${tempo(x)}</td><td>${x.valor ? fBRL(x.valor) : '—'}</td></tr>`).join('')}</tbody></table></div>${lista.length > 400 ? '<p class="muted small" style="margin:0">Mostrando as 400 mais recentes. A planilha traz todas.</p>' : ''}` : '<p class="empty">Nenhuma O.S. nesta situação.</p>'}</section>`;
+}
+async function biosArquivadas() { try { const A = S.adm; const l = await Nuvem.osmPeriodo(diaIni(A.de), diaFim(A.ate)); S.biosArq = new Map(l.map(o => [o.id, o])); } catch (e) { console.warn('os_medidas', e); S.biosArq = S.biosArq || new Map(); } }
+function afterAdmOsBi() {
+  const A = S.adm; const re = () => { const y = window.scrollY; render(); window.scrollTo(0, y); };
+  if (!S.meds && !S.biosMedCarr) { S.biosMedCarr = true; Nuvem.medTodas().then(m => { S.meds = m; re(); }).catch(() => {}); }
+  if (!S.biosArq && !S.biosArqCarr) { S.biosArqCarr = true; biosArquivadas().then(re); }
+  const aplica = async () => { const b = $('#bBiAplica'); if (b) { b.disabled = true; b.textContent = 'Carregando…'; } try { await admCarregar(); try { S.meds = await Nuvem.medTodas(); } catch (e) {} await biosArquivadas(); } catch (e) { toast('Erro ao carregar: ' + e.message, 6000); } re(); };
+  $$('[data-bper]').forEach(b => b.onclick = () => { const [d, a] = b.dataset.bper.split('|'); A.de = d; A.ate = a; aplica(); });
+  $('#bDe').onchange = e => { A.de = e.target.value; }; $('#bAte').onchange = e => { A.ate = e.target.value; }; $('#bTec').onchange = e => { A.tec = e.target.value; };
+  $('#bBiAplica').onclick = aplica;
+  $$('[data-bet]').forEach(b => b.onclick = () => { S.biosEt = S.biosEt === b.dataset.bet ? '' : b.dataset.bet; re(); });
+  let t; $('#bBusca').addEventListener('input', e => { S.biosBusca = e.target.value; clearTimeout(t); t = setTimeout(() => { re(); const i = $('#bBusca'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 300); });
+  $$('[data-bios]').forEach(tr => tr.onclick = () => biosAbrir(tr.dataset.bios));
+  $('#bBiXlsx').onclick = () => biosExcel(); $('#bBiPdf').onclick = () => biosPdf();
+}
+const biosFiltradas = () => { const f = S.biosEt || '', q = normLocal(S.biosBusca || ''); return biosLinhas().filter(x => (!f || x.et === f) && (!q || normLocal(`${x.os} ${x.tec} ${x.tipo} ${x.sub}`).includes(q))); };
+async function biosAbrir(id) {
+  const x = biosLinhas().find(r => r.id === id); if (!x) return;
+  let i = x.i;
+  if (!i && x.et === 'arquivada') { try { const r = Nuvem.ok(await Nuvem.tab('eventos').select('dados').eq('id', x.id).maybeSingle()); i = r && r.dados; } catch (e) {} if (!i) { toast('A ficha desta O.S. arquivada não está mais no servidor (só o resumo da medição).', 6000); return; } }
+  if (i) { S.evView = i; S.evVolta = 'admOsBi'; go('evento'); return; }
+  if (x.atv) abrirAtvAdm(x.atv.id);
+}
+function biosTabela(L) { return L.map(x => ({ 'Criada': x.ini ? fDH(x.ini) : '', 'O.S.': x.os, 'Tipo': x.tipo, 'Técnico': x.tec, 'Cluster': x.clu, 'Situação': BIOS_LB[x.et], 'Detalhe': x.sub, 'Finalizada': x.fim ? fDH(x.fim) : '', 'Tempo (h:mm)': x.min != null ? fHm(x.min) : '', 'Tempo (min)': x.min != null ? Math.round(x.min) : '', 'Meta SLA reparo (h:mm)': x.lim != null ? fHm(x.lim) : '', 'SLA': x.lim != null ? (x.estourou ? 'fora do SLA' : 'no SLA') : '', 'Valor (R$)': +(+x.valor || 0).toFixed(2) })); }
+async function biosExcel() {
+  const A = S.adm, L = biosFiltradas(); if (!L.length) { toast('Nenhuma O.S. para exportar.'); return; }
+  const linhas = biosTabela(L); const itens = []; L.forEach(x => (x.i && x.i.lpu || []).forEach(it => itens.push({ 'O.S.': x.os, 'Técnico': x.tec, 'Código': it.c, 'Descrição': it.d, 'Tipo': it.t === 'M' ? 'Material' : 'Serviço', 'Quantidade': +it.q || 0, 'Unidade': it.u || '', 'Valor unitário (R$)': +it.v || 0 })));
+  const resumo = BIOS_ET.map(([k, l]) => { const n = L.filter(x => x.et === k); return { 'Situação': l, 'O.S.': n.length, 'Valor (R$)': +n.reduce((t, x) => t + (+x.valor || 0), 0).toFixed(2) }; });
+  const nome = `BI_OS_${A.de}_a_${A.ate}${S.biosEt ? '_' + S.biosEt : ''}`;
+  try {
+    if (!window.XLSX) await carregaScript('xlsx.full.min.js'); const wb = XLSX.utils.book_new();
+    const add = (rows, nm) => { if (!rows.length) return; const ws = XLSX.utils.json_to_sheet(rows); ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.min(60, Math.max(k.length, ...rows.map(l => String(l[k] ?? '').length)) + 2) })); XLSX.utils.book_append_sheet(wb, ws, nm); };
+    add(resumo, 'Resumo'); add(linhas, 'O.S.'); add(itens, 'Itens LPU');
+    baixar(new File([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], nome + '.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); toast(`${L.length} O.S. exportada(s).`);
+  } catch (e) { const csv = '\ufeff' + [Object.keys(linhas[0]), ...linhas.map(Object.values)].map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n'); baixar(new File([csv], nome + '.csv', { type: 'text/csv' })); }
+}
+async function biosPdf() {
+  const A = S.adm, L = biosFiltradas(); if (!L.length) { toast('Nenhuma O.S. para exportar.'); return; }
+  const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }); const logo = await logoData();
+  if (logo) doc.addImage(logo, 'JPEG', 12, 8, 30, 18); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(20); doc.text('BI das O.S.' + (S.biosEt ? ' · ' + BIOS_LB[S.biosEt] : ''), 48, 16);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90); doc.text(`Período ${fDM(A.de)} a ${fDM(A.ate)}${A.tec ? ' · ' + ((A.tecnicos || []).find(t => t.uid === A.tec) || {}).nome : ''} · gerado em ${fDH(Date.now())} por ${(Nuvem.admin || {}).nome || ''}`, 48, 22);
+  doc.autoTable({ startY: 30, theme: 'grid', styles: { fontSize: 8.5, cellPadding: 1.6 }, headStyles: { fillColor: [14, 42, 59] }, margin: { left: 12, right: 12 }, head: [BIOS_ET.map(e => e[1])], body: [BIOS_ET.map(([k]) => String(L.filter(x => x.et === k).length))] });
+  const T = biosTabela(L); const cols = ['Criada', 'O.S.', 'Tipo', 'Técnico', 'Situação', 'Detalhe', 'Finalizada', 'Tempo (h:mm)', 'SLA', 'Valor (R$)'];
+  doc.autoTable({ startY: doc.lastAutoTable.finalY + 6, theme: 'grid', styles: { fontSize: 7.5, cellPadding: 1.4 }, headStyles: { fillColor: [14, 42, 59] }, margin: { left: 12, right: 12 }, head: [cols], body: T.map(r => cols.map(c => c === 'Valor (R$)' ? (r[c] ? fBRL(r[c]) : '') : String(r[c] ?? ''))),
+    didParseCell: d => { if (d.section === 'body' && d.column.index === 8 && d.cell.raw === 'fora do SLA') d.cell.styles.textColor = [190, 30, 30]; } });
+  const tot = L.reduce((t, x) => t + (+x.valor || 0), 0); doc.setFontSize(9); doc.setTextColor(20); doc.text(`${L.length} O.S. · valor total ${fBRL(tot)}`, 12, doc.lastAutoTable.finalY + 6);
+  baixar(new File([doc.output('blob')], `BI_OS_${A.de}_a_${A.ate}${S.biosEt ? '_' + S.biosEt : ''}.pdf`, { type: 'application/pdf' }));
+}
