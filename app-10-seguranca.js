@@ -12,7 +12,9 @@ function statusTreino(t, hoje = isoDate(Date.now())) { const v = validadeTreino(
 function treinoValido(lista, tipo) { const l = (lista || []).filter(t => t.tipo === tipo).map(t => ({ t, s: statusTreino(t) })).sort((a, b) => String(b.s.v).localeCompare(String(a.s.v))); return l[0] || null; }
 const ST_TR = { ok: ['ok', 'em dia'], vence: ['draft', 'vence em breve'], vencido: ['bad', 'vencido'], sem: ['', 'sem validade'] };
 // ---------- celular: APR antes de começar no local ----------
-function aprNecessaria() { const r = S.ronda; return !!(!window.__semAPR && r && !r.fim && !r.apr && !isVist(r)); }
+// APR opcional (desde v85): não abre mais sozinha antes de começar; o técnico preenche pelo botão "APR (opcional)"
+function aprPossivel() { const r = S.ronda; return !!(r && !r.fim && !r.apr && !isVist(r)); }
+function aprNecessaria() { return !!(window.__comAPR && aprPossivel()); }
 function abrirAPR(depois) {
   const el = $('#atvAlerta'); if (!el) { depois(); return; } S.alertaId = 'aviso:apr'; const A = S.aprRasc = S.aprRasc || { riscos: [], epis: [], obs: '', foto: null };
   const pinta = () => {
@@ -25,7 +27,7 @@ function abrirAPR(depois) {
       ${obrig.length ? `<p class="muted small" style="margin:0">* obrigatório para os riscos marcados.</p>` : ''}
       <div class="field"><label class="lb" for="aprObs">Medidas de controle / observações</label><textarea id="aprObs" rows="2" placeholder="Ex.: área isolada com cones, escada amarrada no poste">${esc(A.obs)}</textarea></div>
       <button type="button" class="btn ${A.foto ? '' : 'pri'} block" id="aprFoto">${ICON.cam}${A.foto ? 'Foto com EPI registrada ✓ (trocar)' : 'Foto da equipe com EPI'}</button>
-      <button type="button" class="btn go block" id="aprOk">${ICON.check}Avaliei os riscos · começar</button><button type="button" class="btn block" id="aprCanc">Voltar</button></div></div>`;
+      <button type="button" class="btn go block" id="aprOk">${ICON.check}Avaliei os riscos · registrar</button><button type="button" class="btn block" id="aprCanc">Voltar</button></div></div>`;
     el.hidden = false;
     $$('[data-aprr]', el).forEach(c => c.onchange = () => { A.riscos = $$('[data-aprr]', el).filter(x => x.checked).map(x => x.dataset.aprr); A.obs = $('#aprObs').value; pinta(); });
     $$('[data-apre]', el).forEach(b => b.onclick = () => { const e = b.dataset.apre; A.epis = A.epis.includes(e) ? A.epis.filter(x => x !== e) : [...A.epis, e]; A.obs = $('#aprObs').value; pinta(); });

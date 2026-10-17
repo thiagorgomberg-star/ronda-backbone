@@ -88,7 +88,7 @@ const STEPS_CORR_CLARO = STEPS_CORR.filter(([k]) => k !== 'cabos');
 const STEPS_SITE = [['site', 'Check-in e site'], ['sfib', 'Fibras'], ['smapa', 'OTDR no mapa'], ['fotos', 'Fotos'], ['final', 'Finalizar']];
 const ST = () => isSite(S.insp) ? STEPS_SITE : S.insp && S.insp.tipo === 'corretiva' ? (claroCorr(S.insp) ? STEPS_CORR_CLARO : STEPS_CORR) : isImpl(S.insp) ? STEPS_IMPL(S.insp) : isVist(S.insp) ? (S.insp.vist && S.insp.vist.tipo === 'caixa' ? STEPS_VIST_CAIXA : STEPS_VIST) : STEPS_PREV;
 const OCORR = ['Rompimento de cabo','Atenuação / sinal degradado','Vandalismo / furto','Queimada','Poste abalroado ou caído','Obra de terceiros','Caixa de emenda danificada','Outro'];
-const CATS_CORR = ['Antes (rompimento)','Local / rede','Sobra técnica','Caixa de emenda','Bandeja / fusões','Cabo lançado','Depois (normalizado)','Identificação (TAG)','Outra'];
+const CATS_CORR = ['Antes (rompimento)','Foto do evento','Local / rede','Sobra técnica','Bandeja / fusões','Cabo lançado','Depois (normalizado)','Identificação (TAG)','Outra'];
 const CATS_CORR_OBRIG = ['Antes (rompimento)','Local / rede','Depois (normalizado)'];
 const MATERIAIS = [['ceo','Caixa de emenda óptica (CEO)','un'],['bandeja','Bandeja de emenda','un'],['tubete','Protetor de emenda (tubete)','un'],['cabo','Cabo óptico','m'],['alca','Alça preformada','un'],['bap','Braçadeira BAP','un'],['suporteVT','Suporte de reserva técnica (cruzeta)','un'],['fitaInox','Fita de aço inox','m'],['fecho','Fecho para fita de aço','un'],['cordoalha','Cordoalha','m'],['fioEspinar','Fio de espinar','m'],['abracNylon','Abraçadeira de nylon','un'],['plaqueta','Plaqueta de identificação','un'],['fitaIsol','Fita isolante / autofusão','un'],['limpeza','Kit de limpeza (álcool isopropílico)','un']];
 const CATS_CAIXA = ['Caixa fechada', 'Caixa aberta', 'Bandeja', 'Acomodação das fibras', 'Mapa de fusão (existente)', 'DGO / bastidor', 'Identificação (TAG)', 'Poste / CV', 'Irregularidade', 'Outra'];
@@ -343,14 +343,72 @@ async function lerKml(file) {
   }
   return new TextDecoder().decode(buf);
 }
+// lê o XML do KML. O Google Earth Pro às vezes grava prefixos sem declarar (ex.: xsi:schemaLocation):
+// o Earth ignora, mas o leitor do navegador recusa o arquivo. Aqui declara os prefixos que faltam e, se ainda falhar, tira esses atributos.
+function kmlDoc(txt) {
+  const P = s => new DOMParser().parseFromString(s, 'application/xml'), ok = d => !d.getElementsByTagName('parsererror').length;
+  txt = String(txt || '').replace(/^\uFEFF/, ''); let d = P(txt); if (ok(d)) return d;
+  const usados = new Set([...txt.matchAll(/(?:<\/?|\s)([A-Za-z_][\w.-]*):[A-Za-z_][\w.-]*(?=[\s=>\/])/g)].map(m => m[1]).filter(p => !/^(xmlns|xml|https?)$/i.test(p)));
+  const falta = [...usados].filter(p => !new RegExp('xmlns:' + p + '\\s*=').test(txt));
+  if (falta.length) { const t2 = txt.replace(/<(kml|Document)\b/, m => m + falta.map(p => ` xmlns:${p}="urn:tecnicoplus:${p}"`).join('')); d = P(t2); if (ok(d)) return d; }
+  d = P(txt.replace(/\s(?!xmlns:)[A-Za-z_][\w.-]*:[A-Za-z_][\w.-]*\s*=\s*("[^"]*"|'[^']*')/g, '')); if (ok(d)) return d;
+  throw new Error('KML inválido (o arquivo não é um KML/KMZ que o app consiga ler)');
+}
 function parseKml(txt) {
-  const doc = new DOMParser().parseFromString(txt, 'application/xml'); if (doc.getElementsByTagName('parsererror').length) throw new Error('KML inválido');
+  const doc = kmlDoc(txt);
   const g = (el, t) => Array.from(el.getElementsByTagNameNS('*', t)); const linhas = [], pontos = [];
   g(doc, 'LineString').forEach(ls => { const c = g(ls, 'coordinates')[0]; if (!c) return; const pts = c.textContent.trim().split(/\s+/).map(t => t.split(',').map(Number)).filter(a => isFinite(a[0]) && isFinite(a[1])).map(a => [+a[1].toFixed(6), +a[0].toFixed(6)]); if (pts.length > 1) linhas.push(pts); });
   g(doc, 'Placemark').forEach(pm => { const pt = g(pm, 'Point')[0]; if (!pt) return; const c = g(pt, 'coordinates')[0]; if (!c) return; const a = c.textContent.trim().split(',').map(Number); if (!isFinite(a[0])) return; const nm = g(pm, 'name')[0]; pontos.push({ nome: nm ? nm.textContent.trim() : '', lat: +a[1].toFixed(6), lon: +a[0].toFixed(6) }); });
-  const km = linhas.reduce((s, l) => s + pathKm(l.map(([lat, lon]) => ({ lat, lon }))), 0);
-  return { linhas, pontos, km };
+  // traçados repetidos (o mesmo cabo em duas pastas, ex.: CABOS e CABOS2) contam uma vez só
+  const unicas = []; linhas.forEach(l => { const a = { lat: l[0][0], lon: l[0][1] }, b = { lat: l[l.length - 1][0], lon: l[l.length - 1][1] }, km = pathKm(l.map(([lat, lon]) => ({ lat, lon })));
+    const dup = unicas.some(u => { const c = { lat: u[0][0], lon: u[0][1] }, d = { lat: u[u.length - 1][0], lon: u[u.length - 1][1] }, ku = pathKm(u.map(([lat, lon]) => ({ lat, lon }))); const pontas = (hav(a, c) < 30 && hav(b, d) < 30) || (hav(a, d) < 30 && hav(b, c) < 30); return pontas && Math.abs(km - ku) <= Math.max(0.02, ku * 0.01); });
+    if (!dup) unicas.push(l); }); linhas.length = 0; linhas.push(...unicas);
+  const o = ordenaLinhas(linhas); const kmL = l => pathKm(l.map(([lat, lon]) => ({ lat, lon })));
+  const km = o.tronco.reduce((s, l) => s + kmL(l), 0), kmTotal = linhas.reduce((s, l) => s + kmL(l), 0);
+  return { linhas: [...o.tronco, ...o.ramais], nTronco: o.tronco.length, pontos, km, kmTotal, meio: pontasMeio(o.tronco, o.ramais, pontos) };
 }
+// projeta um ponto no tronco: distância (m) desde a ponta A e afastamento (m)
+function projTronco(tronco, p) { let acc = 0, best = null, ant = null;
+  tronco.forEach(l => l.forEach(([lat, lon], k) => { const b = { lat, lon }; if (ant) { const a = ant, seg = hav(a, b); const kx = Math.cos(a.lat * Math.PI / 180), bx = (b.lon - a.lon) * kx, by = b.lat - a.lat, px = (p.lon - a.lon) * kx, py = p.lat - a.lat, L2 = bx * bx + by * by; const t = L2 ? Math.max(0, Math.min(1, (px * bx + py * by) / L2)) : 0; const d = hav({ lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t }, p); if (!best || d < best.d) best = { d, m: acc + seg * t }; acc += seg; } ant = b; }));
+  return best; }
+// pontas intermediárias (sites no meio da rota): fim de um ramal que sai do tronco (ex.: entrada do cabo no site de Paraibuna)
+// ou um DGO/site encostado no tronco longe das pontas. Guarda a posição no tronco e o comprimento do ramal.
+function pontasMeio(tronco, ramais, pontos) {
+  if (!tronco.length) return []; const kmT = tronco.reduce((s, l) => s + pathKm(l.map(([lat, lon]) => ({ lat, lon }))), 0) * 1000; const out = [];
+  const nomeSite = q => { const c = pontos.map(x => ({ ...x, d: hav(q, x) })).filter(x => x.d <= 300 && x.nome).sort((a, b) => (/DGO/i.test(b.nome) - /DGO/i.test(a.nome)) || a.d - b.d); return c[0] ? c[0].nome : ''; };
+  ramais.forEach((l, k) => { const P = l.map(([lat, lon]) => ({ lat, lon })); const i0 = projTronco(tronco, P[0]), i1 = projTronco(tronco, P[P.length - 1]);
+    const [jun, ponta, desdeFim] = i0.d <= i1.d ? [i0, P[P.length - 1], true] : [i1, P[0], false]; if (jun.d > 150) return;
+    const ramalM = pathKm(P) * 1000; if (jun.m < 300 || jun.m > kmT - 300) return;
+    out.push({ nome: nomeSite(ponta) || 'Ramal ' + (k + 1), lat: +ponta.lat.toFixed(6), lon: +ponta.lon.toFixed(6), mTronco: Math.round(jun.m), ramalM: Math.round(ramalM), ramal: k, ramalDoFim: desdeFim }); });
+  pontos.filter(x => /DGO|^POP|SITE/i.test(x.nome)).forEach(x => { const j = projTronco(tronco, x); if (j.d > 150 || j.m < 1000 || j.m > kmT - 1000) return; if (out.some(o => hav(o, x) < 1500 || Math.abs(o.mTronco - j.m) < 1500)) return; out.push({ nome: x.nome, lat: x.lat, lon: x.lon, mTronco: Math.round(j.m), ramalM: Math.round(j.d), ramal: -1 }); });
+  return out.sort((a, b) => a.mTronco - b.mTronco);
+}
+// O KMZ nem sempre traz os trechos na ordem do cabo (nem no mesmo sentido). Encadeia os trechos pela ponta mais próxima,
+// virando os que estão ao contrário, e separa os ramais (trechos que saem do meio do cabo, ex.: descida para um site).
+// tronco = caminho contínuo mais longo, de uma ponta solta à outra; é ele que conta a distância (OTDR, km de referência).
+function ordenaLinhas(linhas) {
+  const L = linhas.map(l => l.map(([lat, lon]) => ({ lat, lon }))); const n = L.length; if (n <= 1) return { tronco: linhas.slice(), ramais: [] };
+  const kmL = L.map(l => pathKm(l)), TOL = 1000; // até 1 km entre o fim de um trecho e o início do outro conta como continuação
+  const pon = (k, f) => f ? L[k][L[k].length - 1] : L[k][0];
+  const anda = (k0, f0) => { const usados = new Set([k0]), seq = [[k0, f0]]; let fim = pon(k0, !f0), tot = kmL[k0];
+    for (;;) { let best = null; for (let k = 0; k < n; k++) { if (usados.has(k)) continue; for (const f of [false, true]) { const d = hav(fim, pon(k, f)); if (d <= TOL && (!best || d < best.d - 1 || (Math.abs(d - best.d) <= 1 && kmL[k] > kmL[best.k]))) best = { k, f, d }; } }
+      if (!best) break; usados.add(best.k); seq.push([best.k, best.f]); fim = pon(best.k, !best.f); tot += kmL[best.k]; }
+    return { seq, tot, usados }; };
+  let melhor = null;
+  for (let k = 0; k < n; k++) for (const f of [false, true]) { const r = anda(k, f); if (!melhor || r.tot > melhor.tot + 1e-6) melhor = r; }
+  const tronco = melhor.seq.map(([k, f]) => f ? linhas[k].slice().reverse() : linhas[k]);
+  const ramais = linhas.filter((_, k) => !melhor.usados.has(k));
+  return { tronco, ramais };
+}
+// código da rota a partir do nome do KMZ: "ROTA MV001 - SJC X PARAIBUNA" → "MV001-SJC-X-PARAIBUNA"
+const codigoRota = nome => String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/^ROTA\s+/, '').replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+// siglas das pontas pelo nome da rota: "ROTA MV002- TTE X CPJ" → ['TTE', 'CPJ']
+function siglasDoNome(nome) { const m = String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().match(/(?:^|[^A-Z0-9])([A-Z]{3})\s*X\s*([A-Z]{3})(?![A-Z0-9])/); return m ? [m[1], m[2]] : null; }
+// nome da ponta da rota: o DGO / site / POP mais perto da ponta do cabo (até 3 km); sem isso, o ponto nomeado mais perto
+function pontaDoCabo(pontos, q) { if (!pontos || !pontos.length) return null; const c = pontos.map(p => ({ ...p, d: hav(p, q) }));
+  const sites = c.filter(p => p.d <= 3000 && /DGO|SITE|POP|ESTA[CÇ]|ODF|DIO/i.test(p.nome)).sort((a, b) => (/DGO/i.test(b.nome) - /DGO/i.test(a.nome)) || a.d - b.d);
+  return sites[0] || c.filter(p => p.nome).sort((a, b) => a.d - b.d)[0] || null; }
+const troncoRota = rt => rt && rt.kml ? (rt.kml.nTronco ? rt.kml.linhas.slice(0, rt.kml.nTronco) : rt.kml.linhas) : [];
 const TOL_COB = 60;
 function cobertura(rt, rondas) {
   if (!rt || !rt.kml || !rt.kml.linhas.length) return null;

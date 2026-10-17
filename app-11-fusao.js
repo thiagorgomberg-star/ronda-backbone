@@ -151,7 +151,7 @@ function verMapaFusao(i) { const el = document.createElement('div'); el.classNam
 // distância do início da rota (km) até o ponto, projetando no traçado do KMZ
 function kmNaRota(rt, p) {
   if (!rt || !rt.kml || !rt.kml.linhas.length || !p || p.lat == null) return null; let acc = 0, best = null;
-  rt.kml.linhas.forEach(l => { for (let k = 1; k < l.length; k++) { const a = { lat: l[k - 1][0], lon: l[k - 1][1] }, b = { lat: l[k][0], lon: l[k][1] }, seg = hav(a, b);
+  troncoRota(rt).forEach(l => { for (let k = 1; k < l.length; k++) { const a = { lat: l[k - 1][0], lon: l[k - 1][1] }, b = { lat: l[k][0], lon: l[k][1] }, seg = hav(a, b);
     const kx = Math.cos(a.lat * Math.PI / 180), bx = (b.lon - a.lon) * kx, by = b.lat - a.lat, px = (p.lon - a.lon) * kx, py = p.lat - a.lat, L2 = bx * bx + by * by;
     const t = L2 ? Math.max(0, Math.min(1, (px * bx + py * by) / L2)) : 0; const d = hav({ lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t }, p);
     if (!best || d < best.d) best = { d, km: (acc + seg * t) / 1000 }; acc += seg; } });

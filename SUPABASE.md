@@ -441,6 +441,14 @@ A corretiva Claro continua sem cabos, fusões e mapa.
 **Para atualizar:** só subir os arquivos. Não precisa rodar SQL de novo.
 
 
+## Rotas (KMZ) no painel (v61)
+
+- Menu **Rotas (KMZ)**: importar o traçado (KMZ ou KML) e ver as rotas cadastradas.
+- Aceita o KMZ do Google Earth Pro mesmo com prefixos não declarados (ex.: `xsi:schemaLocation`).
+- Os trechos do KMZ são encadeados na ordem do cabo (e virados quando estão ao contrário); traçados repetidos em pastas diferentes contam uma vez; trechos que saem do meio do cabo viram **ramais**.
+- **Pontas no meio da rota:** site no fim de um ramal (ex.: DGO de Paraibuna na MV001) ou DGO/site encostado no cabo. Na conjunta, o OTDR pode ser disparado dessas pontas para os dois lados; o ramal entra na conta da distância.
+- Pontas A e B: o DGO/site mais perto de cada ponta do cabo; siglas tiradas do nome da rota quando ele traz "AAA X BBB" (ex.: MV002 TTE X CPJ).
+
 ## Excluir técnico e O.S. (v61)
 
 - **Técnico:** em Equipe e cadastros, botão **Excluir** em cada linha (pede para digitar EXCLUIR). Apaga o cadastro, a ficha, o RH, a posição ao vivo e o login (função `acesso` v4, ação `remover_tecnico`, já publicada). O que ele já executou fica no histórico; O.S. que estavam com ele voltam para a fila.
