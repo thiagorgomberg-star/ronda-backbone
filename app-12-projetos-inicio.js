@@ -58,6 +58,43 @@ async function cobrarAtualizacao(id) {
   if (!confirm(`Cobrar do ${a.tecnicoNome || 'técnico'} a atualização da O.S. ${a.ticket || ''}? O celular dele toca o alarme até ele atualizar.`)) return;
   try { const r = await Nuvem.atvSalvar({ ...a, cobrarAtualizEm: Date.now(), cobrarPor: (Nuvem.admin || {}).nome || 'Supervisor' }); if (r) S.atvsAdm.set(r.id, r); toast('Cobrança enviada ao técnico.'); pintaLimites(); if (S.view === 'admAtv') render(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); }
 }
+// ---------- NOC: resumo da O.S. (fotos antes / durante / depois, produção lançada, horários) antes de liberar ----------
+S.nocRes = new Map(); // pedido_id -> { evs, carregando, erro }
+async function nocCarregaRes(p, depois) {
+  if (!p) return; const d = p.dados || {}; S.nocRes.set(p.id, { ...(S.nocRes.get(p.id) || {}), carregando: true }); depois && depois();
+  try { let rows = []; if ((d.insps || []).length) rows = Nuvem.ok(await Nuvem.tab('eventos').select('id,dados').in('id', d.insps)) || [];
+    if (!rows.length && d.rondaId) rows = Nuvem.ok(await Nuvem.tab('eventos').select('id,dados').ilike('dados->>rondaId', d.rondaId)) || [];
+    S.nocRes.set(p.id, { evs: rows.map(x => x.dados).filter(e => e && isCorr(e)), carregando: false, ts: Date.now() });
+  } catch (e) { S.nocRes.set(p.id, { evs: [], carregando: false, erro: e.message || String(e) }); }
+  depois && depois();
+}
+function nocResBloco(p, pendente) {
+  const aberto = S.nocAberto && S.nocAberto.has(p.id); const R = S.nocRes.get(p.id); const pronto = aberto && R && !R.carregando;
+  const btnRes = `<button type="button" class="btn ${aberto ? '' : 'pri'} block" data-nocres="${esc(p.id)}">${aberto ? 'Ocultar o resumo' : '📋 Ver resumo da O.S. (fotos e produção)'}</button>`;
+  const corpo = !aberto ? '' : !R || R.carregando ? '<p class="muted small" style="margin:0">Carregando o resumo…</p>' : nocResumoHtml(p, R);
+  const acoes = pendente ? `<div class="row" style="gap:8px">${pronto ? `<button type="button" class="btn go" data-nocok="${esc(p.id)}">Validar e liberar</button>` : '<span class="muted small" style="flex:1">Abra o resumo da O.S. para validar e liberar.</span>'}<button type="button" class="btn" data-nocno="${esc(p.id)}">Recusar</button></div>` : '';
+  return btnRes + corpo + acoes;
+}
+function nocResumoHtml(p, R) {
+  const d = p.dados || {}, rs = d.resumo || {}, evs = R.evs || [];
+  const lin = (k, v) => v ? `<div class="kv"><span>${k}</span><b style="white-space:pre-wrap">${esc(v)}</b></div>` : '';
+  const c = evs.length ? { problema: evs.map(e => (e.corr || {}).problema).filter(Boolean).join(' / '), servico: evs.map(e => (e.corr || {}).servico).filter(Boolean).join(' / ') } : rs;
+  const lpu = evs.length ? evs.flatMap(e => e.lpu || []) : (rs.lpu || []); const semMat = evs.length ? evs.some(e => e.semMat) : rs.semMat;
+  const serv = lpu.filter(x => x.t !== 'M'), mat = lpu.filter(x => x.t === 'M');
+  const lista = l => l.length ? `<ul style="margin:0;padding-left:18px">${l.map(x => `<li><b>${esc(x.c)}</b> ${esc(x.d)} — ${fQtd(x.q)} ${esc(x.u || '')}</li>`).join('')}</ul>` : '';
+  const fotos = evs.flatMap(e => (e.fotos || []).map(f => ({ ...f })));
+  const grupo = fase => { const l = fotos.filter(f => faseEv(f) === fase); return `<h3 style="margin:6px 0 2px">${fase} <span class="muted small">(${l.length})</span></h3>${l.length ? `<div class="evg">${l.map(f => `<figure class="ph" style="margin:0">${f.path ? `<img data-nocph="${esc(f.path)}" alt="${esc(f.cat || fase)}" style="cursor:zoom-in">` : '<div class="evvazia" style="cursor:default">Foto ainda subindo do celular</div>'}<figcaption class="small" style="padding:4px 8px">${esc(f.cat || '')}${f.desc ? ': ' + esc(f.desc) : ''}</figcaption></figure>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nenhuma foto.</p>'}`; };
+  const e0 = evs[0] || {};
+  return `<div class="card" style="box-shadow:none;border:1px solid var(--line);gap:8px"><div class="row" style="justify-content:space-between"><b>Resumo da O.S. ${esc(d.ticket || '')}</b><button type="button" class="lnk" data-nocresup="${esc(p.id)}">Atualizar</button></div>
+    ${R.erro ? `<div class="warnbox small">Não foi possível carregar a ficha: ${esc(R.erro)}</div>` : !evs.length ? '<div class="warnbox small">A ficha ainda não chegou do celular do técnico (sem internet?). Abaixo, o resumo enviado com o pedido.</div>' : ''}
+    ${lin('Ocorrência', d.ocorrencia)}${lin('Problema encontrado', c.problema)}${lin('O que foi feito', c.servico)}
+    ${lin('Início da atividade', (e0.chegada || rs.chegada) ? fDH(e0.chegada || rs.chegada) : '')}${lin('Pedido de validação', fHora(p.criado))}
+    <h3 style="margin:6px 0 2px">Produção lançada</h3>${serv.length ? '<span class="lb">Serviços</span>' + lista(serv) : '<p class="small" style="margin:0;color:var(--bad)">Nenhum serviço lançado.</p>'}${mat.length ? '<span class="lb">Materiais</span>' + lista(mat) : `<p class="small muted" style="margin:0">${semMat ? 'Técnico informou que não usou material.' : 'Nenhum material lançado.'}</p>`}
+    ${evs.length ? `<span class="muted small">${fotos.length} evidência(s) no total</span>${grupo('Antes')}${grupo('Durante')}${grupo('Depois')}` : rs.evid != null ? `<p class="small" style="margin:0">${rs.evid} evidência(s) tiradas.</p>` : ''}</div>`;
+}
+async function nocPintaFotos() {
+  for (const img of $$('[data-nocph]')) { if (img.src) continue; const path = img.dataset.nocph; S.nocUrl = S.nocUrl || new Map(); let u = S.nocUrl.get(path); if (!u) { const b = await fotoBlob({ path }); if (!b) continue; u = URL.createObjectURL(b); S.nocUrl.set(path, u); } img.src = u; img.onclick = () => window.open(u, '_blank'); }
+}
 function viewNoc() {
   return `<div id="nocSos" style="display:flex;flex-direction:column;gap:6px"></div><section class="card"><div class="row" style="justify-content:space-between"><h2>Validação e liberação de corretivas</h2><span class="muted small" id="nocHora"></span></div>
     <p class="muted small" style="margin:0">O técnico só dá baixa na O.S. e sai do local depois da liberação do NOC ou do supervisor. Confira a rede, converse com o técnico e libere ou recuse.</p>
@@ -74,11 +111,14 @@ async function afterNoc() {
         ${mapa ? `<a class="lnk" href="${mapa}" target="_blank" rel="noopener">📍 Local do técnico no mapa</a>` : ''}
         ${conversaHtml(p.id, 'noc') || '<p class="muted small" style="margin:0">Sem mensagem do técnico.</p>'}
         ${p.status === 'pedido' ? `<div class="row" style="gap:6px;flex-wrap:nowrap"><input type="text" data-nocmsg="${esc(p.id)}" placeholder="Responder ao técnico" style="flex:1;min-width:0"><button type="button" class="btn" data-nocenv="${esc(p.id)}">Enviar</button></div>
-          <div class="row" style="gap:8px"><button type="button" class="btn go" data-nocok="${esc(p.id)}">Validar e liberar</button><button type="button" class="btn" data-nocno="${esc(p.id)}">Recusar</button></div>` : p.obs ? `<p class="small" style="margin:0">Motivo: ${esc(p.obs)}</p>` : ''}</section>`; };
+          ${nocResBloco(p, true)}` : (p.obs ? `<p class="small" style="margin:0">Motivo: ${esc(p.obs)}</p>` : '') + nocResBloco(p, false)}</section>`; };
     $('#nocLista').innerHTML = (ab.length ? ab.map(card).join('') : '<section class="card"><p class="empty">Nenhum pedido aguardando. Os novos aparecem aqui na hora, com som.</p></section>') + (dec.length ? `<h3 style="margin:8px 4px">Decididos nas últimas 36 h</h3>${dec.slice(0, 30).map(card).join('')}` : '');
     const h = $('#nocHora'); if (h) h.textContent = 'Atualizado ' + fHora(Date.now());
     const msg = async (pid, texto) => { const m = { id: 'pm_' + uid(), org: Nuvem.org(), pedido_id: pid, tecnico_uid: (S.nocPeds.get(pid) || {}).tecnico_uid, autor_uid: Nuvem.user.id, autor_nome: (Nuvem.admin || {}).nome || 'NOC', papel: Nuvem.admin && Nuvem.admin.papel === 'noc' ? 'noc' : 'supervisor', texto, criado: Date.now() }; await Nuvem.msgCriar(m); guardaMsg(m); };
     $$('[data-nocenv]').forEach(b => b.onclick = async () => { const i = $$('[data-nocmsg]').find(x => x.dataset.nocmsg === b.dataset.nocenv); const t = String(i && i.value || '').trim(); if (!t) return; try { await msg(b.dataset.nocenv, t); pinta(); } catch (e) { toast('Erro: ' + (e.message || e)); } });
+    $$('[data-nocres]').forEach(b => b.onclick = () => { const id = b.dataset.nocres; S.nocAberto = S.nocAberto || new Set(); if (S.nocAberto.has(id)) S.nocAberto.delete(id); else { S.nocAberto.add(id); nocCarregaRes(S.nocPeds.get(id), pinta); } pinta(); });
+    $$('[data-nocresup]').forEach(b => b.onclick = () => nocCarregaRes(S.nocPeds.get(b.dataset.nocresup), pinta));
+    nocPintaFotos();
     $$('[data-nocok]').forEach(b => b.onclick = async () => { const p = S.nocPeds.get(b.dataset.nocok); if (!confirm(`Validar e liberar ${p.tecnico_nome} para dar baixa e sair do local (${(p.dados || {}).ticket || ''})?`)) return; try { await Nuvem.pedDecidir(p.id, 'aprovado', ''); await msg(p.id, 'Validado pelo NOC. Pode dar baixa e sair do local.'); p.status = 'aprovado'; p.decidido_em = Date.now(); p.decidido_por = 'NOC · ' + ((Nuvem.admin || {}).nome || ''); pinta(); toast('Liberado.'); } catch (e) { toast('Erro: ' + (e.message || e), 6000); } });
     $$('[data-nocno]').forEach(b => b.onclick = async () => { const p = S.nocPeds.get(b.dataset.nocno); const ob = prompt('Motivo da recusa (o técnico vê):', ''); if (ob === null) return; try { await Nuvem.pedDecidir(p.id, 'recusado', ob); if (ob) await msg(p.id, 'Não liberado: ' + ob); p.status = 'recusado'; p.obs = ob; p.decidido_em = Date.now(); pinta(); } catch (e) { toast('Erro: ' + (e.message || e), 6000); } });
   };

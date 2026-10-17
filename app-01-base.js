@@ -79,7 +79,7 @@ const CATS = ['Caixa fechada','Caixa aberta','Bandeja','Acomodação das fibras'
 const CATS_OBRIG = ['Caixa fechada','Caixa aberta','Bandeja','VT (reserva técnica)','Rede (foto ampla)'];
 const CATS_REDE = ['Rede (foto ampla)','Estrutura no poste','Cabo / espinamento','Poste / ferragem','Poda de árvore','Troca de poste (acompanhamento)','Reserva técnica','Travessia','Irregularidade','Outra'];
 const STEPS_PREV = [['caixa','Caixa'],['cabos','Cabos'],['check','Checklist'],['fusoes','Fusões'],['fotos','Fotos'],['lpu','Produção'],['final','Finalizar']];
-const STEPS_CORR = [['ocorr','Ocorrência'],['cabos','Cabos'],['fusoes','Fusões'],['fotos','Fotos'],['mat','Materiais'],['lpu','Produção'],['final','Finalizar']];
+const STEPS_CORR = [['ocorr','Ocorrência'],['cabos','Cabos'],['fusoes','Fusões'],['fotos','Evidências'],['lpu','Produção'],['final','Finalizar']];
 const STEPS_IMPL = i => [['impl', 'Designação'], ...(usaImpl(i, 'caixa') ? [['caixa', 'Caixa']] : []), ...(usaImpl(i, 'cabos') ? [['cabos', 'Cabos']] : []), ...(usaImpl(i, 'fusoes') ? [['fusoes', i.impl.servico === 'dgo' ? 'Fusões DGO' : 'Fusões']] : []), ['implcheck', 'Checklist'], ['fotos', 'Fotos'], ['lpu', 'Produção'], ['final', 'Finalizar']];
 const STEPS_VIST = [['vist', 'Registro'], ['fotos', 'Evidências'], ['final', 'Finalizar']];
 const STEPS_VIST_CAIXA = [['vist', 'Caixa'], ['cabos', 'Cabos'], ['fusoes', 'Fusões e mapa'], ['fotos', 'Evidências'], ['final', 'Finalizar']];
@@ -93,7 +93,7 @@ const CATS_CORR_OBRIG = ['Antes (rompimento)','Local / rede','Depois (normalizad
 const MATERIAIS = [['ceo','Caixa de emenda óptica (CEO)','un'],['bandeja','Bandeja de emenda','un'],['tubete','Protetor de emenda (tubete)','un'],['cabo','Cabo óptico','m'],['alca','Alça preformada','un'],['bap','Braçadeira BAP','un'],['suporteVT','Suporte de reserva técnica (cruzeta)','un'],['fitaInox','Fita de aço inox','m'],['fecho','Fecho para fita de aço','un'],['cordoalha','Cordoalha','m'],['fioEspinar','Fio de espinar','m'],['abracNylon','Abraçadeira de nylon','un'],['plaqueta','Plaqueta de identificação','un'],['fitaIsol','Fita isolante / autofusão','un'],['limpeza','Kit de limpeza (álcool isopropílico)','un']];
 const CATS_CAIXA = ['Caixa fechada', 'Caixa aberta', 'Bandeja', 'Acomodação das fibras', 'Mapa de fusão (existente)', 'DGO / bastidor', 'Identificação (TAG)', 'Poste / CV', 'Irregularidade', 'Outra'];
 const catsOf = i => isSite(i) ? CATS_SITE : i && i.tipo === 'corretiva' ? CATS_CORR : i && i.tipo === 'implantacao' ? CATS_IMPL : i && i.tipo === 'vistoria' ? (i.vist && i.vist.tipo === 'caixa' ? CATS_CAIXA : CATS_VIST) : CATS;
-const obrigOf = i => isSite(i) ? CATS_SITE_OBRIG : i && i.tipo === 'corretiva' ? CATS_CORR_OBRIG : i && i.tipo === 'implantacao' ? ['Antes', 'Depois'] : i && i.tipo === 'vistoria' ? [] : CATS_OBRIG;
+const obrigOf = i => isSite(i) ? CATS_SITE_OBRIG : i && i.tipo === 'corretiva' ? [] : i && i.tipo === 'implantacao' ? ['Antes', 'Depois'] : i && i.tipo === 'vistoria' ? [] : CATS_OBRIG;
 const isCorr = x => !!(x && x.tipo === 'corretiva');
 const isImpl = x => !!(x && x.tipo === 'implantacao');
 const isVist = x => !!(x && x.tipo === 'vistoria');
@@ -195,7 +195,16 @@ function vozBotoes() {
 if (!ADMIN) { let vozT = null; new MutationObserver(() => { clearTimeout(vozT); vozT = setTimeout(vozBotoes, 120); }).observe(document.documentElement, { childList: true, subtree: true }); }
 // respostas prontas: um toque escreve a frase no campo
 const RESP_UPD = ['Localizei o rompimento', 'Fusões em andamento', 'Aguardando poda da árvore', 'Aguardando a concessionária (poste)', 'Aguardando material', 'Aguardando liberação de acesso', 'Testes e medições em andamento', 'Sinal normalizado, finalizando'];
-const RESP_LIB = ['Fusões concluídas e sinal normalizado. Pode validar?', 'Cabo lançado e emendado. Aguardando a validação do sinal.', 'Serviço concluído. Pode validar?'];
+const RESP_LIB = ['Atividade concluída, pode validar?', 'Cabo lançado e emendado. Aguardando a validação do sinal.'];
+// corretiva: evidências numeradas do evento (mínimo para concluir; sem limite máximo)
+const EVID_MIN = 10;
+// horários da corretiva: início (chegada ao ponto), pedido de validação, validação do NOC e término
+function horariosCorr(i) { const c = i.corr || {}; const p = typeof Lib !== 'undefined' && S.ronda && S.ronda.id === i.rondaId ? Lib.de(S.ronda) : null;
+  const ped = c.libPedido || (p && p.criado) || null, val = c.libEm || (p && p.status === 'aprovado' && +p.decidido_em) || null, por = c.libPor || (p && p.status === 'aprovado' && p.decidido_por) || '';
+  return { inicio: i.chegada || null, pedido: ped, validacao: val, por, termino: i.saida || null }; }
+const FASES_EV = ['Antes', 'Durante', 'Depois'];
+const faseEv = p => FASES_EV.includes(p.fase) ? p.fase : /depois/i.test(p.cat || '') ? 'Depois' : /antes/i.test(p.cat || '') ? 'Antes' : 'Durante';
+function evidRenum(i) { if (i && isCorr(i)) (i.fotos || []).forEach((p, k) => { p.fase = faseEv(p); p.cat = `Evidência ${k + 1} · ${p.fase}`; }); }
 const RESP_MSG = ['Ok, aguardo.', 'Pode verificar agora?', 'Ainda no local, verificando.', 'Sinal voltou?'];
 function respostasHtml(alvo, lista) { return `<div class="chips resp" role="group" aria-label="Respostas prontas">${lista.map(t => `<button type="button" data-resp="${esc(alvo)}" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</div>`; }
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-resp]'); if (!b) return; const el = document.getElementById(b.dataset.resp); if (!el) return; Voz.junta(el, b.dataset.t); el.focus(); });

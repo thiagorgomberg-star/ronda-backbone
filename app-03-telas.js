@@ -80,10 +80,13 @@ function viewHome() {
     const MP = modosPermitidos(); if (!ap && !MP.includes(S.modo)) S.modo = MP[0];
     const M = S.modo || 'preventiva'; S.im = S.im || { servico: 'roteamento' }; S.vi = S.vi || { objetivo: 'Vistoria de rota' };
     const TIT = { corretiva: 'Iniciar corretiva', implantacao: 'Iniciar designação implantação', vistoria: 'Iniciar vistoria de rota', preventiva: 'Ativar rota', conjunta: 'Iniciar conjunta de site' };
-    h += `<section class="card"><h2>${TIT[M]}</h2>
+    // técnico não escolhe o tipo de atividade: só o supervisor / encarregado despacha (corretiva, preventiva, conjunta…)
+    const livre = !!window.__modoLivre;
+    if (!ap && !livre) { h += S.exp && !emCurso && ![...S.atvs.values()].some(atvAberta) ? '<section class="card"><p class="empty" style="margin:0">Nenhuma atividade no momento. Quando o supervisor ou o encarregado enviar uma O.S., ela aparece aqui com alarme.</p></section>' : ''; h += `<section class="acts"><div class="ah"><span>Concluídas hoje</span><button type="button" class="lnk" id="bVerRel">Ver anteriores</button></div><div id="hist"><p class="empty">Carregando…</p></div></section>`; return h; }
+    h += `<section class="card"><h2>${ap ? 'Iniciar atividade' : TIT[M]}</h2>
       ${ap ? `<div class="warnbox" style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><span>Atendendo: <b>${esc(atvTitulo(ap))}</b> ${logTag(ap.log)}</span><button type="button" class="lnk" id="bAtvSolta">Trocar</button></div>${distOSHtml(ap)}` : ''}
       ${ap || MP.length < 2 ? '' : `<div class="seg${MP.length > 3 ? ' seg4' : ''}" role="group" aria-label="Tipo de atividade">${MP.map(k => `<button type="button" data-modo="${k}" aria-pressed="${M === k}">${{ preventiva: 'Preventiva', conjunta: 'Conjunta de site', corretiva: 'Corretiva', implantacao: 'Implantação', vistoria: 'Vistoria' }[k]}</button>`).join('')}</div>`}
-      <p class="muted small" style="margin:0">${{ corretiva: 'O app registra o deslocamento até o local. Chegando, toque em "Encontrei o ponto da corretiva".', implantacao: 'Expansão 5G e interligação de sites. O app registra o deslocamento e cada ponto de trabalho com relatório e fotos.', vistoria: 'Registra seu deslocamento, a retirada de chaves, o acompanhamento das atividades com evidências e o diário da vistoria.', preventiva: 'O app registra o deslocamento até a primeira caixa e depois a rota do cabo entre as caixas. O ticket da atividade é gerado automaticamente.', conjunta: 'Conjunta no site do backbone com o técnico do provedor parceiro. O app gera o ticket, registra o deslocamento e, no site, você preenche as fibras trabalhadas (origem x destino) com as potências TX e RX, as fotos e os dados de quem acompanhou. Depois o supervisor anexa as curvas do OTDR.' }[M]}</p>
+      <p class="muted small" style="margin:0">${{ corretiva: 'Chegando ao local, toque em "Encontrei o ponto da corretiva".', implantacao: 'Expansão 5G e interligação de sites: cada ponto de trabalho com relatório e fotos.', vistoria: 'Registra seu deslocamento, a retirada de chaves, o acompanhamento das atividades com evidências e o diário da vistoria.', preventiva: 'O app registra o deslocamento até a primeira caixa e depois a rota do cabo entre as caixas. O ticket da atividade é gerado automaticamente.', conjunta: 'Conjunta no site do backbone com o técnico do provedor parceiro. O app gera o ticket, registra o deslocamento e, no site, você preenche as fibras trabalhadas (origem x destino) com as potências TX e RX, as fotos e os dados de quem acompanhou. Depois o supervisor anexa as curvas do OTDR.' }[M]}</p>
       ${M === 'implantacao' ? `<div class="grid2"><div class="field full"><label class="lb" for="im_des">Designação <span class="req">*</span></label><input type="text" id="im_des" data-im="designacao" value="${esc(S.im.designacao || '')}" placeholder="Ex.: DES-5G-0001" autocapitalize="characters"></div>
         <div class="field full"><label class="lb" for="im_serv">Serviço</label><select id="im_serv" data-im="servico">${Object.entries(IMPL_SERV).map(([k, l]) => `<option value="${k}" ${S.im.servico === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         ${selAdd('im_proj', 'projetoImpl', S.im.projeto || '', 'Projeto', 'data-imsel="projeto"', true)}
@@ -103,20 +106,20 @@ function viewHome() {
       ${ap && ODO_POR === 'os' ? `<div class="field"><label class="lb" for="odoIni">Odômetro inicial (km) <span class="req">*</span></label><input type="text" inputmode="numeric" id="odoIni" value="${esc(S.odoIni || '')}" placeholder="Ex.: 48210"></div>
       <div class="field" style="justify-content:flex-end"><button type="button" class="btn" id="bFotoOdoIni" style="min-height:48px">${ICON.cam}${S.odoFotoIni ? 'Foto ✓' : 'Foto do painel'}</button></div>` : `<p class="muted small field full" style="margin:0">${ODO_POR === 'expediente' ? 'O odômetro é informado só no início e no fim do expediente.' : 'O odômetro é pedido quando você recebe uma O.S. e inicia o deslocamento até ela.'}</p>`}</div>
       <button class="btn go block" id="bIniciar" ${ap && ODO_POR === 'os' && kmNum(S.odoIni) == null ? 'disabled' : ''}>${ICON.play}${ap ? 'Iniciar deslocamento' : TIT[M]}</button>
-      ${M === 'preventiva' ? `<button class="btn block" id="bAvulsa">${ICON.plus}Inspeção avulsa (sem rota)</button>` : ''}</section>`;
+      ${M === 'preventiva' && livre && !ap ? `<button class="btn block" id="bAvulsa">${ICON.plus}Inspeção avulsa (sem rota)</button>` : ''}</section>`;
     h += `<section class="acts"><div class="ah"><span>Concluídas hoje</span><button type="button" class="lnk" id="bVerRel">Ver anteriores</button></div><div id="hist"><p class="empty">Carregando…</p></div></section>`;
     return h;
   }
   const { t } = totais(r); const corr = isCorr(r); const rt = r.rotaId ? rotaById(r.rotaId) : null;
   h += `<div class="banner" id="atvBanner" ${Alarme.ativo && $('#atvAlerta').hidden ? '' : 'hidden'}><span>Nova atividade recebida</span><button type="button" class="btn" id="bVerAtv">Ver</button></div>`;
   h += `<section class="rhead"><div class="rh1"><span class="av" style="background:${corr ? 'var(--st-corr)' : 'var(--st-ini)'};color:#fff">${avIn(S.perfil.foto, r.tecnico || S.perfil.nome)}</span><span class="tx"><b>${corr ? 'Corretiva · Ticket ' + esc(r.ticket) : isImpl(r) ? 'Implantação · ' + esc(r.designacao) : isVist(r) ? 'Vistoria de rota' : isSite(r) ? 'Conjunta de site · ' + esc(r.ticket || '—') : 'Rota ativada' + (r.ticket ? ' · ' + esc(r.ticket) : '')}</b><span>${isImpl(r) ? esc(IMPL_SERV[r.servico] || '') + ' · ' : isVist(r) ? esc(r.objetivo || '') + ' · ' : ''}Desde ${fHora(r.inicio)}${rt ? ' · ' + esc(rt.codigo) : ''}${tkParcTxt(r) ? ' · parceiro ' + esc(tkParcTxt(r)) : ''}${r.dono ? ' · ' + esc(donoLb(r.dono, r.parceiro)) : ''}</span></span><span class="pill ${corr ? 'draft' : 'ok'}">${corr ? 'Em atendimento' : 'Ativa'}</span></div>${r.atvLog ? `<div class="rh2">${logTag(r.atvLog)}</div>` : ''}
-    <div class="rh2">${corr && r.ocorrencia ? `<span>Ocorrência: <b>${esc(r.ocorrencia)}</b></span>` : ''}${gpsChip()}</div>
+    <div class="rh2">${corr && r.ocorrencia ? `<span>Ocorrência: <b>${esc(r.ocorrencia)}</b></span>` : ''}${ADMIN ? gpsChip() : ''}</div>
     ${S.exp ? expBarHtml(false) : ''}
-    <div class="rstats"><div><b class="clock" id="stDur">${fClock(t.dur)}</b><span>Tempo</span></div><div><b id="stKm">${fKm(t.km)}</b><span>Percorrido</span></div><div><b id="stCx">${t.caixas}</b><span>${corr || isImpl(r) ? 'Pontos' : isVist(r) ? 'Registros' : isSite(r) ? 'Sites' : 'Caixas'}</span></div><div><b id="stVel">${fVel(velAtual())}</b><span>Velocidade</span></div></div></section>
+    <div class="rstats"><div><b class="clock" id="stDur">${fClock(t.dur)}</b><span>Tempo</span></div><div><b id="stCx">${t.caixas}</b><span>${corr || isImpl(r) ? 'Pontos' : isVist(r) ? 'Registros' : isSite(r) ? 'Sites' : 'Caixas'}</span></div></div></section>
     <div class="warnbox" id="velWarn" hidden style="border-color:var(--bad);background:var(--bad-soft);color:var(--bad);font-weight:700">Acima do limite de ${LIM()} km/h. Reduza a velocidade.</div>
     ${minhasAtvHtml()}
-    <div class="tabs" role="tablist" aria-label="Visualização"><button type="button" role="tab" data-htab="lista" aria-selected="${S.homeTab !== 'mapa'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Lista</button><button type="button" role="tab" data-htab="mapa" aria-selected="${S.homeTab === 'mapa'}">${ICON.pin}Mapa</button></div>`;
-  if (S.homeTab === 'mapa') {
+    ${ADMIN || window.__modoLivre ? `<div class="tabs" role="tablist" aria-label="Visualização"><button type="button" role="tab" data-htab="lista" aria-selected="${S.homeTab !== 'mapa'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Lista</button><button type="button" role="tab" data-htab="mapa" aria-selected="${S.homeTab === 'mapa'}">${ICON.pin}Mapa</button></div>` : ''}`;
+  if ((ADMIN || window.__modoLivre) && S.homeTab === 'mapa') {
     h += `<section class="card" style="padding:0;overflow:hidden;gap:0"><div class="map" id="map" style="height:58vh;min-height:320px;border:0;border-radius:0" role="img" aria-label="Mapa do percurso"></div>
       <div class="legend" style="padding:10px 16px"><span><i style="background:${SEGCOR.desl}"></i>Deslocamento</span><span><i style="background:${SEGCOR.cabo}"></i>Rota do cabo</span><span><i style="background:${SEGCOR.atual}"></i>Trecho atual</span></div></section>
       <div class="warnbox small">Mantenha o app aberto durante a atividade. Com a tela apagada, o celular pode parar de enviar a posição.</div>`;
@@ -126,7 +129,6 @@ function viewHome() {
   h += `<section class="acts"><div class="ah"><span>${corr ? 'Pontos atendidos' : isImpl(r) ? 'Pontos da designação' : isVist(r) ? 'Registros da vistoria' : isSite(r) ? 'Sites da conjunta' : 'Atividades da rota'}</span><span class="muted small" style="font-weight:500">${ins.length} ${corr || isImpl(r) ? 'ponto(s)' : isVist(r) ? 'registro(s)' : isSite(r) ? 'site(s)' : 'caixa(s)'}</span></div>
     <div class="act trav"><span class="st"></span><span class="tm">${fHora(r.inicio)}</span><span class="bd"><b>Início · deslocamento</b><span>${[veicTxt(r.veiculo) ? esc(veicTxt(r.veiculo)) : '', kmNum(r.odoIni) != null ? 'Odômetro ' + fOdo(kmNum(r.odoIni)) : ''].filter(Boolean).join(' · ') || '—'}</span></span></div>
     ${ins.map((i, k) => actInsp(i, k + 1)).join('')}
-    ${aprPossivel() ? '<div style="padding:8px 16px"><button type="button" class="btn block" id="bAprOpc">🦺 Preencher APR (opcional)</button></div>' : ''}
     <div class="act pend"><span class="st"></span><span class="tm">—</span><span class="bd"><b>${corr ? 'Local da corretiva' : isImpl(r) ? 'Próximo ponto de trabalho' : isVist(r) ? 'Próximo registro' : isSite(r) ? 'Site da conjunta' : 'Próxima caixa'}</b><span>${isVist(r) ? 'Toque em "Novo registro" para retirada de chaves, acompanhamento ou irregularidade' : `Ao chegar, toque em "${botaoChegada(r)}"`}</span></span></div></section>
     ${isVist(r) ? `<section class="card"><h2>Diário da vistoria</h2><div class="field"><label class="lb" for="diarioTxt">Anotação</label><textarea id="diarioTxt" placeholder="O que você viu, com quem falou, o que foi combinado" style="min-height:72px"></textarea></div><button type="button" class="btn block" id="bDiario">${ICON.plus}Anotar no diário</button>
       ${(r.diario || []).length ? `<div class="list">${r.diario.slice().reverse().map(n => `<div class="item" style="cursor:default;align-items:flex-start"><span class="badge" style="font-size:12px">${fHora(n.ts)}</span><span class="tx"><span style="white-space:pre-wrap;color:var(--ink);font-size:14.5px">${esc(n.txt)}</span></span></div>`).join('')}</div>` : '<p class="muted small" style="margin:0">Nenhuma anotação ainda.</p>'}</section>` : ''}
@@ -173,7 +175,6 @@ async function crProx() {
   box.innerHTML = prox.length ? `<div class="warnbox small" style="margin-top:6px;display:flex;flex-direction:column;gap:4px"><b>Já houve ${prox.length} evento(s) nessa região:</b>${prox.map(p => `<button type="button" class="lnk" data-verev="${p.e.id}" style="text-align:left;padding:4px 0;min-height:36px">${esc(rotuloEvento(p.e))} · ${fData(p.e.chegada)} · ${esc(refTxt(p.e))} ›</button>`).join('')}</div>` : '';
 }
 async function afterHome() {
-  $('#bAprOpc') && ($('#bAprOpc').onclick = async () => { await carregaMeusTreinos(); abrirAPR(() => render()); });
   limpaFotosLocais().catch(() => {});
   if (!ADMIN && !S.eqpAvisou && Nuvem.on && Nuvem.user) { S.eqpAvisou = true; eqpMeusLer().then(D => { const n = D.eq.filter(e => e.status === 'tecnico' && e.tecnico_uid === Nuvem.user.id && (eqpUltRec(D.mov, e) || { aceite_ts: 1 }).aceite_ts == null).length; if (n) toast(`Você recebeu ${n} equipamento(s): confirme o recebimento no Perfil.`, 8000); }).catch(() => {}); }
   if (!S.treinosOk) carregaMeusTreinos().then(() => { if (S.treinosOk && S.view === 'home' && !S.ronda && !S.trAvisoPint && meusTreinosAviso()) { S.trAvisoPint = true; render(); } }).catch(() => {});
@@ -283,8 +284,9 @@ function stepDone(key) {
   if (key === 'mat') return !!(i.mat && (Object.entries(i.mat).some(([k, v]) => k !== 'caboSpec' && +String(v).replace(',', '.') > 0) || (i.matExtra || []).some(m => m.nome)));
   if (key === 'cabos') return !!(i.cabos.entrada.lote || i.cabos.entrada.marca);
   if (key === 'check') return CHECK.every(([k]) => i.check[k]);
+  if (key === 'fusoes' && isCorr(i) && i.corr.houveFusao !== 'sim') return i.corr.houveFusao === 'nao';
   if (key === 'fusoes') return !!i.fo.modo && (i.fo.modo !== 'exc' || (i.fo.exc || []).every(e => e.fo && (e.tipo === 'livre' || e.fib)));
-  if (key === 'fotos') return i.fotos.length > 0;
+  if (key === 'fotos') return isCorr(i) ? i.fotos.length >= EVID_MIN : i.fotos.length > 0;
   if (key === 'impl') return !!(i.impl && i.impl.designacao && (usaImpl(i, 'caixa') || i.info.endereco));
   if (key === 'implcheck') return !!(i.impl && (IMPL_CHECK[i.impl.servico] || []).every(([k]) => i.impl.check[k]));
   if (key === 'site') return !!(i.site && i.site.checkin && i.site.sigla && i.site.parc.nome && i.site.parc.empresa);
@@ -302,7 +304,7 @@ function viewInsp() {
   if (key === 'mat') h += stepMat(i);
   if (key === 'cabos') h += stepCabos(i);
   if (key === 'check') h += stepCheck(i);
-  if (key === 'fusoes') h += stepFusoes(i);
+  if (key === 'fusoes') h += isCorr(i) ? fusaoPergunta(i) : stepFusoes(i);
   if (key === 'fotos') h += stepFotos(i);
   if (key === 'impl') h += stepImpl(i);
   if (key === 'implcheck') h += stepImplCheck(i);
@@ -397,6 +399,13 @@ function resumoFo(i) {
   if (m === 'exc') { const ex = i.fo.exc || []; return `Fusões cor com cor nas ${tot} fibras, exceto ${ex.length} ocorrência(s): ` + ex.map(e => e.tipo === 'livre' ? `FO ${e.fo} livre${e.mot ? ' (' + e.mot + ')' : ''}` : `${EXCT[e.tipo]} FO ${e.fo} com FO ${e.fib || '?'}${e.cabo && e.cabo !== 'S1' ? ' na ' + e.cabo : ''}${e.mot ? ' (' + e.mot + ')' : ''}`).join('; ') + '.'; }
   const f = i.fo.rows.slice(0, tot).filter(r => r.f && !paraAqui(i, r)).length, pa = i.fo.rows.slice(0, tot).filter(r => paraAqui(i, r)).length; return `Plano detalhado: ${f} de ${tot} fibras fusionadas${pa ? `; ${pa} param nesta caixa (o cabo de saída é menor)` : ''}.`;
 }
+// corretiva: primeiro pergunta se houve fusão; só abre o mapa de fusões quando a resposta é sim
+function fusaoPergunta(i) {
+  const v = i.corr.houveFusao || '';
+  return `<section class="card"><h2><span class="num">3</span>Houve fusão?</h2><p class="muted small" style="margin:0">Se você fez fusões neste atendimento, responda <b>Sim</b> e preencha as informações. Se não, toque em <b>Não</b> para avançar.</p>
+    <div class="seg" role="group" aria-label="Houve fusão?"><button type="button" data-houvefus="sim" aria-pressed="${v === 'sim'}">Sim, houve fusão</button><button type="button" data-houvefus="nao" aria-pressed="${v === 'nao'}">Não houve</button></div>
+    ${v === 'nao' ? '<div class="okbox">Sem fusões neste atendimento.</div>' : ''}</section>${v === 'sim' ? stepFusoes(i) : ''}`;
+}
 function stepFusoes(i) {
   ensureRows(i); if (!i.fo.modo) i.fo.modo = i.fo.rows.some(r => r.f) && !isCorr(i) ? 'det' : 'cor'; if (!i.fo.exc) i.fo.exc = [];
   const tot = i.fo.total, m = i.fo.modo, pe = padE(i);
@@ -460,7 +469,24 @@ function stepFusoesDet(i) {
   return h + '</div></details></section>';
 }
 function chipsHtml(cats, sel, cont) { return `<div class="chips" role="radiogroup" aria-label="Tipo da foto">${cats.map(c => `<button type="button" role="radio" data-cat="${esc(c)}" aria-checked="${c === sel}">${esc(c)}${cont ? `<span class="cnt">${cont[c] || 0}</span>` : ''}</button>`).join('')}</div>`; }
+function evidHtml(i) {
+  const n = i.fotos.length, tot = Math.max(EVID_MIN, n + 1), ok = n >= EVID_MIN;
+  const fase = FASES_EV.includes(S.faseEv) ? S.faseEv : (n ? faseEv(i.fotos[n - 1]) : 'Antes'); S.faseEv = fase;
+  const cont = f => i.fotos.filter(p => faseEv(p) === f).length;
+  const cheias = i.fotos.map((p, k) => `<div class="ph"><img data-ph="${k}" alt="Evidência ${k + 1}, ${faseEv(p)}"><span class="tag">Evidência ${k + 1} · ${faseEv(p)}</span><div class="pb"><select data-evfase="${k}" aria-label="Momento da evidência ${k + 1}">${FASES_EV.map(f => `<option ${faseEv(p) === f ? 'selected' : ''}>${f}</option>`).join('')}</select><input type="text" data-k="fotos.${k}.desc" value="${esc(p.desc || '')}" placeholder="O que a foto mostra (opcional)" aria-label="Descrição da evidência ${k + 1}"><button class="del" data-delph="${k}">Remover</button></div></div>`).join('');
+  const vazias = Array.from({ length: tot - n }, (_, x) => `<button type="button" class="evvazia${x === 0 ? ' prox' : ''}" data-evadd aria-label="Fotografar a evidência ${n + x + 1}">${ICON.cam}<b>Evidência ${n + x + 1}</b><span class="small">${x === 0 ? 'Toque para fotografar' : n + x + 1 > EVID_MIN ? 'Opcional' : 'Pendente'}</span></button>`).join('');
+  return `<section class="card"><div class="row" style="justify-content:space-between;align-items:center;gap:8px"><h2 style="margin:0"><span class="num">4</span>Evidências do evento</h2><span class="pill ${ok ? 'ok' : 'draft'}" id="evCont">${n} de ${EVID_MIN}${ok ? ' ✓' : ''}</span></div>
+    <p class="muted small" style="margin:0">Fotografe o evento: escolha o momento (antes, durante ou depois) e tire a foto. Cada uma vira uma evidência numerada. São no mínimo ${EVID_MIN}, e você pode adicionar quantas precisar.</p>
+    <div class="okbox small" style="display:flex;gap:10px;align-items:center" role="note"><span aria-hidden="true" style="font-size:22px;line-height:1">📱↔</span><span><b>Deite o celular:</b> fotos na horizontal ficam maiores e mais nítidas no relatório.</span></div>
+    <span class="lb">Momento da foto</span>
+    <div class="seg seg3" role="group" aria-label="Momento da próxima foto">${FASES_EV.map(f => `<button type="button" data-fasesel="${f}" aria-pressed="${fase === f}">${f}${cont(f) ? ` (${cont(f)})` : ''}</button>`).join('')}</div>
+    <div class="row"><button class="btn pri" id="bCam">${ICON.cam}Tirar foto · ${fase}</button><button class="btn" id="bGal">${ICON.img}Da galeria</button></div>
+    <div class="evg" id="photos">${cheias}${vazias}</div>
+    ${ok ? `<div class="okbox">Mínimo de ${EVID_MIN} evidências atingido. Pode continuar adicionando.</div>` : `<div class="warnbox">Faltam <b>${EVID_MIN - n}</b> evidência(s) para concluir o atendimento.</div>`}
+    <p class="muted small" style="margin:0">Cada foto recebe o carimbo com data, hora, coordenadas do GPS e a O.S.</p></section>`;
+}
 function stepFotos(i) {
+  if (isCorr(i)) return evidHtml(i);
   const cats = catsOf(i); if (!cats.includes(S.fotoCat)) S.fotoCat = cats[0];
   const cont = {}; i.fotos.forEach(p => cont[p.cat] = (cont[p.cat] || 0) + 1);
   const falta = obrigOf(i).filter(c => !cont[c]);
@@ -479,12 +505,12 @@ function pendencias(i) {
   const p = [];
   if (isSite(i)) return pendSite(i);
   if (isVist(i)) { if (i.vist.tipo === 'caixa' ? !i.info.tag : !i.vist.descricao) p.push(i.vist.tipo === 'caixa' ? 'TAG da caixa' : 'Registro escrito'); if (!i.loc) p.push('Localização (GPS)'); if (!i.fotos.length) p.push('Pelo menos uma foto de evidência'); if (!i.assinatura) p.push('Assinatura'); return p; }
-  if (isCorr(i)) { if (!i.corr.problema) p.push('Problema encontrado'); if (!i.corr.servico) p.push('Serviço executado'); } else if (isImpl(i)) { if (!i.impl.designacao) p.push('Designação'); if (usaImpl(i, 'caixa') && !i.info.tag) p.push('TAG da caixa'); } else if (!i.info.tag) p.push('TAG da caixa');
+  if (isCorr(i)) { if (!i.corr.problema) p.push('Problema encontrado'); if (!i.corr.servico) p.push('Serviço executado'); if (!i.apoio && i.fotos.length < EVID_MIN) p.push(`Evidências (${i.fotos.length} de ${EVID_MIN})`); } else if (isImpl(i)) { if (!i.impl.designacao) p.push('Designação'); if (usaImpl(i, 'caixa') && !i.info.tag) p.push('TAG da caixa'); } else if (!i.info.tag) p.push('TAG da caixa');
   if (!i.info.dono && !claroCorr(i)) p.push('Backbone próprio ou parceiro'); if (!i.info.tecnico) p.push('Técnico');
   if (!i.loc) p.push('Localização (GPS)'); if (!i.info.endereco) p.push('Endereço');
   const sem = isCorr(i) ? 0 : isImpl(i) ? (IMPL_CHECK[i.impl.servico] || []).filter(([k]) => !i.impl.check[k]).length : CHECK.filter(([k]) => !i.check[k]).length; if (sem) p.push(`${sem} item(ns) do checklist`);
   (isCorr(i) || (isImpl(i) && !usaImpl(i, 'cabos')) ? [] : [['entrada', 'entrada'], ['s1', 'saída 1'], ...(i.cabos.temS2 ? [['s2', 'saída 2']] : [])]).forEach(([k, n]) => { if (!i.cabos[k].padrao) p.push(`Padrão de cores do cabo de ${n}`); });
-  const faltaF = obrigOf(i).filter(c => !i.fotos.some(f => f.cat === c)); if (faltaF.length) p.push('Fotos de ' + faltaF.join(', ')); if (!i.assinatura) p.push('Assinatura');
+  const faltaF = obrigOf(i).filter(c => !i.fotos.some(f => f.cat === c)); if (faltaF.length) p.push('Fotos de ' + faltaF.join(', ')); if (!i.assinatura && !isCorr(i)) p.push('Assinatura');
   return p;
 }
 function pendHtml(i) { const p = pendencias(i); return p.length ? `<div class="warnbox"><b>Faltando:</b> ${p.map(esc).join(', ')}.<br>O PDF pode ser gerado assim mesmo.</div>` : '<div class="okbox">Tudo preenchido.</div>'; }
@@ -496,6 +522,16 @@ function stepFinal(i) {
     ${inp('corr.sobra', 'Sobra técnica puxada (m)', { mode: 'decimal', ph: '0' })}${inp('corr.normalizacao', 'Normalizado às', { type: 'time' })}
     <label class="row field full" style="min-height:44px;cursor:pointer"><input type="checkbox" data-k="corr.novaCaixa" ${i.corr.novaCaixa ? 'checked' : ''} style="width:22px;height:22px"> <b>Foi criada caixa de emenda nova</b></label>
     <label class="row field full" style="min-height:44px;cursor:pointer"><input type="checkbox" data-k="corr.pendente" ${i.corr.pendente ? 'checked' : ''} style="width:22px;height:22px"> <b>Ficou pendência para outra equipe / retorno</b></label></div></section>` : '';
+  if (isCorr(i)) { // corretiva: só a descrição do que foi feito e o pedido de baixa ao NOC
+    const naRonda = S.ronda && S.ronda.id === i.rondaId;
+    return `<section class="card"><h2><span class="num">6</span>Descrição do que foi feito</h2><div class="field"><label class="lb" for="f_serv">O que foi feito <span class="req">*</span></label><textarea id="f_serv" data-k="corr.servico" data-voz placeholder="Ex.: puxada sobra técnica de 40 m, instalada caixa de emenda nova, fusionadas 72 fibras, testes OK" style="min-height:96px">${esc(i.corr.servico || '')}</textarea></div></section>
+    ${naRonda ? liberaHtml(S.ronda) : ''}
+    ${(() => { const h = horariosCorr(i); const lin = (k, v) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`; return `<section class="card"><h2>Horários</h2>${lin('Início da atividade', h.inicio ? fDH(h.inicio) : '—')}${lin('Pedido de validação', h.pedido ? fHora(h.pedido) : 'ainda não pedido')}${lin('Validação do NOC', h.validacao ? fHora(h.validacao) + (h.por ? ' · ' + esc(h.por) : '') : 'aguardando')}${lin('Término da atividade', h.termino ? fHora(h.termino) : 'ao concluir')}</section>`; })()}
+    <section class="card"><h2>Baixa</h2><div id="pend">${p.length ? `<div class="warnbox"><b>Faltando:</b> ${p.map(esc).join(', ')}.</div>` : '<div class="okbox">Tudo preenchido.</div>'}</div>
+    <button class="btn go block" id="bConcluir">${ICON.check}${i.status === 'concluida' ? 'Salvar e voltar' : 'Concluir atendimento'}</button>
+    ${i.status !== 'concluida' && naRonda && Lib.precisa(S.ronda) && !Lib.liberada(S.ronda) ? '<p class="muted small" style="margin:0">O atendimento conclui depois que o NOC ou o supervisor liberar a baixa.</p>' : ''}
+    <details><summary class="small" style="cursor:pointer;min-height:40px;display:flex;align-items:center;font-weight:600;color:var(--accent)">Relatório (PDF / KMZ)</summary><div class="row"><button class="btn wa" id="bWa">${ICON.wa}Enviar PDF no WhatsApp</button><button class="btn" id="bPdf">${ICON.pdf}Baixar PDF</button></div><button class="btn block" id="bKmz">${ICON.pin}Exportar KMZ (Google Earth)</button></details></section>`;
+  }
   if (!isCorr(i) && !isImpl(i) && !isVist(i) && !Array.isArray(i.tkParc)) i.tkParc = ['', ''];
   const tkHtml = isCorr(i) || isImpl(i) || isVist(i) || isSite(i) ? '' : `<section class="card"><h2>Tickets</h2><div class="grid2"><div class="field full"><span class="lb">Ticket interno</span><b>${esc(i.ticketAtv || '—')}</b></div>${inp('tkParc.0', 'Ticket do parceiro 1', { caps: 1, ph: 'Opcional' })}${inp('tkParc.1', 'Ticket do parceiro 2', { caps: 1, ph: 'Opcional' })}</div></section>`;
   const wfHtml = tkHtml + (isVist(i) || i.apoio ? '' : `<details class="card" ${i.wfc || i.wf2 ? 'open' : ''}><summary style="cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--accent)">Tickets de faturamento WFC / WF2 (opcional)</summary><div class="grid2">${inp('wfc', 'WFC', { ph: 'Opcional' })}${inp('wf2', 'WF2', { ph: 'Opcional' })}</div></details>`);
@@ -506,7 +542,7 @@ function stepFinal(i) {
     <div class="row"><button class="btn wa" id="bWa">${ICON.wa}Enviar PDF no WhatsApp</button><button class="btn" id="bPdf">${ICON.pdf}Baixar PDF</button></div>
     <button class="btn block" id="bKmz">${ICON.pin}Exportar KMZ (Google Earth)</button>
     <button class="btn go block" id="bConcluir">${ICON.check}${i.status === 'concluida' ? 'Salvar e voltar' : isCorr(i) ? 'Concluir atendimento' : isSite(i) ? 'Concluir conjunta' : 'Concluir inspeção'}</button>
-    ${S.ronda && i.rondaId === S.ronda.id && i.status !== 'concluida' ? '<p class="muted small" style="margin:0">Ao concluir, o app passa a registrar a rota do cabo até a próxima caixa.</p>' : ''}</section>`;
+    </section>`;
 }
 function barInsp() {
   const last = S.step === ST().length - 1;
@@ -562,7 +598,8 @@ function afterInsp() {
   if (isSite(i)) afterSite(i, key);
   if (key === 'impl' || key === 'vist' || key === 'site') { $('#bLocImpl') && ($('#bLocImpl').onclick = async () => { const l = await posAtual(5000); if (l) { i.loc = l; saveInsp(); preencherEndereco(true); render(); } else toast('Sem sinal de GPS.'); }); }
   if (key === 'check') $('#bAllOk').onclick = () => { CHECK.forEach(([k]) => { if (!i.check[k]) i.check[k] = 'OK'; }); saveInsp(); render(); };
-  if (key === 'fusoes') {
+  if (key === 'fusoes') $$('[data-houvefus]').forEach(b => b.onclick = () => { i.corr.houveFusao = b.dataset.houvefus; saveInsp(); if (i.corr.houveFusao === 'nao') { S.step = Math.min(ST().length - 1, S.step + 1); render(); window.scrollTo(0, 0); } else { const y = window.scrollY; render(); window.scrollTo(0, y); } });
+  if (key === 'fusoes' && $('#foTot')) {
     bindMapaFusao(i);
     $('#foLista') && $('#foLista').addEventListener('toggle', e => { S.foLista = e.target.open; });
     $('#foTot').onchange = e => { i.fo.total = +e.target.value; i.cabos.entrada.fibras = String(i.fo.total); ensureRows(i); syncFo(i); saveInsp(); render(); };
@@ -581,10 +618,12 @@ function afterInsp() {
   }
   if (key === 'fotos') {
     S.fotoMode = 'insp';
-    $('#bCam').onclick = () => { S.fotoMode = 'insp'; $('#fileCam').click(); }; $('#bGal').onclick = () => { S.fotoMode = 'insp'; $('#fileGal').click(); };
+    $('#bCam').onclick = () => { S.fotoMode = 'insp'; $('#fileCam').click(); }; $$('[data-evadd]').forEach(b => b.onclick = () => { S.fotoMode = 'insp'; $('#fileCam').click(); });
+    $$('[data-fasesel]').forEach(b => b.onclick = () => { S.faseEv = b.dataset.fasesel; const y = window.scrollY; render(); window.scrollTo(0, y); });
+    $$('[data-evfase]').forEach(b => b.onchange = () => { const p = i.fotos[+b.dataset.evfase]; if (!p) return; p.fase = b.value; evidRenum(i); saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); }); $('#bGal').onclick = () => { S.fotoMode = 'insp'; $('#fileGal').click(); };
     $$('[data-cat]').forEach(b => b.onclick = () => { S.fotoCat = b.dataset.cat; const y = window.scrollY; render(); window.scrollTo(0, y); });
     $$('[data-ph]').forEach(img => { const p = i.fotos[+img.dataset.ph]; if (p) fotoBlob(p).then(bl => { if (bl) { img.src = URL.createObjectURL(bl); img.onload = () => URL.revokeObjectURL(img.src); } }); });
-    $$('[data-delph]').forEach(b => b.onclick = () => { if (!confirm('Remover esta foto?')) return; i.fotos.splice(+b.dataset.delph, 1); saveInsp(); render(); });
+    $$('[data-delph]').forEach(b => b.onclick = () => { if (!confirm('Remover esta foto?')) return; i.fotos.splice(+b.dataset.delph, 1); evidRenum(i); saveInsp(); const y = window.scrollY; render(); window.scrollTo(0, y); });
   }
   if (key === 'final') {
     sigInit();
@@ -592,6 +631,7 @@ function afterInsp() {
     $('#bKmz').onclick = async () => { const f = isSite(i) ? await kmzSite(i) : await kmzInsp(i); if (f) exportar(f); };
     $('#bWa').onclick = async () => { const f = await gerarPdfInsp(i); if (f) compartilhar([f], textoInsp(i)); };
     $('#bConcluir').onclick = concluirInsp;
+    $('#f_serv') && isCorr(i) && $('#f_serv').addEventListener('change', () => { const y = window.scrollY; render(); window.scrollTo(0, y); });
   }
 }
 ['fileCam', 'fileGal'].forEach(id => $('#' + id).addEventListener('change', async e => {
@@ -617,8 +657,8 @@ function afterInsp() {
   if (!S.insp) return;
   toast(files.length > 1 ? `Processando ${files.length} fotos…` : 'Processando foto…', 6000);
   const loc = S.gps.last && Date.now() - S.gps.last.ts < 120000 ? S.gps.last : S.insp.loc; let nVert = 0;
-  for (const f of files) { try { const p = await processarFoto(f, loc, { cat: S.fotoCat || catsOf(S.insp)[0], tag: isSite(S.insp) ? 'Site ' + (S.insp.site.sigla || '') : S.insp.info.tag, ticket: isCorr(S.insp) ? S.insp.corr.ticket : isImpl(S.insp) ? S.insp.impl.designacao : '', tecnico: S.insp.info.tecnico, endereco: [S.insp.info.endereco, S.insp.info.bairro, S.insp.info.cidade].filter(Boolean).join(', ') }); if (p.h > p.w * 1.05) { p.vertical = true; nVert++; } S.insp.fotos.push(p); } catch (err) { toast('Não foi possível ler uma das fotos.'); } }
-  saveInsp(true); render(); if (nVert) toast(`${nVert === 1 ? 'Foto tirada em pé' : nVert + ' fotos tiradas em pé'}. Da próxima vez, deite o celular (horizontal): fica melhor no relatório.`, 5000); else toast('Foto adicionada: ' + (S.fotoCat || catsOf(S.insp)[0]) + '.');
+  for (const f of files) { try { const p = await processarFoto(f, loc, { cat: isCorr(S.insp) ? (S.faseEv || 'Antes') : S.fotoCat || catsOf(S.insp)[0], tag: isSite(S.insp) ? 'Site ' + (S.insp.site.sigla || '') : S.insp.info.tag, ticket: isCorr(S.insp) ? S.insp.corr.ticket : isImpl(S.insp) ? S.insp.impl.designacao : '', tecnico: S.insp.info.tecnico, endereco: [S.insp.info.endereco, S.insp.info.bairro, S.insp.info.cidade].filter(Boolean).join(', ') }); if (p.h > p.w * 1.05) { p.vertical = true; nVert++; } if (isCorr(S.insp)) p.fase = S.faseEv || 'Antes'; S.insp.fotos.push(p); } catch (err) { toast('Não foi possível ler uma das fotos.'); } }
+  evidRenum(S.insp); saveInsp(true); render(); if (nVert) toast(`${nVert === 1 ? 'Foto tirada em pé' : nVert + ' fotos tiradas em pé'}. Da próxima vez, deite o celular (horizontal): fica melhor no relatório.`, 5000); else toast(isCorr(S.insp) ? `Evidência ${S.insp.fotos.length} (${S.faseEv || 'Antes'}) registrada${S.insp.fotos.length < EVID_MIN ? ` (faltam ${EVID_MIN - S.insp.fotos.length})` : ''}.` : 'Foto adicionada: ' + (S.fotoCat || catsOf(S.insp)[0]) + '.');
 }));
 async function fotosRede(rondaId) { return (await DB.all('fotos')).filter(f => f.rondaId === rondaId && !f.apr).sort((a, b) => a.ts - b.ts); }
 // Foto com carimbo no padrão Multivale: hora, data, endereço, latitude/longitude e, na faixa branca,
@@ -672,7 +712,7 @@ async function processarFoto(file, loc, o) {
   return { id: uid(), cat: o.cat, desc: '', blob, w, h: h + rodape, ts, lat: loc && loc.lat, lon: loc && loc.lon, end };
 }
 function sigInit() {
-  const c = $('#sig'); const i = S.insp; const dpr = window.devicePixelRatio || 1;
+  const c = $('#sig'); if (!c) return; const i = S.insp; const dpr = window.devicePixelRatio || 1;
   const w = c.clientWidth, h = c.clientHeight; c.width = w * dpr; c.height = h * dpr; const x = c.getContext('2d'); x.scale(dpr, dpr); x.lineWidth = 2.4; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#111';
   if (i.assinatura) { const im = new Image(); im.onload = () => x.drawImage(im, 0, 0, w, h); im.src = i.assinatura; }
   let drawing = false, last = null;

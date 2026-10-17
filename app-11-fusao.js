@@ -3,7 +3,7 @@
 'use strict';
 /* ============================ mapa de fusão da caixa de emenda (diagrama) ============================ */
 // tem fusões para desenhar? (preventiva, corretiva, implantação com fusões e vistoria de mapeamento de caixa)
-const temMapaFusao = i => !!(i && i.fo && i.cabos && (!isVist(i) || (i.vist && i.vist.tipo === 'caixa')) && (!isImpl(i) || usaImpl(i, 'fusoes')) && !claroCorr(i));
+const temMapaFusao = i => !!(i && i.fo && i.cabos && !(isCorr(i) && i.corr && i.corr.houveFusao === 'nao') && (!isVist(i) || (i.vist && i.vist.tipo === 'caixa')) && (!isImpl(i) || usaImpl(i, 'fusoes')) && !claroCorr(i));
 function mapaFusaoDados(i) {
   ensureRows(i); if ((i.fo.modo || 'cor') !== 'det') syncFo(i); const tot = i.fo.total, pe = padE(i);
   const links = [], livres = []; const usados = new Set(), deS = new Map();

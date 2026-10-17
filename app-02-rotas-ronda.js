@@ -141,7 +141,7 @@ async function iniciarRonda() {
   S.ronda.distCasa = distCasa; if (im) S.im = { servico: 'roteamento' }; S.tkParc = null;
   await vinculaAtividade(S.ronda, now);
   await DB.put('rondas', S.ronda); await DB.put('meta', { id: 'ativa', rondaId: S.ronda.id }); Alarme.revisa();
-  S.cr = {}; S.odoIni = ''; S.odoFotoIni = null; Nuvem.aoVivo(true); toast(loc ? (isCorr(S.ronda) ? (S.ronda.ticketAuto ? `Corretiva ${S.ronda.ticket} iniciada (número automático).` : 'Corretiva iniciada. Deslocamento até o local sendo registrado.') : isImpl(S.ronda) ? 'Designação iniciada. Deslocamento sendo registrado.' : isVist(S.ronda) ? 'Vistoria iniciada. Deslocamento sendo registrado.' : isSite(S.ronda) ? `Conjunta ${S.ronda.ticket} iniciada. Deslocamento até o site sendo registrado.` : `Ronda ${S.ronda.ticket} iniciada. Deslocamento sendo registrado.`) : 'Atividade iniciada. Aguardando sinal de GPS.');
+  S.cr = {}; S.odoIni = ''; S.odoFotoIni = null; Nuvem.aoVivo(true); toast(loc ? (isCorr(S.ronda) ? (S.ronda.ticketAuto ? `Corretiva ${S.ronda.ticket} iniciada (número automático).` : 'Corretiva iniciada.') : isImpl(S.ronda) ? 'Designação iniciada.' : isVist(S.ronda) ? 'Vistoria iniciada.' : isSite(S.ronda) ? `Conjunta ${S.ronda.ticket} iniciada.` : `Atividade ${S.ronda.ticket} iniciada.`) : 'Atividade iniciada.');
   render();
 }
 /* ---------- corretiva: sair do local / fechar a O.S. só com a liberação do gestor ---------- */
@@ -163,12 +163,39 @@ function liberaHtml(r) {
   if (p && p.status === 'aprovado') return `<div class="okbox"><b>Baixa e saída liberadas</b>${p.decidido_por ? ' (' + esc(p.decidido_por) + ')' : ''}${p.decidido_em ? ' às ' + fHora(+p.decidido_em) : ''}. Pode concluir e encerrar.</div>`;
   if (p && p.status === 'pedido') return `<div class="warnbox" style="display:flex;flex-direction:column;gap:8px"><span><b>Aguardando a validação do NOC ou do supervisor</b> desde ${fHora(+p.criado)}. A O.S. fica travada até a liberação.${Date.now() - p.criado > 10 * 60000 ? ' <button type="button" class="lnk" data-libpede>Pedir de novo</button>' : ''}</span>${conversaHtml(p.id, 'tecnico')}${respostasHtml('libMsg', RESP_MSG)}<div class="row" style="gap:6px;flex-wrap:nowrap"><input type="text" id="libMsg" data-voz placeholder="Mensagem para o NOC / supervisor" style="flex:1;min-width:0"><button type="button" class="btn" data-libmsg="${esc(p.id)}">Enviar</button></div></div>`;
   if (p && p.status === 'recusado') return `<div class="warnbox" style="border-color:var(--bad);background:var(--bad-soft)"><b>O gestor não liberou a saída</b>${p.obs ? ': ' + esc(p.obs) : ''}. <button type="button" class="lnk" data-libpede>Pedir de novo</button></div>`;
-  return `<div class="warnbox" style="display:flex;flex-direction:column;gap:8px"><span><b>Para dar baixa na O.S. e sair do local, peça a validação ao NOC.</b> O NOC ou o supervisor confere e libera. Sem isso a corretiva fica travada.</span>${respostasHtml('libTxt', RESP_LIB)}<textarea id="libTxt" rows="2" placeholder="Ex.: fusões concluídas, sinal normalizado no node XYZ. Pode validar?"></textarea><button type="button" class="btn pri block" data-libpede>Pedir validação ao NOC</button></div>`;
+  const pend = libPend(r);
+  if (pend.length) return `<div class="warnbox" style="display:flex;flex-direction:column;gap:8px"><span><b>Antes de pedir a validação ao NOC</b>, falta: ${pend.map(esc).join(', ')}.</span>${pend.some(x => /servi|material|atendimento/.test(x)) ? '<button type="button" class="btn pri block" data-libirlpu>Lançar a produção (serviço e material)</button>' : S.view === 'insp' ? '' : '<button type="button" class="btn pri block" data-libirlpu>Escrever a descrição</button>'}</div>`;
+  return `<div class="warnbox" style="display:flex;flex-direction:column;gap:8px"><span><b>Para dar baixa na O.S. e sair do local, peça a validação ao NOC.</b> O NOC ou o supervisor confere e libera. Sem isso a corretiva fica travada.</span>${respostasHtml('libTxt', RESP_LIB)}<textarea id="libTxt" rows="2" placeholder="Ex.: Atividade concluída, pode validar?">Atividade concluída, pode validar?</textarea><button type="button" class="btn pri block" data-libpede>Pedir validação ao NOC</button></div>`;
 }
+// LPU obrigatória antes da validação: serviço executado e material gasto (ou "não usei material")
+function inspsDaRonda(r) { const ids = [...new Set([...(r.retomadas || []), ...r.eventos.filter(e => e.tipo === 'chegada').map(e => e.inspId)])]; const l = ids.map(id => S.insp && S.insp.id === id ? S.insp : S.inspCache.get(id)).filter(Boolean); if (S.insp && S.insp.rondaId === r.id && !l.includes(S.insp)) l.push(S.insp); return l; }
+const temMatInsp = i => !!(i.mat && Object.entries(i.mat).some(([k, v]) => k !== 'caboSpec' && +String(v).replace(',', '.') > 0)) || (i.matExtra || []).some(m => m.nome);
+function libPend(r) {
+  if (!r || !isCorr(r) || window.__regrasCorrOff) return []; const l = inspsDaRonda(r).filter(isCorr);
+  if (!l.length) return ['abrir o atendimento ("' + botaoChegada(r) + '") e lançar o serviço executado e o material gasto'];
+  if (l.every(i => i.apoio)) return [];
+  const lp = l.flatMap(i => i.lpu || []); const p = [];
+  if (!lp.some(x => x.t !== 'M')) p.push('o serviço executado');
+  if (!lp.some(x => x.t === 'M') && !l.some(temMatInsp) && !l.some(i => i.semMat)) p.push('o material gasto (ou marque "Não usei material")');
+  if (!l.some(i => !i.apoio && String((i.corr || {}).servico || '').trim())) p.push('a descrição do que foi feito');
+  return p;
+}
+function irLpu() {
+  const r = S.ronda; if (!r) return; const l = inspsDaRonda(r).filter(i => isCorr(i) && !i.apoio);
+  const i = S.insp && S.insp.rondaId === r.id ? S.insp : l.filter(x => x.status !== 'concluida').pop() || l.pop(); const soDesc = !libPend(r).some(x => /servi|material|atendimento/.test(x));
+  if (!i) { toast('Toque em "' + botaoChegada(r) + '" para abrir o atendimento e lançar a LPU.', 6000); return; }
+  saveInsp && S.insp && saveInsp(true); S.insp = i; S.step = Math.max(0, ST().findIndex(s => s[0] === (soDesc ? 'final' : 'lpu'))); go('insp'); window.scrollTo(0, 0); if (soDesc) setTimeout(() => { const t = $('#f_serv'); t && t.focus(); }, 200);
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-libirlpu]'); if (!b || ADMIN) return; irLpu(); });
 async function pedirLiberacao(r) {
-  if (!r) return; if (!Nuvem.on) { toast('Sem internet: conecte para pedir a liberação ao gestor.', 6000); return; }
+  if (!r) return;
+  const pend = libPend(r); if (pend.length) { toast('Antes de pedir a validação, falta: ' + pend.join(', ') + '.', 7000); irLpu(); return; } if (!Nuvem.on) { toast('Sem internet: conecte para pedir a liberação ao gestor.', 6000); return; }
   const loc = S.gps.last; const ref = Lib.ref(r);
-  const p = { id: 'lib_' + ref + '_' + Date.now(), org: Nuvem.org(), tipo: 'liberar_corretiva', ref_id: ref, tecnico_uid: Nuvem.user.id, tecnico_nome: S.perfil.nome, dados: { ticket: r.ticket || '', ocorrencia: r.ocorrencia || '', inicio: r.inicio, rondaId: r.id, lat: loc && loc.lat, lon: loc && loc.lon, caixas: r.eventos.filter(e => e.tipo === 'chegada').length }, status: 'pedido', criado: Date.now() };
+  // resumo da O.S. para o NOC conferir antes de liberar (as fotos sobem junto com a ficha)
+  if (S.insp && S.insp.rondaId === r.id) saveInsp(true); const L = inspsDaRonda(r).filter(i => isCorr(i) && !i.apoio);
+  const resumo = { problema: L.map(i => i.corr.problema).filter(Boolean).join(' / '), servico: L.map(i => i.corr.servico).filter(Boolean).join(' / '), chegada: (L[0] || {}).chegada || null, lpu: L.flatMap(i => (i.lpu || []).map(x => ({ c: x.c, d: x.d, q: x.q, u: x.u, t: x.t }))), semMat: L.some(i => i.semMat), evid: L.reduce((s, i) => s + (i.fotos || []).length, 0) };
+  const p = { id: 'lib_' + ref + '_' + Date.now(), org: Nuvem.org(), tipo: 'liberar_corretiva', ref_id: ref, tecnico_uid: Nuvem.user.id, tecnico_nome: S.perfil.nome, dados: { ticket: r.ticket || '', ocorrencia: r.ocorrencia || '', inicio: r.inicio, rondaId: r.id, lat: loc && loc.lat, lon: loc && loc.lon, caixas: r.eventos.filter(e => e.tipo === 'chegada').length, insps: L.map(i => i.id), resumo }, status: 'pedido', criado: Date.now() };
+  try { Nuvem.processar(); } catch (e) {}
   const txt = String(($('#libTxt') || {}).value || '').trim();
   try { await Nuvem.pedCriar(p); Lib.guarda(p); if (txt) { const m = { id: 'pm_' + uid(), org: Nuvem.org(), pedido_id: p.id, tecnico_uid: Nuvem.user.id, autor_uid: Nuvem.user.id, autor_nome: S.perfil.nome, papel: 'tecnico', texto: txt, criado: Date.now() }; await Nuvem.msgCriar(m); guardaMsg(m); } toast('Pedido enviado ao NOC e ao supervisor. Assim que liberarem, você conclui e encerra.', 6000); render(); } catch (e) { toast('Não foi possível enviar: ' + (e.message || e), 6000); }
 }
@@ -190,7 +217,7 @@ async function encerrarRonda() {
   if (!Lib.liberada(S.ronda)) { toast('A corretiva só encerra com a liberação do gestor. Peça a liberação.', 6000); const el = document.querySelector('[data-libpede]'); el && el.scrollIntoView({ block: 'center' }); return; }
   if (kmNum(S.ronda.odoIni) != null && kmNum(S.ronda.odoFim) == null) { toast('Informe o odômetro final do veículo antes de encerrar.'); $('#odoFim') && $('#odoFim').focus(); return; }
   if (kmNum(S.ronda.odoIni) != null && kmNum(S.ronda.odoFim) < kmNum(S.ronda.odoIni)) { toast('O odômetro final está menor que o inicial. Confira.'); $('#odoFim') && $('#odoFim').focus(); return; }
-  if (!confirm(isCorr(S.ronda) ? 'Encerrar a corretiva agora? O percurso para de ser registrado.' : isSite(S.ronda) ? 'Encerrar a conjunta agora? O percurso para de ser registrado.' : 'Encerrar a ronda agora? O percurso para de ser registrado.')) return;
+  if (!confirm(isCorr(S.ronda) ? 'Encerrar a corretiva agora?' : isSite(S.ronda) ? 'Encerrar a conjunta agora?' : 'Encerrar a atividade agora?')) return;
   const loc = await posAtual(60000);
   if (loc && S.ronda.pontos.length && loc.ts > S.ronda.pontos[S.ronda.pontos.length - 1].ts) S.ronda.pontos.push(loc);
   S.ronda.fim = Date.now(); S.ronda.eventos.push({ tipo: 'fim', ts: S.ronda.fim, lat: loc && loc.lat, lon: loc && loc.lon });
@@ -336,11 +363,13 @@ window.addEventListener('online', () => { S.geoTry = 0; tentaGeo(); });
 async function concluirInsp() {
   const i = S.insp; if (!i) return; marcaApoios(i);
   if (isCorr(i) && S.ronda && S.ronda.id === i.rondaId && !Lib.liberada(S.ronda)) { const p = Lib.de(S.ronda); if (!p || p.status === 'recusado') { if (confirm('Para concluir e sair do local é preciso a liberação do gestor. Pedir agora?')) pedirLiberacao(S.ronda); } else toast('Aguardando a liberação do gestor para concluir.', 6000); return; }
+  if (isCorr(i) && !i.apoio && !window.__regrasCorrOff && i.status !== 'concluida' && i.fotos.length < EVID_MIN) { toast(`Tire no mínimo ${EVID_MIN} evidências do evento (agora são ${i.fotos.length}).`, 6000); S.step = Math.max(0, ST().findIndex(s => s[0] === 'fotos')); render(); window.scrollTo(0, 0); return; }
   if (isCorr(i)) { if (!String(i.corr.ticket || '').trim()) { i.corr.ticket = await proximoTicket(); i.corr.ticketAuto = true; toast('Ticket gerado automaticamente: ' + i.corr.ticket); } } else if (isVist(i)) { if (!String(i.vist.descricao || '').trim()) { toast('Escreva o registro da vistoria.'); S.step = 0; render(); return; } } else if (isImpl(i) && !usaImpl(i, 'caixa')) { if (!String(i.impl.designacao || '').trim()) { toast('Informe a designação.'); S.step = 0; render(); return; } } else if (isSite(i)) { const stp = k => Math.max(0, ST().findIndex(x => x[0] === k)); if (!i.site.checkin) { toast('Faça o check-in no site.'); S.step = 0; render(); return; } if ((i.site.fibras || []).some(f => (f.bobina && mNum(f.bobinaM) == null) || (f.ev || []).some(e => mNum(e.dist) == null))) { toast('Informe o tamanho da bobina e a distância de cada evento do OTDR.'); S.step = stp('sfib'); render(); return; } if (!String(i.site.sigla || '').trim()) { toast('Informe a sigla do site.'); S.step = 0; render(); return; } if (!String(i.site.parc.nome || '').trim()) { toast('Informe o técnico do parceiro que acompanhou.'); S.step = 0; render(); return; } if (!siteFibOk(i).length) { toast('Informe as fibras trabalhadas (origem x destino).'); S.step = stp('sfib'); render(); return; } if (siteFibSemPot(i).length) { toast('Escreva a potência TX e RX de todas as fibras.'); S.step = stp('sfib'); render(); return; } const ff = obrigOf(i).filter(c => !i.fotos.some(x => x.cat === c)); if (ff.length && !confirm('Faltam fotos de: ' + ff.join(', ') + '. Concluir assim mesmo?')) { S.step = stp('fotos'); render(); return; } } else if (!i.info.tag.trim()) { toast('Preencha a TAG da caixa.'); S.step = isImpl(i) ? 1 : 0; render(); return; }
-  i.status = 'concluida'; i.saida = Date.now();
+  if (isCorr(i) && i.status !== 'concluida' && S.ronda && S.ronda.id === i.rondaId) { const p = Lib.de(S.ronda); if (p) { i.corr.libPedido = p.criado || null; if (p.status === 'aprovado') { i.corr.libEm = +p.decidido_em || Date.now(); i.corr.libPor = p.decidido_por || ''; } } }
+  if (i.status !== 'concluida') { i.status = 'concluida'; i.saida = Date.now(); }
   const r = S.ronda && S.ronda.id === i.rondaId ? S.ronda : null;
   if (r && !r.eventos.some(e => e.tipo === 'saida' && e.inspId === i.id)) { r.eventos.push({ tipo: 'saida', ts: i.saida, inspId: i.id }); saveRonda(true);  Nuvem.aoVivo(true); }
-  saveInsp(true); baixaDaInsp(i); toast(isCorr(i) ? 'Atendimento concluído. Ao sair do local, toque em Encerrar corretiva.' : isSite(i) ? 'Conjunta concluída. Fica pendente para o supervisor anexar as curvas do OTDR (TX e RX).' : r ? 'Inspeção concluída. Percurso até a próxima caixa sendo registrado.' : 'Inspeção concluída.');
+  saveInsp(true); baixaDaInsp(i); toast(isCorr(i) ? 'Atendimento concluído. Ao sair do local, toque em Encerrar corretiva.' : isSite(i) ? 'Conjunta concluída. Fica pendente para o supervisor anexar as curvas do OTDR (TX e RX).' : 'Inspeção concluída.');
   S.insp = null; go('home');
 }
 

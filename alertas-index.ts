@@ -50,6 +50,7 @@ export function combina(a: any, rec: any) {
   if (serv && a.tipo === "preventiva" && !serv.includes("preventiva")) return false;
   if (serv && a.tipo === "implantacao" && !serv.includes("implantacao")) return false;
   if (serv && a.tipo === "conjunta" && !serv.includes("conjunta") && !serv.includes("preventiva")) return false;
+  if (serv && a.tipo === "vistoria" && !serv.includes("vistoria")) return false;
   if (d.mini && reg) return d.mini === reg;
   if (d.cluster && clu) return d.cluster === clu;
   return false;
@@ -78,7 +79,7 @@ export async function despachoAuto(db: Db, agora: number, nomes: Map<string, str
   }
   if (!restantes.length) return out;
   const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date(agora));
-  const fila = (await db.backlog()).filter((a: any) => a.tipo !== "emergencial" && !((a.dados || {}).agendaDia && (a.dados || {}).agendaDia > hoje)).sort((x: any, y: any) => +x.criado - +y.criado);
+  const fila = (await db.backlog()).filter((a: any) => a.tipo !== "emergencial" && a.tipo !== "vistoria" && !((a.dados || {}).agendaDia && (a.dados || {}).agendaDia > hoje)).sort((x: any, y: any) => +x.criado - +y.criado);
   const usados = new Set<string>();
   for (const a of fila) {
     const cand = restantes.filter((v: any) => !usados.has(v.uid) && combina(a, recs.get(v.uid)));
@@ -127,15 +128,15 @@ export async function ciclo(db: Db, envia: Envia, agora = Date.now()) {
   // 1) atividades aguardando o técnico iniciar o deslocamento
   for (const a of pend) {
     const k = "atv:" + a.id; if (!pode(k, INTERVALO.atv)) continue;
-    const d = a.dados || {}; const em = a.tipo === "emergencial"; const impl = a.tipo === "implantacao"; const cnj = a.tipo === "conjunta";
-    const titulo = `${em ? "🚨 EMERGENCIAL" : impl ? "Nova implantação" : cnj ? "Nova conjunta de site" : "Nova preventiva"} · ${a.ticket || ""}${a.log >= 2 ? ` · LOG ${a.log}` : ""}`;
+    const d = a.dados || {}; const em = a.tipo === "emergencial"; const impl = a.tipo === "implantacao"; const cnj = a.tipo === "conjunta"; const vis = a.tipo === "vistoria";
+    const titulo = `${em ? "🚨 EMERGENCIAL" : impl ? "Nova implantação" : cnj ? "Nova conjunta de site" : vis ? "Nova vistoria" : "Nova preventiva"} · ${a.ticket || ""}${a.log >= 2 ? ` · LOG ${a.log}` : ""}`;
     const corpo = [d.ocorrencia, d.designacao, d.siteSigla ? "Site " + d.siteSigla : "", a.endereco || d.refLocal, "Toque para abrir e confirmar o recebimento."].filter(Boolean).join(" · ");
     const n = await envia(a.tecnico_uid, { titulo, corpo, tag: "atv-" + a.id, url: "./" });
     await marca(k); out.push(`atv ${a.id} → ${n}`);
   }
   for (const { a, uid } of apo) {
     const k = `apo:${a.id}:${uid}`; if (!pode(k, INTERVALO.atv)) continue; const d = a.dados || {};
-    const titulo = `🤝 APOIO · ${a.tipo === "emergencial" ? "emergencial" : a.tipo === "implantacao" ? "implantação" : a.tipo === "conjunta" ? "conjunta de site" : "preventiva"} · ${a.ticket || ""}`;
+    const titulo = `🤝 APOIO · ${a.tipo === "emergencial" ? "emergencial" : a.tipo === "implantacao" ? "implantação" : a.tipo === "conjunta" ? "conjunta de site" : a.tipo === "vistoria" ? "vistoria" : "preventiva"} · ${a.ticket || ""}`;
     const corpo = [d.ocorrencia, a.endereco || d.refLocal, a.tecnico_nome ? "Principal: " + a.tecnico_nome : "", "Toque para abrir e confirmar o recebimento."].filter(Boolean).join(" · ");
     const n = await envia(uid, { titulo, corpo, tag: "apo-" + a.id, url: "./" }); await marca(k); out.push(`apo ${a.id} ${uid} → ${n}`);
   }
